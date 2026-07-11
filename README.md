@@ -34,6 +34,8 @@
 6. [데이터, 라이선스, contamination 정책](docs/05_DATA_AND_GOVERNANCE.md)
 7. [Qwen3 논문과 후속 연구](docs/06_LITERATURE_REVIEW.md)
 8. [실행 및 재현 runbook](docs/07_RUNBOOK.md)
+9. [MTEB Korean 상위 모델과 F2LLM/PwC 감사](docs/08_KOREAN_LEADERBOARD_AND_F2LLM.md)
+10. [실제 평가 결과 로그](docs/09_EVALUATION_RESULTS.md)
 
 ## 실험 지도
 
