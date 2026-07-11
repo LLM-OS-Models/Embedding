@@ -195,11 +195,22 @@ run_stage official-korean-legal-target-adapted \
   --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-legal250k"
 
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
+CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
+run_stage clean-legal-legal-target-adapted \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
+  --model "$MODEL_REL" --revision "$revision" --batch-size 192 \
+  --max-length 8192 --attn-implementation flash_attention_2 \
+  --output-dir "$CLEAN_OUT" \
+  --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" || true
+CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
 if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
+  clean_args=()
+  [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
   if run_stage publish-legal-target-adapted \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
+    "${clean_args[@]}" \
     --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
     --upload --public; then
     run_stage record-legal-replay-result \
@@ -209,5 +220,6 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi
+run_stage record-clean-legal-results "$ROOT/scripts/commit_clean_legal_results.sh" || true
 
 echo "[$(timestamp)] legal target-adaptation queue complete"

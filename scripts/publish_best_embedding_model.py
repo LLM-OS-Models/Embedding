@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--sionic-summary", type=Path, required=True)
     parser.add_argument("--official-summary", type=Path, required=True)
+    parser.add_argument("--clean-summary", type=Path)
     parser.add_argument("--training-manifest", type=Path, required=True)
     parser.add_argument(
         "--repo-id", default="LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1"
@@ -121,6 +122,7 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     model_evidence = read_json(model_evidence_path)
     sionic = read_json(args.sionic_summary.resolve())
     official = read_json(args.official_summary.resolve())
+    clean = read_json(args.clean_summary.resolve()) if args.clean_summary else None
     training = read_json(args.training_manifest.resolve())
     if model_evidence.get("status") != "pass":
         raise ValueError("Model packaging/parity evidence did not pass")
@@ -145,6 +147,16 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     for label, summary in (("Sionic", sionic), ("official", official)):
         if summary.get("requested_revision") != expected_revision:
             raise ValueError(f"{label} summary revision does not match model evidence")
+    if clean is not None:
+        if clean.get("protocol_id") != "legal-source-document-heldout-i-v1":
+            raise ValueError("Unexpected clean legal protocol")
+        if resolved_local_model(clean.get("model")) != model_dir:
+            raise ValueError("Clean legal summary belongs to a different model artifact")
+        if clean.get("requested_revision") != expected_revision:
+            raise ValueError("Clean legal summary revision does not match model evidence")
+        dataset = clean.get("dataset", {})
+        if dataset.get("independence_grade") != "I" or dataset.get("not_grade") != "Z":
+            raise ValueError("Clean legal independence evidence is invalid")
     recomputed_sionic = fmean(float(value) for value in sionic["scores"].values())
     if abs(float(sionic["average"]) - recomputed_sionic) > 1e-12:
         raise ValueError("Sionic average is inconsistent with task scores")
@@ -160,7 +172,7 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     actual_model_sha = model_weights_sha256(model_dir)
     if model_evidence.get("model", {}).get("weights_sha256") != actual_model_sha:
         raise ValueError("Published model shards do not match model evidence")
-    return model_evidence, sionic, official, training
+    return model_evidence, sionic, official, training, clean
 
 
 def is_full_update(evidence: dict[str, Any]) -> bool:
@@ -219,6 +231,7 @@ def build_card(
     sionic: dict[str, Any],
     official: dict[str, Any],
     training: dict[str, Any],
+    clean: dict[str, Any] | None,
 ) -> str:
     delta = float(sionic["average"]) - 0.793
     full_update = is_full_update(evidence)
@@ -261,6 +274,20 @@ def build_card(
         "성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와 "
         "SentenceTransformers last-token/L2/prompt 계약을 검증했다."
     )
+    clean_section = ""
+    if clean is not None:
+        clean_metrics = clean["metrics"]
+        clean_section = f"""
+### Clean 법률 source-document-held-out 10K
+
+- NDCG@10: **{float(clean_metrics['ndcg_at_10']):.5f}**
+- Recall@10: **{float(clean_metrics['recall_at_10']):.5f}**
+- MRR@10: **{float(clean_metrics['mrr_at_10']):.5f}**
+- Recall@100: **{float(clean_metrics['recall_at_100']):.5f}**
+- independence: `I` (same-repository whole-source-document-held-out), **not Z**
+
+각 query에 source-native positive qrel 하나만 있어 relevance judgment는 exhaustive하지 않다.
+"""
     if full_update:
         method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
 - method: partial full-parameter contrastive fine-tuning, InfoNCE/explicit negatives
@@ -324,6 +351,8 @@ tags:
 이 결과는 pinned MTEB protocol의 로컬 실행이며 MTEB leaderboard 제출 행 자체는
 아니다. task별 MTEB raw result JSON은 이 model repository의 `evaluation/raw/`에,
 실행 코드는 프로젝트 repository에 보존한다.
+
+{clean_section}
 
 ## 학습
 
@@ -417,9 +446,9 @@ benchmark한다.
 
 def main() -> None:
     args = parse_args()
-    evidence, sionic, official, training = validate(args)
+    evidence, sionic, official, training, clean = validate(args)
     model_dir = args.model_dir.resolve()
-    card = build_card(args.repo_id, evidence, sionic, official, training)
+    card = build_card(args.repo_id, evidence, sionic, official, training, clean)
     card_path = model_dir / "README.md"
     card_path.write_text(card, encoding="utf-8")
     evidence_dir = model_dir / "evaluation"
@@ -429,6 +458,8 @@ def main() -> None:
         "mteb_korean_v1_summary.json": args.official_summary.resolve(),
         "training_manifest.json": args.training_manifest.resolve(),
     }
+    if args.clean_summary:
+        evidence_files["legal_source_heldout_summary.json"] = args.clean_summary.resolve()
     for name, source in evidence_files.items():
         shutil.copy2(source, evidence_dir / name)
     raw_evidence = {
