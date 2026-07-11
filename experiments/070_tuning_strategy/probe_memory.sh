@@ -53,7 +53,9 @@ COMMON=(
   --loss_type infonce
 )
 
-OUT="$ROOT/outputs/memory_probes/$MODE"
+suffix="${PROBE_SUFFIX:-}"
+[[ -z "$suffix" ]] || suffix="-$suffix"
+OUT="$ROOT/outputs/memory_probes/$MODE$suffix"
 mkdir -p "$OUT"
 
 case "$MODE" in

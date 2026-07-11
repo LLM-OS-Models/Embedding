@@ -167,9 +167,26 @@ fi
 run_stage validate-legal-mined-data \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
   "$CURRICULUM" "$VAL_FILE" || exit 6
+
+LEGAL_TRAIN_ENV="$ROOT/.venv-train"
+LEGAL_TRAIN_ATTN=sdpa
+if [[ -x "$ROOT/.venv-train-fa2/bin/swift" ]] && \
+    "$ROOT/.venv-train-fa2/bin/python" -c 'import torch, flash_attn, swift; assert torch.cuda.is_available()' \
+      >/dev/null 2>&1; then
+  if run_stage probe-legal-fa2-backward env \
+    TRAIN_ENV="$ROOT/.venv-train-fa2" ATTN_IMPL=flash_attention_2 \
+    PROBE_SUFFIX=legal-fa2 DATA="$VAL_FILE" MAX_LENGTH=512 \
+    "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" lora_r64; then
+    LEGAL_TRAIN_ENV="$ROOT/.venv-train-fa2"
+    LEGAL_TRAIN_ATTN=flash_attention_2
+  fi
+fi
+echo "[$(timestamp)] legal training backend=$LEGAL_TRAIN_ATTN env=$LEGAL_TRAIN_ENV"
+
 train_legal() {
   local output_name="$1" batch="$2" accum="$3"
   run_stage "train-$output_name" env \
+    TRAIN_ENV="$LEGAL_TRAIN_ENV" ATTN_IMPL="$LEGAL_TRAIN_ATTN" \
     RUN_NAME="$output_name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \

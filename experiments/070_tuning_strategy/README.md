@@ -44,6 +44,15 @@ bitsandbytes, Q-GaLore, DeepSpeed는 기본 의존으로 두지
 GPU에서는 ZeRO/FSDP 통신 이득도 없다. memory probe는 더 이상 64-token smoke로
 낙관 측정하지 않고 mined training row, max length 512, FA2에서 실행한다.
 
+기본 `.venv-train`은 PyTorch `2.13+cu130`인데 호스트 `nvcc`는 12.6이라 외부
+FlashAttention 2 extension을 그 환경에 억지로 빌드하지 않는다. 대신 NVIDIA system
+PyTorch `2.5.0a0+nv24.10`과 설치된 `flash-attn 2.4.2`를 상속하는
+`.venv-train-fa2`를 [`bootstrap_train_fa2_env.sh`](../../scripts/bootstrap_train_fa2_env.sh)로
+격리한다. import 성공만으로 장기 학습에 쓰지 않는다. 1M/법률 stage는 GPU가 비면
+실제 Qwen 8B LoRA 1-step forward/backward를 실행하고, 성공한 stage에서만 FA2 환경을
+선택하며 실패 시 SDPA로 자동 복귀한다. probe output은 suffix가 붙은 별도 디렉터리에
+남아 기존 tuner memory probe를 덮어쓰지 않는다.
+
 첫 실전 후보는 `LoRA r64 → DoRA r32 → 마지막 4층 partial FT → GaLore full` 순서다. 마지막 4층+final norm은 771.790M trainable parameters이고, all-linear LoRA r64는 174.588M이다. 충분히 어려운 hard negatives에서 앞 설정이 Comsat 격차를 닫지 못할 때 full update를 승격한다. F2LLM의 full FT 결과만 보고 우리 데이터 규모에서도 full FT가 자동으로 낫다고 가정하지 않는다.
 
 모든 1-step 명령은 [`probe_memory.sh`](probe_memory.sh)에 고정했다. `standard_full`은 OOM 가능성을 명시적으로 감수하는 마지막 probe이며 저장을 끄므로 15GB checkpoint를 만들지 않는다.

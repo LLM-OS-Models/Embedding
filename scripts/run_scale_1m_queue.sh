@@ -176,9 +176,25 @@ fi
 
 MAX_STEPS_1M="$(jq -r '.output_rows / 128 | floor' "$TRAINING_MANIFEST")"
 
+SCALE_TRAIN_ENV="$ROOT/.venv-train"
+SCALE_TRAIN_ATTN=sdpa
+if [[ -x "$ROOT/.venv-train-fa2/bin/swift" ]] && \
+    "$ROOT/.venv-train-fa2/bin/python" -c 'import torch, flash_attn, swift; assert torch.cuda.is_available()' \
+      >/dev/null 2>&1; then
+  if run_stage probe-scale-fa2-backward env \
+    TRAIN_ENV="$ROOT/.venv-train-fa2" ATTN_IMPL=flash_attention_2 \
+    PROBE_SUFFIX=scale1m-fa2 DATA="$VAL_FILE" MAX_LENGTH=512 \
+    "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" lora_r64; then
+    SCALE_TRAIN_ENV="$ROOT/.venv-train-fa2"
+    SCALE_TRAIN_ATTN=flash_attention_2
+  fi
+fi
+echo "[$(timestamp)] scale training backend=$SCALE_TRAIN_ATTN env=$SCALE_TRAIN_ENV"
+
 train_scale() {
   local output_name="$1" batch="$2" accum="$3"
   run_stage "train-$output_name" env \
+    TRAIN_ENV="$SCALE_TRAIN_ENV" ATTN_IMPL="$SCALE_TRAIN_ATTN" \
     RUN_NAME="$output_name" TRAIN_FILE="$TRAIN_FILE" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS_1M" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
