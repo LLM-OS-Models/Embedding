@@ -14,6 +14,8 @@ O(N²) 경로는 부적합하므로 `scripts/mine_faiss_hard_negatives.py`가 FA
   version이 같을 때만 재사용한다.
 - own positive, query와 exact 같은 document, `s_neg >= .95*s_pos` 후보를 제외한다.
 - 선택된 후보 score는 ANN이 반환한 근사 score가 아니라 원 float32 vector dot이다.
+- exact score 내림차순 top-24 pool에서 양 끝을 포함한 7개 score-rank quantile을
+  결정론적으로 선택한다. `top_k`와 hash sample은 ablation으로만 유지한다.
 - 그러나 IVF가 진짜 top hard negative를 놓칠 수 있으므로 candidate recall은
   approximate다. 최종 데이터에는 reranker/teacher 검증이 여전히 필요하다.
 
@@ -37,6 +39,7 @@ PYTHONPATH=scripts .venv-mteb/bin/python scripts/mine_faiss_hard_negatives.py \
   --candidate-pool-size 24 \
   --search-k 256 \
   --num-negatives 7 \
+  --selection-strategy score_rank_quantiles \
   --positive-relative-ratio .95 \
   --nlist 512 \
   --nprobe 32 \

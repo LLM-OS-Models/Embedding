@@ -80,7 +80,8 @@ fi
 
 if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
     --manifest "$MINING_MANIFEST" --model "$MINING_MODEL" \
-    --revision "$MINING_REVISION" 2>/dev/null; then
+    --revision "$MINING_REVISION" --selection-strategy score_rank_quantiles \
+    --candidate-pool-size 24 --num-negatives 7 2>/dev/null; then
   rm -f "$MINING_MANIFEST" "$MINED" "$AUDIT" "$MINED_PROVENANCE" \
     "$ORDERED" "$ORDERED_PROVENANCE" "$ORDERED_MANIFEST" \
     "$CURRICULUM" "$CURRICULUM_PROVENANCE" "$CURRICULUM_MANIFEST"
@@ -91,7 +92,8 @@ if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
     --work-dir "$DATA_DIR/faiss-work-current-student" \
     --model "$MINING_MODEL" --revision "$MINING_REVISION" \
     --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
-    --num-negatives 7 --positive-relative-ratio .95 \
+    --num-negatives 7 --selection-strategy score_rank_quantiles \
+    --positive-relative-ratio .95 \
     --nlist 512 --nprobe 32 --training-points 50000 --faiss-threads 64 \
     --keep-work-dir --allow-target-adapted || exit 3
 fi

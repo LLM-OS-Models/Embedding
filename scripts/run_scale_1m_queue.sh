@@ -100,7 +100,8 @@ TRAIN_HARD_NEGATIVES=4
 if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
   if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
       --manifest "$MINING_MANIFEST" --model "$CONTINUAL_BASE" \
-      --revision "$CONTINUAL_REVISION" 2>/dev/null; then
+      --revision "$CONTINUAL_REVISION" --selection-strategy score_rank_quantiles \
+      --candidate-pool-size 24 --num-negatives 7 2>/dev/null; then
     rm -f "$MINING_MANIFEST" "$MINED_TRAIN" "$MINING_AUDIT" \
       "$MINED_PROVENANCE" "$MINED_HOMOGENEOUS_TRAIN" \
       "$MINED_HOMOGENEOUS_PROVENANCE" "$MINED_HOMOGENEOUS_MANIFEST"
@@ -111,7 +112,8 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
       --work-dir "$DATA_DIR/faiss-work-current-student" --keep-work-dir \
       --model "$CONTINUAL_BASE" --revision "$CONTINUAL_REVISION" \
       --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
-      --num-negatives 7 --positive-relative-ratio .95 \
+      --num-negatives 7 --selection-strategy score_rank_quantiles \
+      --positive-relative-ratio .95 \
       --nlist 1024 --nprobe 32 --training-points 50000 --faiss-threads 64 \
       --allow-target-adapted || true
   fi

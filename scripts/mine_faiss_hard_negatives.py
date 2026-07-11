@@ -65,6 +65,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-pool-size", type=int, default=24)
     parser.add_argument("--search-k", type=int, default=256)
     parser.add_argument("--num-negatives", type=int, default=7)
+    parser.add_argument(
+        "--selection-strategy",
+        choices=("top_k", "hash_sample_from_top_pool", "score_rank_quantiles"),
+        default="score_rank_quantiles",
+    )
     parser.add_argument("--positive-relative-ratio", type=float, default=0.95)
     parser.add_argument("--nlist", type=int, default=512)
     parser.add_argument("--nprobe", type=int, default=32)
@@ -281,6 +286,43 @@ def select_candidates(
     return positive_score, threshold, candidates[:pool_size], exclusions
 
 
+def evenly_spaced_rank_indices(pool_size: int, selected_size: int) -> list[int]:
+    if selected_size < 1 or pool_size < selected_size:
+        raise ValueError("rank quantiles require pool_size >= selected_size >= 1")
+    if selected_size == 1:
+        return [0]
+    denominator = selected_size - 1
+    indices = [
+        (index * (pool_size - 1) + denominator // 2) // denominator
+        for index in range(selected_size)
+    ]
+    if len(set(indices)) != selected_size:
+        raise RuntimeError("rank quantile anchors unexpectedly collided")
+    return indices
+
+
+def select_from_pool(
+    pool: list[tuple[int, float]], count: int, strategy: str, seed: int, row_index: int
+) -> tuple[list[tuple[int, float]], list[int]]:
+    if len(pool) < count:
+        return [], []
+    if strategy == "top_k":
+        indices = list(range(count))
+    elif strategy == "score_rank_quantiles":
+        indices = evenly_spaced_rank_indices(len(pool), count)
+    elif strategy == "hash_sample_from_top_pool":
+        indices = sorted(
+            range(len(pool)),
+            key=lambda index: hashlib.sha256(
+                f"{seed}\0{row_index}\0{pool[index][0]}".encode()
+            ).digest(),
+        )[:count]
+        indices.sort()
+    else:
+        raise ValueError(f"Unsupported selection strategy: {strategy}")
+    return [pool[index] for index in indices], indices
+
+
 def main() -> None:
     args = parse_args()
     rows = read_rows(args.input)
@@ -296,6 +338,7 @@ def main() -> None:
         "search_k": args.search_k,
         "candidate_pool_size": args.candidate_pool_size,
         "num_negatives": args.num_negatives,
+        "selection_strategy": args.selection_strategy,
         "positive_relative_ratio": args.positive_relative_ratio,
     }
     if args.dry_run:
@@ -372,7 +415,13 @@ def main() -> None:
                 )
                 for key, value in exclusions.items():
                     exclusion_totals[key] += value
-                selected = pool[: args.num_negatives]
+                selected, selected_pool_indices = select_from_pool(
+                    pool,
+                    args.num_negatives,
+                    args.selection_strategy,
+                    args.seed,
+                    global_index,
+                )
                 output_index = None
                 if len(selected) == args.num_negatives:
                     output_index = output_rows
@@ -397,6 +446,9 @@ def main() -> None:
                                 {"document_sha256": corpus[index].sha256, "score": score}
                                 for index, score in selected
                             ],
+                            "selection_strategy": args.selection_strategy,
+                            "selected_pool_indices_zero_based": selected_pool_indices,
+                            "eligible_top_pool_count": len(pool),
                             "ann_search_k": args.search_k,
                             "drop_reason": None if output_index is not None else "insufficient_ann_candidates",
                         },
@@ -438,7 +490,7 @@ def main() -> None:
             output.name: {"rows": output_rows, "sha256": file_hash(output)},
             audit_output.name: {"rows": len(rows), "sha256": file_hash(audit_output)},
         },
-        "claim_scope": "ANN candidate generation; selected candidate dot scores are exact float32, but ANN recall is approximate and teacher/reranker validation remains required",
+        "claim_scope": "ANN candidate generation with deterministic pool selection; selected candidate dot scores are exact float32, but ANN recall is approximate and teacher/reranker validation remains required",
         "benchmark_adaptation": (
             "target-adapted; never claim clean zero-shot"
             if args.allow_target_adapted

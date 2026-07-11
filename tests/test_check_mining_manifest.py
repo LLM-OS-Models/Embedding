@@ -19,8 +19,19 @@ class LocalModelFingerprintTest(unittest.TestCase):
                 "model": str(root),
                 "revision": "",
                 "model_weights_sha256": first,
+                "selection_strategy": "score_rank_quantiles",
+                "candidate_pool_size": 24,
+                "num_negatives": 7,
             }
             self.assertTrue(manifest_matches(manifest, str(root), ""))
+            self.assertTrue(
+                manifest_matches(
+                    manifest, str(root), "", "score_rank_quantiles", 24, 7
+                )
+            )
+            self.assertFalse(
+                manifest_matches(manifest, str(root), "", "top_k", 24, 7)
+            )
             shard.write_bytes(b"second")
             self.assertFalse(manifest_matches(manifest, str(root), ""))
 

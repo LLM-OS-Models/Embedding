@@ -77,6 +77,24 @@ class FaissSelectionTests(unittest.TestCase):
         self.assertEqual(exclusions["own_positive"], 1)
         self.assertEqual(exclusions["query_document_exact_match"], 1)
 
+    def test_pool_selection_spans_score_ranks_and_is_deterministic(self) -> None:
+        pool = [(index, 1.0 - index / 100) for index in range(24)]
+        selected, indices = MODULE.select_from_pool(
+            pool, 7, "score_rank_quantiles", seed=42, row_index=3
+        )
+        self.assertEqual(indices[0], 0)
+        self.assertEqual(indices[-1], 23)
+        self.assertEqual(len(indices), 7)
+        self.assertEqual(selected, [pool[index] for index in indices])
+
+        first, first_indices = MODULE.select_from_pool(
+            pool, 7, "hash_sample_from_top_pool", seed=42, row_index=3
+        )
+        second, second_indices = MODULE.select_from_pool(
+            pool, 7, "hash_sample_from_top_pool", seed=42, row_index=3
+        )
+        self.assertEqual((first, first_indices), (second, second_indices))
+
 
 if __name__ == "__main__":
     unittest.main()
