@@ -18,6 +18,7 @@ assert (major, minor) >= (8, 0)
 print({"torch": torch.__version__, "cuda": torch.version.cuda, "flash_attn": flash_attn.__version__})
 PY
 "$TARGET/bin/python" -m pip install -U pip setuptools wheel
+"$TARGET/bin/python" -m pip install -r "$ROOT/requirements/train-fa2-overlay.txt"
 "$TARGET/bin/python" -m pip install -e "$ROOT/third_party/ms-swift"
 "$TARGET/bin/python" - <<'PY'
 import accelerate

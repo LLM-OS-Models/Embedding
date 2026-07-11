@@ -1,0 +1,8 @@
+# Packages layered over the NVIDIA system PyTorch/FlashAttention image.
+# torch==2.5.0a0+e000cf0ad9.nv24.10 and flash-attn==2.4.2 are inherited,
+# not downloaded from PyPI by this file.
+accelerate==1.14.0
+datasets==4.8.4
+peft==0.19.1
+transformers==5.12.1
+trl==0.29.1

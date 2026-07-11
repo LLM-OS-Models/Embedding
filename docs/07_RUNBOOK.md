@@ -37,6 +37,8 @@ scripts/bootstrap_train_fa2_env.sh
 queue는 시작 직전 Qwen3-Embedding-8B LoRA 1-step backward probe까지 성공해야 이
 환경과 `flash_attention_2`를 선택한다. 그렇지 않으면 `.venv-train + sdpa`로 자동
 복귀한다. 활성 학습 도중에는 backend나 environment를 바꾸지 않는다.
+Python overlay는 [`train-fa2-overlay.txt`](../requirements/train-fa2-overlay.txt)에
+고정하고, system torch/flash-attn의 실제 version은 probe log에 함께 남긴다.
 
 설치가 끝나면 package/version snapshot을 `artifacts/environment/`에 저장합니다.
 
