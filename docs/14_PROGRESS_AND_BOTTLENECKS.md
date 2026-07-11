@@ -33,7 +33,11 @@
 | 공개 가능 데이터 공장 | KOGL·법률·Wikipedia·PMC·CDC 1,000,000행 계획 | source/revision/license 및 생성·검수 gate 고정 |
 | 10K private pilot 입력 | train 10,000 / validation 512, hash 검증 | source license 미명시로 public release 불가 |
 | performance 50K mix | 계획 수량 전체 build·strict validation 완료 | train SHA `b46a7be…258a`, provenance SHA `e8ccca…6031` |
+| performance 200K mix | 200,000 rows build·strict validation·공개 업로드 | train SHA `379694…e480`, provenance SHA `7243e6…17b8` |
+| 법률 source-native mix | 4개 pinned repository에서 균형 250,000 rows build·공개 업로드 | train SHA `1d8136…4c90`, provenance SHA `a1b3cd…de3e`; bootstrap negative 표시 |
+| 데이터 공개 | 50K, 200K, 법률 250K dataset card/provenance/manifest | `LLM-OS-Models` HF organization의 public dataset 3개 |
 | vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | Ko-Strategy parity/처리량 측정 완료; 이 workload에서는 FA2가 더 빠름 |
+| adapter 병합/공개 | safe merge, 6-probe parity, ST contract, 카드/대용량 upload 코드 | tiny Qwen 실제 LoRA merge에서 max pair delta `4.68e-8` |
 
 ## 현재 실행 중
 
@@ -48,7 +52,13 @@ Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
 | MIRACLReranking | 0.6846700 |
 | MIRACLRetrieval | 실행 중: 1,486,752 documents |
 
-마지막 retrieval은 H100 1장, FlashAttention 2, batch 192에서 실행 중이다. 실측 GPU 메모리는 corpus batch에 따라 약 50–58GiB이고 워밍업 후 약 300–350 documents/s 수준이다. 완료 전 5-task 평균을 공식 6-task 평균이나 Borda rank로 쓰지 않는다.
+마지막 retrieval은 H100 1장, FlashAttention 2, batch 224에서 실행 중이다. exact
+float32 embedding cache를 켜고 MTEB의 50K corpus chunk가 끝날 때마다 약 819MB씩
+atomic 저장한다. 실측 GPU 메모리는 corpus batch에 따라 약 47–60GiB이며 GPU compute
+구간은 100%다. 완료 전 5-task 평균을 공식 6-task 평균이나 Borda rank로 쓰지 않는다.
+
+동시에 `performance_1m` 1,000,000-row base mix를 CPU에서 build 중이다. 완료된
+200K manifest는 GPU queue가 자동 감지해 10K/50K 뒤 scale run에 사용한다.
 
 ## 아직 성능 결과가 아닌 것
 
@@ -88,13 +98,14 @@ Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
 
 ### 3. 8B full-corpus 평가 시간
 
-MIRACL Korean corpus만 약 149만 문서다. 일반 SentenceTransformers batch 2는 비현실적으로 느리고, 현재 FA2/batch192로 최적화해도 한 모델당 상당한 시간이 든다. MTEB search wrapper는 50K chunk 중간 embedding을 task result cache에 저장하지 않아 프로세스 중단 시 현재 chunk 또는 전체 encoding을 다시 할 수 있다.
+MIRACL Korean corpus만 약 149만 문서다. 일반 SentenceTransformers batch 2는 비현실적으로 느리고, 현재 FA2/batch224로 최적화해도 한 모델당 상당한 시간이 든다. 기본 MTEB result cache는 task 완료 전 embedding을 보존하지 않으므로 이 저장소가 encode 호출별 exact NPY cache를 추가했다.
 
 해소 조건:
 
 - 현재 Comsat run은 중단하지 않고 완료
 - backend마다 짧은 throughput/parity gate를 먼저 실행하고 vLLM이 실제로 빠른 모델·길이에서만 continuous batching 사용
 - Comsat MIRACL은 FA2 batch 224를 사용하고 peak/처리량에 따라 208/192 fallback
+- 각 50K document chunk의 input/options/model namespace와 float32 array를 atomic NPY로 저장하고 재시작 때 exact hit만 재사용
 - official board에 이미 신뢰할 값이 있는 모델은 불필요하게 재실행하지 않음
 
 ### 4. LoRA 대 full FT 결정
@@ -137,8 +148,8 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 | 6 | LoRA r64 160-step private pilot | mined data | non-zero learning signal, reload, VRAM |
 | 7 | pilot 성능 평가 | checkpoint 검증 | private mined dev + AutoRAG, base/Comsat 비교 |
 | 8 | partial/DoRA 품질 비교 | LoRA result 확보 | 동일 token budget Pareto |
-| 9 | 50K→200K→744K performance scale | 10K 학습 신호 확인 | data-size curve와 best update strategy |
-| 10 | F2/KaLM/Nemotron 1M–2M mix | converter/source cap 완료 | Sionic 9와 Korean broad 최고 후보 |
+| 9 | 50K→200K→744K performance scale | 50K/200K build 완료 | data-size curve와 best update strategy |
+| 10 | F2/KaLM/Nemotron 1M–2M mix | 1M build 실행 중 | Sionic 9와 Korean broad 최고 후보 |
 | 11 | leaderboard-adapted specialist | train/test 분리 확인 | in-domain task와 zero-shot 비율 공개 |
 | 12 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
 
@@ -161,6 +172,12 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 
 [`scripts/run_night_gpu_queue.sh`](../scripts/run_night_gpu_queue.sh)는 실행 중인 대형
 baseline PID가 끝난 뒤 MIRACL fallback/summary/Borda, 10K hard-negative mining,
-LoRA r64, 준비된 경우 50K 성능 mix, F2 dual-loss/MRL, LoRA·DoRA·partial·full memory
+LoRA r64, 준비된 50K/200K 성능 mix, F2 dual-loss/MRL, LoRA·DoRA·partial·full memory
 probe를 순차 실행한다. 각 stage는 시작·종료 시각과 exit status를 남기며, 한 ablation의
 실패가 뒤의 유효한 실험을 막지 않는다. 동일 GPU에서 두 stage를 동시에 실행하지 않는다.
+
+그 다음 [`scripts/run_post_training_eval_queue.sh`](../scripts/run_post_training_eval_queue.sh)가
+각 run의 minimum-eval-loss checkpoint를 선택해 safe merge, Sionic 9종 전체, 최고
+후보 공식 Korean v1, 공개 model card/HF upload를 수행한다. 마지막으로
+[`scripts/run_top_model_sionic_queue.sh`](../scripts/run_top_model_sionic_queue.sh)가
+Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron을 같은 Sionic protocol로 측정한다.
