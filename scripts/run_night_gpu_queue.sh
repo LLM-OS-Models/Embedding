@@ -55,6 +55,7 @@ fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
+export ATTN_IMPL="${ATTN_IMPL:-flash_attention_2}"
 
 if [[ -n "$WAIT_PID" ]]; then
   echo "[$(timestamp)] waiting for pid=$WAIT_PID"
