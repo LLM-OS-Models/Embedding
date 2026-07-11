@@ -58,6 +58,13 @@ MTEB registry revision `4e423935c619ae4df87b646a3ce949610c66241c`의
 입력 text, model revision, dtype, max length가 cache key에 포함된다. raw
 SentenceTransformer fallback으로 얻은 Qwen 숫자는 official-contract 표에 넣지 않는다.
 
+Qwen3-Embedding에서 파생된 우리 local artifact는 아직 MTEB registry에 없으므로
+`--qwen3-instruction-loader`를 사용한다. 이 경로는 동일 pinned Qwen3
+`instruction_template`, task metadata/fallback instruction, passage 무지시문 계약을
+local weight에 적용한다. `--registered-loader`와는 상호 배타적이다. 모델 공개기는
+summary의 `qwen3_instruction_loader=true`와
+`instruction_contract=qwen3-task-instruction`을 확인하지 못하면 공개를 거부한다.
+
 ## 실행
 
 GPU를 쓰지 않고 설치된 코드와 명세만 확인합니다.
@@ -77,6 +84,16 @@ PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
   --registered-loader --max-length 32768 --batch-size 192 \
   --attn-implementation flash_attention_2 \
   --embedding-cache-dir outputs/embedding-cache/official-qwen-base
+```
+
+우리 local Qwen3 derivative는 다음과 같이 실행한다.
+
+```bash
+PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
+  scripts/evaluate_mteb_korean_v1.py \
+  --model artifacts/models/<candidate> --revision model-<weights-sha-prefix> \
+  --qwen3-instruction-loader --max-length 8192 --batch-size 192 \
+  --attn-implementation flash_attention_2
 ```
 
 Comsat 전체 6종을 실행합니다. 작업은 task별로 재개할 수 있고 이미 저장된

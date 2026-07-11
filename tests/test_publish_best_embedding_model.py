@@ -103,6 +103,10 @@ class PublishBestModelTests(unittest.TestCase):
                         "mean_task_leaderboard_points": 80.0,
                         "mean_task_type_leaderboard_points": 79.0,
                         "means_by_type": {"Retrieval": 0.79},
+                        "environment": {
+                            "qwen3_instruction_loader": True,
+                            "instruction_contract": "qwen3-task-instruction",
+                        },
                         "scores": {
                             f"task-{index}": {"score": 0.8} for index in range(6)
                         },

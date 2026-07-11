@@ -145,6 +145,14 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         raise ValueError("Unexpected Sionic protocol")
     if official.get("protocol_id") != "mteb-korean-v1-mteb-2.18.0":
         raise ValueError("Unexpected official Korean protocol")
+    official_environment = official.get("environment", {})
+    if (
+        official_environment.get("qwen3_instruction_loader") is not True
+        or official_environment.get("instruction_contract") != "qwen3-task-instruction"
+    ):
+        raise ValueError(
+            "Official Korean candidate result did not use Qwen3 task instructions"
+        )
     if resolved_local_model(sionic.get("model")) != model_dir:
         raise ValueError("Sionic summary belongs to a different model artifact")
     if resolved_local_model(official.get("model")) != model_dir:

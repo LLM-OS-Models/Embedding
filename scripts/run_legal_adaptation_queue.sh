@@ -205,6 +205,7 @@ SIONIC_SUMMARY="$SIONIC_OUT/$safe/summary.json"
 run_stage official-korean-legal-target-adapted \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
   --model "$MODEL_REL" --revision "$revision" --max-length 8192 \
+  --qwen3-instruction-loader \
   --batch-size 192 --attn-implementation flash_attention_2 \
   --output-dir "$OFFICIAL_OUT" \
   --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-legal250k"

@@ -127,6 +127,7 @@ if [[ -s "$SELECTION" ]]; then
   run_stage "official-korean-v1-best" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
     --model "$best_model" --revision "$local_revision" --max-length 8192 \
+    --qwen3-instruction-loader \
     --batch-size 192 --attn-implementation flash_attention_2 \
     --output-dir "$OFFICIAL_OUT" \
     --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-best"

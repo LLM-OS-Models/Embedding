@@ -40,10 +40,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--save-predictions", action="store_true")
     parser.add_argument("--trust-remote-code", action="store_true")
-    parser.add_argument(
+    loader_group = parser.add_mutually_exclusive_group()
+    loader_group.add_argument(
         "--registered-loader",
         action="store_true",
         help="Use the pinned MTEB registry wrapper and task-specific instructions",
+    )
+    loader_group.add_argument(
+        "--qwen3-instruction-loader",
+        action="store_true",
+        help="Apply Qwen3's registered task-instruction contract to a local derivative",
     )
     parser.add_argument(
         "--embedding-cache-dir",
@@ -235,10 +241,16 @@ def main() -> None:
             "--max-length is required for models not pinned by this protocol"
         )
 
+    if args.registered_loader:
+        loader_contract = "registered-task-instruction"
+    elif args.qwen3_instruction_loader:
+        loader_contract = "qwen3-task-instruction"
+    else:
+        loader_contract = "sentence-transformer"
     cache_namespace = (
         f"{args.model}@{revision}|protocol={protocol['protocol_id']}|"
         f"max={max_length}|attn={args.attn_implementation}|dtype={evaluation_dtype}|"
-        f"loader={'registered-task-instruction' if args.registered_loader else 'sentence-transformer'}"
+        f"loader={loader_contract}"
     )
     if args.registered_loader:
         model = mteb.get_model(
@@ -251,8 +263,27 @@ def main() -> None:
             },
             tokenizer_kwargs={"padding_side": "left"},
         )
+    elif args.qwen3_instruction_loader:
+        from mteb.models.model_implementations.qwen3_models import q3e_instruct_loader
+
+        model = q3e_instruct_loader(
+            args.model,
+            revision=revision,
+            device=args.device,
+            model_kwargs={
+                "attn_implementation": args.attn_implementation,
+                "torch_dtype": torch_dtype,
+            },
+            tokenizer_kwargs={"padding_side": "left"},
+        )
+    else:
+        model = None
+
+    if args.registered_loader or args.qwen3_instruction_loader:
         if not hasattr(model, "model"):
-            raise TypeError("Registered model wrapper has no inner SentenceTransformer")
+            raise TypeError(
+                "Instruction model wrapper has no inner SentenceTransformer"
+            )
         model.model.max_seq_length = max_length
         if args.embedding_cache_dir is not None:
             try:
@@ -267,7 +298,7 @@ def main() -> None:
                 embedding_cache_namespace=cache_namespace,
                 counter_target=model,
             )
-    else:
+    if model is None:
         model_class = SentenceTransformer
         model_extra: dict[str, Any] = {}
         if args.embedding_cache_dir is not None:
@@ -379,6 +410,8 @@ def main() -> None:
             "attention": args.attn_implementation,
             "torch_dtype": evaluation_dtype,
             "registered_loader": args.registered_loader,
+            "qwen3_instruction_loader": args.qwen3_instruction_loader,
+            "instruction_contract": loader_contract,
             "embedding_cache_dir": (
                 str(args.embedding_cache_dir.resolve())
                 if args.embedding_cache_dir is not None
