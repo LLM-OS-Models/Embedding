@@ -1,0 +1,4 @@
+# Scalable hard-negative candidate mining. NumPy is pinned below 2 to remain
+# compatible with the CUDA/RAPIDS/ModelOpt packages present on the H100 image.
+faiss-cpu==1.14.3
+numpy==1.26.4

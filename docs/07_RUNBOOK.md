@@ -28,6 +28,19 @@ python -m venv --system-site-packages .venv
 
 설치가 끝나면 package/version snapshot을 `artifacts/environment/`에 저장합니다.
 
+평가와 대규모 ANN candidate mining은 `.venv-mteb`로 분리한다. 2026-07-11 실제
+환경은 MTEB 2.18.0/pinned checkout `193e3f66`, FAISS CPU 1.14.3, NumPy 1.26.4다.
+FAISS 최신 wheel이 NumPy 2.x를 끌어오면 이 H100 이미지의 RAPIDS/ModelOpt `<2`
+제약과 충돌하므로 extras 파일의 두 버전을 함께 설치한다.
+
+```bash
+.venv-mteb/bin/python -m pip install -r requirements/mteb-extras.txt
+```
+
+10K mining은 exact blockwise dot product를 사용한다. 250K–1M은 FAISS IVF/HNSW로
+candidate pool만 만들고, 최종 positive-relative filter와 teacher score는 별도 정확
+단계에서 계산한다. approximate ANN score만으로 false negative를 확정하지 않는다.
+
 ## Important explicit settings
 
 현재 ms-swift의 InfoNCE default temperature는 `.1`입니다. 과거 Qwen training doc의 `.01`과 다르므로 모든 run에서 다음 값을 명시합니다.
