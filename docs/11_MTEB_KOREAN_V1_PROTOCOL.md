@@ -83,6 +83,13 @@ PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
 `MIRACLRetrieval`을 실행합니다. 출력은
 `outputs/evaluation/mteb_korean_v1/<model>/<revision>/`에 저장됩니다.
 
+대형 retrieval에는 `--embedding-cache-dir outputs/embedding-cache`를 함께 줄 수
+있다. 모델, revision, max length, attention, prompt options와 입력 text 전체의
+SHA-256으로 각 encode chunk를 float32 `.npy`에 원자 저장한다. MTEB의 검색·metric
+코드는 바꾸지 않는다. 중단 후 같은 명령을 다시 실행하면 완료된 50K corpus chunk를
+byte-exact하게 재사용한다. 모델/revision/prompt/text가 하나라도 바뀌면 cache key가
+달라져 잘못된 embedding을 재사용하지 않는다.
+
 ## 집계와 표기
 
 - `Mean(Task)`: 6개 main score의 동일 가중 평균

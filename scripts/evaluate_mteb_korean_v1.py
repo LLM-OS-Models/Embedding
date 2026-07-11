@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-predictions", action="store_true")
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument(
+        "--embedding-cache-dir",
+        type=Path,
+        help="Persist exact float32 encode chunks so interrupted retrieval can resume",
+    )
+    parser.add_argument(
         "--task",
         action="append",
         help="Run only this official task; repeat for a resumable partial run",
@@ -184,7 +189,24 @@ def main() -> None:
     if not max_length:
         raise ValueError("--max-length is required for models not pinned by this protocol")
 
-    model = SentenceTransformer(
+    model_class = SentenceTransformer
+    model_extra: dict[str, Any] = {}
+    if args.embedding_cache_dir is not None:
+        try:
+            from resumable_sentence_transformer import ResumableSentenceTransformer
+        except ModuleNotFoundError:
+            from scripts.resumable_sentence_transformer import ResumableSentenceTransformer
+        model_class = ResumableSentenceTransformer
+        model_extra = {
+            "embedding_cache_dir": args.embedding_cache_dir,
+            "embedding_cache_namespace": (
+                f"{args.model}@{revision}|protocol={protocol['protocol_id']}|"
+                f"max={max_length}|attn={args.attn_implementation}|"
+                f"prompts={json.dumps(protocol['comsat']['effective_prompts'], sort_keys=True)}"
+            ),
+        }
+
+    model = model_class(
         args.model,
         revision=revision,
         device=args.device,
@@ -194,6 +216,7 @@ def main() -> None:
             "torch_dtype": torch.bfloat16,
         },
         tokenizer_kwargs={"padding_side": "left"},
+        **model_extra,
     )
     model.max_seq_length = max_length
 
@@ -279,6 +302,13 @@ def main() -> None:
             "batch_size": args.batch_size,
             "max_length": max_length,
             "attention": args.attn_implementation,
+            "embedding_cache_dir": (
+                str(args.embedding_cache_dir.resolve())
+                if args.embedding_cache_dir is not None
+                else None
+            ),
+            "embedding_cache_hits": getattr(model, "embedding_cache_hits", 0),
+            "embedding_cache_misses": getattr(model, "embedding_cache_misses", 0),
         },
     }
     (run_dir / "summary.json").write_text(
