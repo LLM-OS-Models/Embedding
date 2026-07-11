@@ -73,6 +73,7 @@
 | 100만 행 공개 가능 데이터 공장 | source·수량·검수 gate 설계 완료 | [docs/13_RIGHTS_SAFE_DATA_FACTORY.md](docs/13_RIGHTS_SAFE_DATA_FACTORY.md) |
 | Legalize-KR 데이터 | 312,581문서 감사, 2,756,363 source-native 후보 추출 가능 | [docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md](docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md) |
 | 성능 우선 50K 데이터 | 50,000 rows 검증·provenance·manifest 공개 완료 | [`LLM-OS-Models/korean-embedding-performance-v1-pilot-50k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k) |
+| 성능 우선 200K 데이터 | 200,000 rows 검증·provenance·manifest 공개 업로드 | [`LLM-OS-Models/korean-embedding-performance-v1-ablation-200k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k) |
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
