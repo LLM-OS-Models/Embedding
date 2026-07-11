@@ -1,0 +1,567 @@
+{
+  "schema_version": 1,
+  "mix_id": "ko-embedding-performance-v1",
+  "created_at": "2026-07-11",
+  "purpose": "Private, non-commercial performance-first embedding training; evaluation query/qrel leakage remains forbidden.",
+  "default_visibility": "private",
+  "default_use_policy": "research-noncommercial",
+  "seed": 42,
+  "output_schema": {
+    "trainer": "ms-swift InfoNCE",
+    "row_fields": [
+      "messages",
+      "positive_messages",
+      "negative_messages"
+    ],
+    "provenance_sidecar": "provenance.jsonl",
+    "manifest": "manifest.json"
+  },
+  "defaults": {
+    "shuffle_buffer": 10000,
+    "negatives_per_row": 7,
+    "min_query_chars": 4,
+    "min_document_chars": 8,
+    "max_document_chars": 80000,
+    "require_hangul": true,
+    "query_instruction": "Given a Korean web search query, retrieve relevant passages that answer the query"
+  },
+  "phases": {
+    "pilot_50k": {
+      "target_rows": 50000,
+      "intent": "Fast loss/data/backbone/tuner ablation with diverse Korean retrieval and explicit target-train exposure.",
+      "source_caps": {
+        "nlpai_ko_triplet": 25147,
+        "f2_webfaq_kor": 8000,
+        "f2_mqa_ko": 3000,
+        "f2_koalpaca": 3500,
+        "f2_koalpaca_realqa": 3500,
+        "f2_miracl_ko_train": 700,
+        "f2_mrtidy_korean_train": 1200,
+        "f2_mldr_ko_train": 1500,
+        "klue_sts_train": 1000,
+        "kor_sts_train": 500,
+        "ko_strategyqa_train": 953,
+        "klue_ynat_train": 1000
+      }
+    },
+    "ablation_200k": {
+      "target_rows": 200000,
+      "intent": "First meaningful LoRA-versus-partial/full-finetuning and loss/negative ablation.",
+      "source_caps": {
+        "nlpai_ko_triplet": 100248,
+        "f2_webfaq_kor": 25000,
+        "f2_mqa_ko": 15000,
+        "f2_koalpaca": 10000,
+        "f2_koalpaca_realqa": 8000,
+        "f2_komagpie": 10000,
+        "f2_miracl_ko_train": 700,
+        "f2_mrtidy_korean_train": 1200,
+        "f2_mldr_ko_train": 2252,
+        "f2_pawsx_ko": 5000,
+        "f2_paracrawl_ko_en": 5000,
+        "f2_paracrawl_en_ko": 5000,
+        "klue_ynat_train": 5000,
+        "klue_sts_train": 4000,
+        "kor_sts_train": 1500,
+        "ko_strategyqa_train": 2100
+      }
+    },
+    "ko_core_744k": {
+      "target_rows": 744000,
+      "intent": "Large Korean core with hard-negative-rich F2 data and limited multilingual replay.",
+      "source_caps": {
+        "nlpai_ko_triplet": 465248,
+        "f2_webfaq_kor": 50000,
+        "f2_mqa_ko": 50000,
+        "f2_koalpaca": 20000,
+        "f2_koalpaca_realqa": 17000,
+        "f2_komagpie": 50000,
+        "f2_miracl_ko_train": 700,
+        "f2_mrtidy_korean_train": 1200,
+        "f2_mldr_ko_train": 2252,
+        "f2_pawsx_ko": 15000,
+        "f2_paracrawl_ko_en": 15000,
+        "f2_paracrawl_en_ko": 10000,
+        "klue_ynat_train": 10000,
+        "klue_sts_train": 4000,
+        "kor_sts_train": 1500,
+        "ko_strategyqa_train": 2100,
+        "kalm_finetuning_replay": 30000
+      }
+    },
+    "performance_1m": {
+      "target_rows": 1000000,
+      "intent": "Performance candidate before rights-safe distillation/retraining; retain 2.6% KaLM replay.",
+      "source_caps": {
+        "nlpai_ko_triplet": 600248,
+        "f2_webfaq_kor": 70000,
+        "f2_mqa_ko": 100000,
+        "f2_koalpaca": 20000,
+        "f2_koalpaca_realqa": 17000,
+        "f2_komagpie": 80000,
+        "f2_miracl_ko_train": 700,
+        "f2_mrtidy_korean_train": 1200,
+        "f2_mldr_ko_train": 2252,
+        "f2_pawsx_ko": 20000,
+        "f2_paracrawl_ko_en": 20000,
+        "f2_paracrawl_en_ko": 20000,
+        "klue_ynat_train": 15000,
+        "klue_sts_train": 4000,
+        "kor_sts_train": 1500,
+        "ko_strategyqa_train": 2100,
+        "kalm_finetuning_replay": 26000
+      }
+    }
+  },
+  "sources": {
+    "nlpai_ko_triplet": {
+      "loader": "hf_dataset",
+      "adapter": "triplet_fields",
+      "repo_id": "nlpai-lab/ko-triplet-v1.0",
+      "revision": "1f5d72d21ae8309b5221a588b13930b423385bff",
+      "config": "default",
+      "split": "train",
+      "observed_rows": 744862,
+      "schema": {
+        "query_field": "query",
+        "positive_field": "document",
+        "negative_fields": [
+          "hard_negative"
+        ]
+      },
+      "declared_license": null,
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_declared; source construction and benchmark decontamination are undocumented",
+      "release_eligible": false
+    },
+    "f2_webfaq_kor": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "webfaq_kor.parquet",
+      "observed_rows": 89271,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_known",
+      "release_eligible": false
+    },
+    "f2_mqa_ko": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "mqa_ko.parquet",
+      "observed_rows": 137035,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_known",
+      "release_eligible": false
+    },
+    "f2_koalpaca": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "koalpaca.parquet",
+      "observed_rows": 21126,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_known",
+      "release_eligible": false
+    },
+    "f2_koalpaca_realqa": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "koalpaca_realqa.parquet",
+      "observed_rows": 17599,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_known",
+      "release_eligible": false
+    },
+    "f2_komagpie": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "komagpie.parquet",
+      "observed_rows": 428780,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_known",
+      "release_eligible": false
+    },
+    "f2_miracl_ko_train": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "miracl_ko.parquet",
+      "observed_rows": 753,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "MIRACLRetrieval",
+        "MIRACLReranking"
+      ],
+      "benchmark_exposure": "task-train family exposed; MTEB dev rows remain forbidden",
+      "release_eligible": false
+    },
+    "f2_mrtidy_korean_train": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "mrtidy_korean.parquet",
+      "observed_rows": 1294,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "MrTidyRetrieval"
+      ],
+      "benchmark_exposure": "task train exposed; test rows remain forbidden",
+      "release_eligible": false
+    },
+    "f2_mldr_ko_train": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "mldr_ko.parquet",
+      "observed_rows": 2252,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "MultiLongDocRetrieval"
+      ],
+      "benchmark_exposure": "provider-preprocessed task training data; pinned MTEB dev/test rows remain forbidden",
+      "release_eligible": false
+    },
+    "f2_pawsx_ko": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "pawsx_ko.parquet",
+      "observed_rows": 32109,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "PAWS-X task family"
+      ],
+      "benchmark_exposure": "task-family exposure outside Korean-v1/Sionic9",
+      "release_eligible": false
+    },
+    "f2_paracrawl_ko_en": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "paracrawl_ko-en.parquet",
+      "observed_rows": 245966,
+      "declared_collection_license": "apache-2.0",
+      "language": "ko-en",
+      "require_hangul": true,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_known",
+      "release_eligible": false
+    },
+    "f2_paracrawl_en_ko": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "paracrawl_en-ko.parquet",
+      "observed_rows": 245974,
+      "declared_collection_license": "apache-2.0",
+      "language": "en-ko",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "none_known",
+      "release_eligible": false
+    },
+    "kalm_finetuning_replay": {
+      "loader": "hf_dataset",
+      "adapter": "kalm_lists",
+      "repo_id": "KaLM-Embedding/KaLM-embedding-finetuning-data",
+      "revision": "e9443ab6f5d4dc29c79cea03834e932428ed6ab1",
+      "config": "default",
+      "split": "train",
+      "schema": {
+        "query_field": "query",
+        "positive_list_field": "pos",
+        "negative_list_field": "neg"
+      },
+      "declared_license": "mit",
+      "language": "en-zh-multilingual",
+      "require_hangul": false,
+      "trained_on_tasks": [
+        "multiple published MTEB training task families"
+      ],
+      "benchmark_exposure": "mixed task-train exposure; never claim fully zero-shot multilingual evaluation",
+      "release_eligible": false,
+      "notes": "The requested tencent/KaLM-embedding-finetuning-data ID does not exist publicly; this is the canonical live repository linked by KaLM."
+    },
+    "klue_ynat_train": {
+      "loader": "hf_dataset",
+      "adapter": "classification_label",
+      "repo_id": "klue/klue",
+      "revision": "349481ec73fff722f88e0453ca05c77a447d967c",
+      "config": "ynat",
+      "split": "train",
+      "observed_rows": 45678,
+      "schema": {
+        "text_field": "title",
+        "label_field": "label",
+        "label_values": [
+          "IT과학",
+          "경제",
+          "사회",
+          "생활문화",
+          "세계",
+          "스포츠",
+          "정치"
+        ]
+      },
+      "query_instruction": "Classify the Korean news headline by topic",
+      "min_document_chars": 1,
+      "declared_license": "cc-by-sa-4.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "KLUE-TC"
+      ],
+      "benchmark_exposure": "official train split exposed; validation evaluation remains forbidden",
+      "release_eligible": false
+    },
+    "klue_sts_train": {
+      "loader": "hf_dataset",
+      "adapter": "sts_pairs",
+      "repo_id": "klue/klue",
+      "revision": "349481ec73fff722f88e0453ca05c77a447d967c",
+      "config": "sts",
+      "split": "train",
+      "observed_rows": 11668,
+      "schema": {
+        "sentence1_field": "sentence1",
+        "sentence2_field": "sentence2",
+        "score_field": "labels.label",
+        "positive_threshold": 3.5,
+        "negative_threshold": 1.0
+      },
+      "query_instruction": "Retrieve semantically similar Korean text",
+      "declared_license": "cc-by-sa-4.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "KLUE-STS"
+      ],
+      "benchmark_exposure": "official train split exposed; validation evaluation remains forbidden",
+      "release_eligible": false
+    },
+    "kor_sts_train": {
+      "loader": "hf_dataset",
+      "adapter": "sts_pairs",
+      "repo_id": "dkoterwa/kor-sts",
+      "revision": "016f35f9b961daaaa7a352e927084e3da662ac1f",
+      "config": "default",
+      "split": "train",
+      "observed_rows": 5691,
+      "schema": {
+        "sentence1_field": "sentence1",
+        "sentence2_field": "sentence2",
+        "score_field": "score",
+        "positive_threshold": 3.5,
+        "negative_threshold": 1.0
+      },
+      "query_instruction": "Retrieve semantically similar Korean text",
+      "declared_license": "cc-by-sa-4.0",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "KorSTS"
+      ],
+      "benchmark_exposure": "official train split exposed; test evaluation remains forbidden",
+      "release_eligible": false
+    },
+    "ko_strategyqa_train": {
+      "loader": "hf_beir",
+      "adapter": "beir_join",
+      "repo_id": "taeminlee/Ko-StrategyQA",
+      "revision": "d243889a3eb6654029dbd7e7f9319ae31d58f97c",
+      "qrels": {
+        "config": "default",
+        "split": "train",
+        "query_id_field": "query-id",
+        "doc_id_field": "corpus-id",
+        "score_field": "score"
+      },
+      "queries": {
+        "config": "queries",
+        "split": "queries",
+        "id_field": "_id",
+        "text_field": "text"
+      },
+      "corpus": {
+        "config": "corpus",
+        "split": "corpus",
+        "id_field": "_id",
+        "title_field": "title",
+        "text_field": "text"
+      },
+      "positive_score_gt": 0,
+      "query_instruction": "Given a Korean question requiring implicit reasoning, retrieve evidence passages that answer it",
+      "declared_license": null,
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "Ko-StrategyQA"
+      ],
+      "benchmark_exposure": "official train qrels exposed; dev qrels and dev-only query IDs remain forbidden",
+      "release_eligible": false
+    }
+  },
+  "catalog_only": {
+    "nvidia_embed_nemotron_dataset_v1": {
+      "repo_id": "nvidia/embed-nemotron-dataset-v1",
+      "revision": "f457c3e2da4af3b9dd2818685d411b26298d7cbb",
+      "live_configs": 28,
+      "query_schema": [
+        "question_id",
+        "question",
+        "corpus_id",
+        "pos_doc[].id",
+        "neg_doc[].id"
+      ],
+      "corpus_schema": [
+        "id",
+        "text (not present for ID-only redistributions)"
+      ],
+      "published_scale": {
+        "subdatasets": 14,
+        "queries": 3662695,
+        "documents": 9118599
+      },
+      "status": "not in v1 executable phases",
+      "reason": "Mostly non-Korean replay and requires a per-config ID-to-corpus join/source reconstruction; use after the 200K ablation proves replay is needed.",
+      "terms": "research-and-development only; per-source governing terms; synthetic subset carries Llama license implications"
+    },
+    "legalize_kr": {
+      "repo": "https://github.com/legalize-kr/legalize-kr",
+      "revision": "db3cd760c14042ee04fd9166e1bdbb662fc999bc",
+      "observed_files": "5725 Markdown law documents",
+      "schema": "kr/{law-name}/{law-kind}.md with YAML frontmatter and article-structured Markdown",
+      "planned_use": "law-title/article-heading queries, article positives, sibling-article hard negatives, and long-document evidence-location samples",
+      "status": "pair generation required before inclusion",
+      "lawir_warning": "Exact and near-duplicate LawIRKo evaluation corpus/articles must be hash/MinHash blocked before query synthesis."
+    },
+    "legalize_admrule_kr": {
+      "repo": "https://github.com/legalize-kr/admrule-kr",
+      "revision": "64a5a272909ab5bc077b0ad9519ef31de8febb46",
+      "observed_files": "20390 Markdown administrative-rule documents",
+      "schema": "{agency hierarchy}/{rule type}/{rule name}/본문.md with YAML frontmatter and article-structured Markdown",
+      "planned_use": "agency/rule/article retrieval, same-agency hard negatives, OCR/table robustness, and long documents",
+      "status": "pair generation required before inclusion"
+    },
+    "legalize_precedent_kr": {
+      "repo": "https://github.com/legalize-kr/precedent-kr",
+      "revision": "40cd00e54df19d98562abb170c8ff51fd6fe2c2e",
+      "observed_files": ">=62217 Markdown precedents (GitHub recursive tree response was truncated)",
+      "schema": "{case type}/{court}/{court}_{decision date}_{case number}.md; YAML plus 판시사항/판결요지/본문 sections",
+      "planned_use": "holding-to-reason retrieval, issue-to-rationale retrieval, court/date/type metadata queries, and same-statute hard negatives",
+      "status": "pair generation required before inclusion"
+    },
+    "legalize_ordinance_kr": {
+      "repo": "https://github.com/legalize-kr/ordinance-kr",
+      "revision": "6443e5dd5833d863219064cd362111f516430bec",
+      "observed_files": ">=22959 Markdown ordinances (GitHub recursive tree response was truncated)",
+      "schema": "{region}/{local body}/{kind}/{name}/본문.md with YAML frontmatter",
+      "planned_use": "region-aware ordinance retrieval and lexically difficult cross-region hard negatives",
+      "status": "pair generation required before inclusion"
+    },
+    "llm_ko_datasets_catalog": {
+      "repo": "https://github.com/gyunggyung/LLM-Ko-Datasets",
+      "revision": "53f7b4a4431c11a1031a56c107b5b12b245471ea",
+      "observed_schema": "README catalog only; no dataset payload",
+      "status": "discovery input, not a trainable source",
+      "rule": "Every linked downstream dataset needs an independent revision, schema, license, task-overlap, and contamination audit."
+    }
+  },
+  "blocked_training_inputs": [
+    {
+      "rule": "Never load any dev/test/validation query, qrel, positive mapping, reranking candidate, or derived query from the pinned MTEB Korean-v1 and Sionic9 evaluation protocols."
+    },
+    {
+      "repo_id": "mteb/MIRACLRetrieval",
+      "blocked_splits": [
+        "dev"
+      ]
+    },
+    {
+      "repo_id": "mteb/MIRACLReranking",
+      "blocked_splits": [
+        "dev"
+      ]
+    },
+    {
+      "repo_id": "yjoonjang/markers_bm",
+      "blocked_splits": [
+        "test",
+        "corpus",
+        "queries"
+      ]
+    },
+    {
+      "repo_id": "xhluca/publichealth-qa",
+      "blocked_splits": [
+        "test"
+      ]
+    },
+    {
+      "repo_id": "mteb/belebele",
+      "blocked_splits": [
+        "test"
+      ]
+    },
+    {
+      "repo_id": "yjoonjang/squad_kor_v1",
+      "blocked_splits": [
+        "test"
+      ]
+    },
+    {
+      "repo_id": "on-and-on/lawgov_ir-ko",
+      "blocked_splits": [
+        "all"
+      ],
+      "reason": "The repository exposes train-named storage, but MTEB consumes it as the LawIRKo test benchmark."
+    },
+    {
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "blocked_files": [
+        "mkqa_*.parquet",
+        "sib200.parquet"
+      ],
+      "reason": "The F2LLM-v2 card states that current MTEB evaluates the training split of MKQA and SIB200."
+    }
+  ]
+}
