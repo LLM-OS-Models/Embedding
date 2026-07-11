@@ -45,8 +45,8 @@ train-family 노출이 있으므로 clean zero-shot이 아니라 `performance ta
 | max length | 512 |
 | global batch | 16 × accumulation 8 = 128 |
 | steps | homogeneous manifest의 `floor(output_rows / 128)`, 약 1 epoch |
-| LR | 2e-5 cosine, warmup 5% |
-| checkpoint | 500 steps, minimum validation loss 선택 |
+| LR | **1e-5** cosine, warmup 5%; 50K의 2e-5가 step 80 이후 악화된 실측 반영 |
+| checkpoint | **250 steps**, minimum validation loss 선택; 초기 최적점 누락 방지 |
 
 source별 row를 먼저 shuffle하고 16-row source-homogeneous microbatch로 나눈 뒤
 microbatch 순서만 전역 shuffle한다. source별 16 미만 remainder는 manifest에 기록하고

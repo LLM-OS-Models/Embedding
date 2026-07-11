@@ -149,10 +149,10 @@ train_scale() {
   local output_name="$1" batch="$2" accum="$3"
   run_stage "train-$output_name" env \
     RUN_NAME="$output_name" TRAIN_FILE="$TRAIN_FILE" VAL_FILE="$VAL_FILE" \
-    MAX_STEPS="$MAX_STEPS_1M" EVAL_STEPS=500 SAVE_STEPS=500 SAVE_TOTAL_LIMIT=3 \
+    MAX_STEPS="$MAX_STEPS_1M" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
     TRAIN_DATALOADER_SHUFFLE=false \
-    LEARNING_RATE=2e-5 WARMUP_RATIO=.05 \
+    LEARNING_RATE=1e-5 WARMUP_RATIO=.05 \
     INFONCE_HARD_NEGATIVES="$TRAIN_HARD_NEGATIVES" \
     BASE_MODEL="$CONTINUAL_BASE" BASE_REVISION="$CONTINUAL_REVISION" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
