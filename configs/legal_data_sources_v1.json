@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "config_id": "legal-data-sources-v1",
+  "audit_date": "2026-07-11",
+  "source_root_default": "data/raw/legal_source_audit",
+  "purpose": "Pinned source inventory and deterministic extraction rules for source-grounded Korean legal embedding-pair candidates.",
+  "aggregate_legal_inventory": {
+    "documents": 312581,
+    "document_bytes": 3510755300,
+    "article_headings": 2760902,
+    "precedents_with_issue_and_holding_headings": 66273,
+    "independent_source_dry_run_records": 2756363,
+    "independent_source_dry_run_logical_jsonl_bytes": 5614940344
+  },
+  "output_contract": {
+    "format": "UTF-8 JSONL, one JSON object per line, keys serialized in sorted order",
+    "required_fields": [
+      "id",
+      "query",
+      "positive",
+      "pair_type",
+      "label_origin",
+      "provenance"
+    ],
+    "negative_policy": "No negatives are emitted. Mine and audit negatives in a later stage.",
+    "generation_policy": "No LLM-written query or relevance label is emitted. Query text consists only of source-native titles, section headings, or issue text whose relationship to the positive is explicit in the source structure."
+  },
+  "track_policy": {
+    "performance_noncommercial": {
+      "legal_sources": "allowed",
+      "required_disclosure": "Report legal-source training and any target-benchmark exposure. A LawIRKo score after using title/article structural pairs is trained-on-domain/target-like, not clean zero-shot."
+    },
+    "clean_release": {
+      "legal_sources": "allowed only after exact and near-duplicate evaluation blocklist filtering",
+      "lawirko_rule": "Exclude any example whose query or positive overlaps the pinned LawIRKo query, corpus, or qrel-derived text."
+    }
+  },
+  "sources": [
+    {
+      "id": "legalize_kr_statutes",
+      "repository": "legalize-kr/legalize-kr",
+      "url": "https://github.com/legalize-kr/legalize-kr",
+      "clone_url": "https://github.com/legalize-kr/legalize-kr.git",
+      "branch": "main",
+      "revision": "db3cd760c14042ee04fd9166e1bdbb662fc999bc",
+      "head_commit_time_as_encoded_by_repository": "2026-07-02T12:00:00+09:00",
+      "local_subdir": "legalize-kr",
+      "file_globs": [
+        "kr/**/*.md"
+      ],
+      "extractor": "legal_articles",
+      "title_field": "제목",
+      "source_url_field": "출처",
+      "identifier_fields": [
+        "법령MST",
+        "법령ID",
+        "법령구분",
+        "공포일자",
+        "시행일자",
+        "상태"
+      ],
+      "snapshot_inventory": {
+        "documents": 5725,
+        "document_bytes": 277323687,
+        "documents_with_article_heading": 5664,
+        "article_headings": 205957,
+        "parsing_failed_documents": 0
+      },
+      "extraction_dry_run": {
+        "parameters": "min_positive_chars=64, no text caps, exact pair deduplication",
+        "records_emitted": 191283,
+        "duplicates_skipped": 19,
+        "logical_jsonl_bytes": 436087091,
+        "logical_output_sha256": "382f1232a293b4cfad9cff1b667eda89e91ac5dfad7628b394480cefcf1025e6"
+      },
+      "format": "YAML-like frontmatter followed by Markdown; articles use level-5 headings such as `##### 제1조 (목적)`.",
+      "upstream_source_as_declared": "국가법령정보센터 OpenAPI",
+      "license_as_declared": {
+        "content": "README: 법령 원문은 대한민국 정부 공공저작물이며 자유롭게 이용 가능",
+        "repository_structure_and_metadata": "README: MIT",
+        "license_file_present": false,
+        "caution": "These are repository declarations, not an independent legal determination."
+      },
+      "embedding_use": "High-value title + article-heading -> article-text structural candidates for Korean legal retrieval and terminology.",
+      "benchmark_risk": {
+        "level": "critical",
+        "benchmarks": [
+          "LawIRKo",
+          "AutoRAGRetrieval legal slice"
+        ],
+        "reason": "LawIRKo uses official Korean legal articles as corpus and constructs queries from law titles and article identifiers, which closely matches this extractor."
+      }
+    },
+    {
+      "id": "legalize_kr_administrative_rules",
+      "repository": "legalize-kr/admrule-kr",
+      "url": "https://github.com/legalize-kr/admrule-kr",
+      "clone_url": "https://github.com/legalize-kr/admrule-kr.git",
+      "branch": "main",
+      "revision": "64a5a272909ab5bc077b0ad9519ef31de8febb46",
+      "head_commit_time_as_encoded_by_repository": "2026-07-10T12:00:00+09:00",
+      "local_subdir": "admrule-kr",
+      "file_globs": [
+        "**/본문.md"
+      ],
+      "extractor": "legal_articles",
+      "title_field": "행정규칙명",
+      "source_url_field": "출처",
+      "identifier_fields": [
+        "행정규칙ID",
+        "행정규칙일련번호",
+        "행정규칙종류",
+        "발령일자",
+        "시행일자",
+        "현행여부",
+        "본문출처"
+      ],
+      "snapshot_inventory": {
+        "documents": 20390,
+        "document_bytes": 294676303,
+        "documents_with_article_heading": 15062,
+        "article_headings": 293532,
+        "parsing_failed_documents": 674
+      },
+      "extraction_dry_run": {
+        "parameters": "min_positive_chars=64, no text caps, exact pair deduplication",
+        "records_emitted": 289472,
+        "duplicates_skipped": 34,
+        "logical_jsonl_bytes": 636170860,
+        "logical_output_sha256": "2f2114930f3a03343e76a1fcb8c3427af92ff3adcd3e9714a850adb59c4bc5b6"
+      },
+      "format": "YAML-like frontmatter plus Markdown body; institution/type/name are encoded in the path; article-shaped bodies use level-5 headings.",
+      "upstream_source_as_declared": "국가법령정보센터 OpenAPI",
+      "license_as_declared": {
+        "content": "README: 행정규칙 원문은 대한민국 정부 공공저작물이며 자유롭게 이용 가능",
+        "repository_structure_and_metadata": "README: MIT",
+        "license_file_present": false,
+        "caution": "These are repository declarations, not an independent legal determination."
+      },
+      "embedding_use": "Useful for administrative terminology, agency-specific rules, and title/article retrieval; skip `본문출처: parsing-failed`.",
+      "benchmark_risk": {
+        "level": "high",
+        "benchmarks": [
+          "LawIRKo",
+          "AutoRAGRetrieval public/legal slices"
+        ],
+        "reason": "The domain and official-source passages can overlap evaluation corpora even when query strings are not copied."
+      }
+    },
+    {
+      "id": "legalize_kr_precedents",
+      "repository": "legalize-kr/precedent-kr",
+      "url": "https://github.com/legalize-kr/precedent-kr",
+      "clone_url": "https://github.com/legalize-kr/precedent-kr.git",
+      "branch": "main",
+      "revision": "40cd00e54df19d98562abb170c8ff51fd6fe2c2e",
+      "head_commit_time_as_encoded_by_repository": "1999-04-23T12:00:00+09:00",
+      "local_subdir": "precedent-kr",
+      "file_globs": [
+        "*/*/*.md"
+      ],
+      "extractor": "precedent_issue_holding",
+      "title_field": "사건명",
+      "source_url_field": "출처",
+      "identifier_fields": [
+        "판례일련번호",
+        "사건번호",
+        "법원명",
+        "법원등급",
+        "사건종류",
+        "선고일자"
+      ],
+      "snapshot_inventory": {
+        "documents": 124116,
+        "document_bytes": 1340941601,
+        "documents_with_issue_section": 76590,
+        "documents_with_holding_section": 68889,
+        "documents_with_both_issue_and_holding_headings": 66273,
+        "documents_with_opinion_section": 124114
+      },
+      "extraction_dry_run": {
+        "parameters": "min_positive_chars=64, no text caps, exact pair deduplication",
+        "records_emitted": 64814,
+        "duplicates_skipped": 890,
+        "logical_jsonl_bytes": 173331613,
+        "logical_output_sha256": "e24be4ca57f7132ec7b2ae5668579a82351ecaed8072faef84c23486daba477c"
+      },
+      "format": "YAML-like frontmatter plus Markdown sections including `판시사항`, `판결요지`, and `판례내용`.",
+      "upstream_source_as_declared": "국가법령정보센터 OpenAPI",
+      "license_as_declared": {
+        "content": "README: 판례 원문은 대한민국 정부 공공저작물이며 자유롭게 이용 가능",
+        "repository_structure_and_metadata": "README: MIT",
+        "license_file_present": false,
+        "caution": "These are repository declarations, not an independent legal determination."
+      },
+      "embedding_use": "The source-native `판시사항` -> `판결요지` relation is a strong query-like issue/positive-holding candidate. Full opinions should be chunked only in a later long-document stage.",
+      "benchmark_risk": {
+        "level": "high",
+        "benchmarks": [
+          "LawIRKo",
+          "AutoRAGRetrieval legal slice"
+        ],
+        "reason": "Legal vocabulary and possible source overlap create domain advantage; exact benchmark blocklisting remains required for a clean claim."
+      }
+    },
+    {
+      "id": "legalize_kr_ordinances",
+      "repository": "legalize-kr/ordinance-kr",
+      "url": "https://github.com/legalize-kr/ordinance-kr",
+      "clone_url": "https://github.com/legalize-kr/ordinance-kr.git",
+      "branch": "main",
+      "revision": "6443e5dd5833d863219064cd362111f516430bec",
+      "head_commit_time_as_encoded_by_repository": "2026-07-09T12:00:00+09:00",
+      "local_subdir": "ordinance-kr",
+      "file_globs": [
+        "**/본문.md"
+      ],
+      "extractor": "legal_articles",
+      "title_field": "자치법규명",
+      "source_url_field": "출처",
+      "identifier_fields": [
+        "자치법규ID",
+        "자치법규일련번호",
+        "자치법규종류",
+        "지자체기관명",
+        "공포일자",
+        "시행일자",
+        "본문출처"
+      ],
+      "snapshot_inventory": {
+        "documents": 162350,
+        "document_bytes": 1597813709,
+        "documents_with_article_heading": 162046,
+        "article_headings": 2261413,
+        "parsing_failed_documents": 220
+      },
+      "extraction_dry_run": {
+        "parameters": "min_positive_chars=64, no text caps, exact pair deduplication",
+        "records_emitted": 2210794,
+        "duplicates_skipped": 1207,
+        "logical_jsonl_bytes": 4369350780,
+        "logical_output_sha256": "ef3fbff2f0d91fa258809989ab0b3fe1aba480e278f03c17b0c6fed003f84a2e"
+      },
+      "format": "YAML-like frontmatter plus Markdown; region/municipality/type/name are encoded in paths and articles use level-5 headings.",
+      "upstream_source_as_declared": "국가법령정보센터 OpenAPI",
+      "license_as_declared": {
+        "content": "README: 자치법규 원문은 대한민국 정부 공공저작물이며 자유롭게 이용 가능",
+        "repository_structure_and_metadata": "README: MIT",
+        "license_file_present": false,
+        "caution": "These are repository declarations, not an independent legal determination."
+      },
+      "embedding_use": "Largest source: local-government title/article pairs, regional entities, and diverse public-administration terminology.",
+      "benchmark_risk": {
+        "level": "high",
+        "benchmarks": [
+          "LawIRKo",
+          "AutoRAGRetrieval public/legal slices"
+        ],
+        "reason": "Official legal text is target-like for LawIRKo and public/legal RAG tasks."
+      }
+    },
+    {
+      "id": "llm_ko_datasets_catalog",
+      "repository": "gyunggyung/LLM-Ko-Datasets",
+      "url": "https://github.com/gyunggyung/LLM-Ko-Datasets",
+      "clone_url": "https://github.com/gyunggyung/LLM-Ko-Datasets.git",
+      "branch": "main",
+      "revision": "53f7b4a4431c11a1031a56c107b5b12b245471ea",
+      "head_commit_time_as_encoded_by_repository": "2026-01-20T23:14:28+09:00",
+      "local_subdir": "LLM-Ko-Datasets",
+      "extractor": "none",
+      "role": "discovery_catalog_only",
+      "snapshot_inventory": {
+        "readme_lines": 551,
+        "readme_bytes": 49051,
+        "unique_huggingface_dataset_links": 107,
+        "bundled_training_examples": 0
+      },
+      "format": "Markdown catalog of external datasets, collections, models, papers, and evaluation resources; it does not vendor the linked datasets.",
+      "license_as_declared": {
+        "catalog_repository": "Apache-2.0 LICENSE file",
+        "linked_datasets": "independent upstream terms; the catalog license does not relicense them"
+      },
+      "embedding_use": "Use only to discover upstream corpora. Audit and pin each selected Hugging Face dataset independently, then convert suitable QA/title-body/parallel structures to embedding pairs.",
+      "benchmark_risk": {
+        "level": "critical_if_eval_rows_used",
+        "explicit_evaluation_entries": [
+          "KMMLU",
+          "HAE-RAE-BENCH",
+          "CSAT-QA",
+          "K2-Eval",
+          "KorMedMCQA",
+          "LogicKor"
+        ],
+        "reason": "The repository explicitly lists evaluation datasets. They are blocklist inputs, not default training sources."
+      }
+    }
+  ]
+}

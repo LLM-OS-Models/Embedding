@@ -71,6 +71,7 @@
 | 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
 | 데이터 manifest / 오염 차단 | 15-task benchmark seal 빌더 구현 완료 | [docs/05_DATA_AND_GOVERNANCE.md](docs/05_DATA_AND_GOVERNANCE.md) |
 | 100만 행 공개 가능 데이터 공장 | source·수량·검수 gate 설계 완료 | [docs/13_RIGHTS_SAFE_DATA_FACTORY.md](docs/13_RIGHTS_SAFE_DATA_FACTORY.md) |
+| Legalize-KR 데이터 | 312,581문서 감사, 2,756,363 source-native 후보 추출 가능 | [docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md](docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md) |
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
@@ -94,6 +95,7 @@
 15. [진행 현황, 병목과 다음 의사결정](docs/14_PROGRESS_AND_BOTTLENECKS.md)
 16. [성능 우선 50K→1M 데이터 믹스](docs/15_PERFORMANCE_DATA_MIX.md)
 17. [F2LLM-v2-8B와 Comsat 계보·레시피 정밀 감사](docs/16_F2LLM_COMSAT_RECIPE_AUDIT.md)
+18. [Legalize-KR·LLM-Ko-Datasets 원본 감사와 데이터 설계](docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md)
 
 ## 실험 지도
 
