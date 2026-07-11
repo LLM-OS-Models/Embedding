@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "factory_id": "ko-grounded-synthetic-query-v1",
+  "created_at": "2026-07-11",
+  "purpose": "Generate source-grounded Korean retrieval queries, verify exact answer evidence and source citations, and compile teacher-filtered hard-negative rows for ms-swift InfoNCE.",
+  "seed": 42,
+  "input_contract": {
+    "format": "UTF-8 JSONL",
+    "required_fields": [
+      "id",
+      "query",
+      "positive",
+      "pair_type",
+      "label_origin",
+      "provenance"
+    ],
+    "id_unique": true,
+    "legalize_kr_compatible": true,
+    "minimum_source_query_characters": 2,
+    "minimum_positive_characters": 40
+  },
+  "generation": {
+    "model": "Qwen/Qwen3-32B",
+    "system_prompt": "당신은 한국어 검색 데이터 작성자다. 제공된 원문만 사용한다. 원문에 없는 사실을 추론하거나 추가하지 않는다. 출력은 지정된 JSON 객체 하나뿐이다.",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "max_tokens": 512,
+    "endpoint": {
+      "base_url": "http://127.0.0.1:8000/v1",
+      "chat_completions_path": "/chat/completions",
+      "api_key_env": "SYNTHETIC_QUERY_API_KEY",
+      "timeout_seconds": 120,
+      "concurrency": 32,
+      "max_attempts": 3
+    },
+    "response_contract": {
+      "required_fields": [
+        "query",
+        "answer",
+        "evidence_quote",
+        "citation"
+      ],
+      "citation_fields": [
+        "source_candidate_id",
+        "locator"
+      ],
+      "answer_policy": "answer must be copied verbatim from evidence_quote",
+      "evidence_policy": "evidence_quote must be a contiguous source-positive span after Unicode/whitespace normalization",
+      "citation_policy": "source_candidate_id and locator must exactly match an allowed value in the request"
+    },
+    "styles": [
+      {
+        "id": "natural_question",
+        "downstream_sampling_weight": 3,
+        "instruction": "일반 사용자가 검색창이나 RAG 챗봇에 입력할 자연스러운 완전한 질문을 작성한다. 법률 용어를 모를 수 있는 표현을 허용하되 원문 근거 밖의 상황은 만들지 않는다."
+      },
+      {
+        "id": "keyword_search",
+        "downstream_sampling_weight": 2,
+        "instruction": "핵심 고유명사와 법률 개념을 포함한 짧은 한국어 검색어를 작성한다. 단순히 원문 제목 전체를 복사하지 않는다."
+      },
+      {
+        "id": "scenario_question",
+        "downstream_sampling_weight": 2,
+        "instruction": "원문의 적용 조건을 묻는 짧은 생활형 질문을 작성한다. 원문에 없는 인물, 금액, 날짜, 예외를 만들어내지 않는다."
+      },
+      {
+        "id": "citation_lookup",
+        "downstream_sampling_weight": 2,
+        "instruction": "법령명·조문명·판례 쟁점처럼 출처 식별 단서를 포함하여 해당 근거를 찾는 질의를 작성한다."
+      },
+      {
+        "id": "paraphrased_fact_lookup",
+        "downstream_sampling_weight": 1,
+        "instruction": "원문이 명시한 한 가지 사실이나 요건을 다른 한국어 표현으로 묻는다. 답 자체를 질문에 포함하지 않는다."
+      }
+    ]
+  },
+  "validation": {
+    "minimum_query_characters": 4,
+    "maximum_query_characters": 300,
+    "minimum_answer_characters": 2,
+    "maximum_answer_characters": 300,
+    "minimum_evidence_characters": 4,
+    "maximum_evidence_characters": 600,
+    "require_hangul_in_query": true,
+    "require_exact_answer_in_evidence": true,
+    "require_exact_evidence_in_positive": true,
+    "reject_query_equal_to_source_query": false,
+    "maximum_query_positive_character_coverage": 0.9,
+    "reject_duplicate_generated_queries_per_source": true
+  },
+  "teacher_scoring": {
+    "recommended_model": "Qwen/Qwen3-Reranker-8B",
+    "score_file_format": "one JSON object per generated_id with a documents array",
+    "score_field_priority": [
+      "reranker_score",
+      "teacher_score",
+      "retriever_score"
+    ],
+    "score_range": [
+      0.0,
+      1.0
+    ],
+    "minimum_positive_score": 0.5,
+    "require_positive_document_score": true
+  },
+  "hard_negative_selection": {
+    "candidate_pool_size": 24,
+    "negatives_per_query": 7,
+    "positive_relative_ratio": 0.95,
+    "minimum_negative_score": 0.05,
+    "absolute_positive_margin": 0.0,
+    "selection_strategy": "hash_sample_from_top_pool",
+    "exclude_same_candidate": true,
+    "exclude_duplicate_positive_text": true,
+    "exclude_query_text_match": true,
+    "insufficient_policy": "drop",
+    "duplicate_row_policy": "drop"
+  },
+  "output_contract": {
+    "training_jsonl_fields": [
+      "messages",
+      "positive_messages",
+      "negative_messages"
+    ],
+    "message_role": "user",
+    "provenance_sidecar": "one audit record per emitted training row in identical order",
+    "manifest": "input/config/output SHA-256, generation/scorer identities, counters, and all selection thresholds",
+    "visibility_default": "private-noncommercial-performance-track"
+  },
+  "evaluation_safety": {
+    "rule": "Apply the pinned benchmark exact/near-duplicate blocklist before generation and again before training.",
+    "target_adaptation_disclosure": "If benchmark-train or target-like Legalize-KR rows are used, disclose them per task; never describe the resulting score as clean zero-shot.",
+    "forbidden": "Do not use evaluation queries, qrels, answer labels, or held-out corpus-derived synthetic queries as factory inputs."
+  }
+}
