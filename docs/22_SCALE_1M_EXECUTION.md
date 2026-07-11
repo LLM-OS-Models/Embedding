@@ -45,6 +45,8 @@ train-family 노출이 있으므로 clean zero-shot이 아니라 `performance ta
 forward/backward 5-step admission probe가 검증된 SDPA `23.2 s/step`보다 최소 1.05배
 빠를 때만 격리 FA2 환경으로 전환하고, 실패하거나 느리면 SDPA로 즉시 fallback한다.
 vLLM pooling은 평가·서빙 backend이며 gradient 학습 가속 경로로 사용하지 않는다.
+1M queue는 동일 batch/length의 200K admission 결과를 재사용한다. 결과가 없을 때만
+1M exact trainer input으로 같은 5-step gate를 한 번 실행한다.
 
 ## 학습
 

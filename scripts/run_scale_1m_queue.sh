@@ -198,18 +198,18 @@ MAX_STEPS_1M="$(jq -r '.output_rows / 128 | floor' "$TRAINING_MANIFEST")"
 
 SCALE_TRAIN_ENV="$ROOT/.venv-train"
 SCALE_TRAIN_ATTN=sdpa
-if [[ -x "$ROOT/.venv-train-fa2/bin/swift" ]] && \
-    "$ROOT/.venv-train-fa2/bin/python" -c 'import torch, flash_attn, swift; assert torch.cuda.is_available()' \
-      >/dev/null 2>&1; then
-  if run_stage probe-scale-fa2-backward env \
-    TRAIN_ENV="$ROOT/.venv-train-fa2" ATTN_IMPL=flash_attention_2 \
-    PROBE_SUFFIX=scale1m-fa2 DATA="$VAL_FILE" MAX_LENGTH=512 \
-    "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" lora_r64; then
-    SCALE_TRAIN_ENV="$ROOT/.venv-train-fa2"
-    SCALE_TRAIN_ATTN=flash_attention_2
-  fi
+FA2_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
+if [[ ! -s "$FA2_ADMISSION" ]]; then
+  run_stage probe-scale-fa2-throughput env \
+    TRAIN_FILE="$TRAIN_FILE" RUN_KEY=scale1m-lora-r64 \
+    "$ROOT/experiments/070_tuning_strategy/admit_fa2_lora_backend.sh" || true
+  FA2_ADMISSION="$ROOT/outputs/backend-probes/scale1m-lora-r64/admission.json"
 fi
-echo "[$(timestamp)] scale training backend=$SCALE_TRAIN_ATTN env=$SCALE_TRAIN_ENV"
+if [[ -s "$FA2_ADMISSION" ]] && jq -e '.admitted == true' "$FA2_ADMISSION" >/dev/null; then
+  SCALE_TRAIN_ENV="$ROOT/.venv-train-fa2"
+  SCALE_TRAIN_ATTN=flash_attention_2
+fi
+echo "[$(timestamp)] scale training backend=$SCALE_TRAIN_ATTN env=$SCALE_TRAIN_ENV admission=$FA2_ADMISSION"
 
 train_scale() {
   local output_name="$1" batch="$2" accum="$3"
