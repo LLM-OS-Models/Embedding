@@ -227,6 +227,12 @@ OOM·API 오류·속도 역전·로그 파싱 실패는 모두 `.venv-train + sd
 1M, SQuAD/health/AutoRAG, legal, combined 장기 queue도 이 동일 admission JSON을
 재사용해 import-only 1-step probe를 반복하지 않는다.
 
+10K FP32 safe-merge를 50K GPU 학습과 CPU에서 병렬 실행하는 시도는 중단했다. 35GB
+RSS와 약 9.7 CPU-core를 지속 사용하면서 step 760 validation이 평소 약 4 it/s에서
+초반 0.6–0.8 it/s로 떨어지고 H100이 input을 기다렸다. process와 빈 staging을 즉시
+제거하자 후반 validation은 3–4 it/s로 회복했다. 따라서 8B CPU merge는 GPU 학습과
+겹치지 않으며, 후속 queue가 GPU를 넘겨받은 뒤 FP32 parity fallback을 직렬 실행한다.
+
 ### 5. clean selection 보드 부재
 
 Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfitting이 된다. 법률/공공의 첫 source-document-held-out 10K는 확보했으며, 일반·보건·금융 temporal/domain holdout은 추가로 필요하다.
