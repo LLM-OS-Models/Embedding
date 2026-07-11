@@ -144,6 +144,7 @@ def validate_config(config: dict[str, Any]) -> None:
         "kalm_lists",
         "classification_label",
         "sts_pairs",
+        "qa_context",
         "beir_join",
     }
     for source_id, source in sources.items():
@@ -349,6 +350,56 @@ def iter_sts_pairs(
         yield query, positive, [negative_pool[index]]
 
 
+def iter_qa_context(
+    source: dict[str, Any], seed: int
+) -> Iterator[tuple[str, str, list[str]]]:
+    """Convert extractive QA train rows into retrieval examples.
+
+    The first pass builds a deterministic pool of unique contexts. The second
+    pass emits question -> answer-bearing context pairs plus bootstrap
+    negatives from other contexts. These bootstrap negatives are deliberately
+    simple: scale/target-adaptation queues must remine them with the current
+    embedding model before using this source for a final candidate.
+    """
+
+    schema = source["schema"]
+    context_field = schema["context_field"]
+    question_field = schema["question_field"]
+    bootstrap_negatives = int(source.get("bootstrap_negatives", 7))
+    if bootstrap_negatives <= 0:
+        raise ValueError("qa_context bootstrap_negatives must be positive")
+
+    context_pool: list[str] = []
+    context_seen: set[str] = set()
+    for row in load_hf_dataset_stream(source, seed, shuffle=False):
+        context = normalize_text(row.get(context_field))
+        if context and context not in context_seen:
+            context_seen.add(context)
+            context_pool.append(context)
+    if len(context_pool) <= bootstrap_negatives:
+        raise RuntimeError(
+            f"{source['repo_id']}: QA adapter needs more than "
+            f"{bootstrap_negatives} unique contexts"
+        )
+
+    for row in load_hf_dataset_stream(source, seed, shuffle=True):
+        query = normalize_text(row.get(question_field))
+        positive = normalize_text(row.get(context_field))
+        if not query or not positive:
+            yield query, positive, []
+            continue
+        start = stable_seed(seed, stable_hash(query, positive)) % len(context_pool)
+        negatives: list[str] = []
+        for offset in range(len(context_pool)):
+            candidate = context_pool[(start + offset) % len(context_pool)]
+            if candidate == positive:
+                continue
+            negatives.append(candidate)
+            if len(negatives) >= bootstrap_negatives:
+                break
+        yield query, positive, negatives
+
+
 def iter_beir_join(
     source: dict[str, Any], seed: int
 ) -> Iterator[tuple[str, str, list[str]]]:
@@ -433,6 +484,8 @@ def source_examples(
         return iter_classification(source, seed)
     if adapter == "sts_pairs":
         return iter_sts_pairs(source, seed)
+    if adapter == "qa_context":
+        return iter_qa_context(source, seed)
     if adapter == "beir_join":
         return iter_beir_join(source, seed)
     raise AssertionError(f"Unsupported adapter: {adapter}")

@@ -11,4 +11,7 @@
 
 실험 사이에 결과 파일을 복사해 덮어쓰지 않습니다. 공통 데이터는 root `data/`, 모델 결과는 `artifacts/`에 두고 manifest로 참조합니다.
 
-현재 비교 축은 `000`–`070`이며, LoRA와 full-parameter tuning의 비용·품질 비교는 [`070_tuning_strategy`](070_tuning_strategy/)에 기록합니다.
+현재 비교 축은 `000`–`090`이다. LoRA와 full-parameter tuning의 비용·품질 비교는
+[`070_tuning_strategy`](070_tuning_strategy/), F2 dual-loss/MRL은
+[`080_f2_recipe`](080_f2_recipe/), SQuADKorV1 train-family adaptation은
+[`090_sionic_squad_adaptation`](090_sionic_squad_adaptation/)에 기록한다.

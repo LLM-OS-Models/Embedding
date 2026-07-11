@@ -111,6 +111,13 @@
         "ko_strategyqa_train": 2100,
         "kalm_finetuning_replay": 26000
       }
+    },
+    "sionic_squad_train_60k": {
+      "target_rows": 60000,
+      "intent": "Isolated SQuADKorV1 train-family target adaptation; bootstrap negatives must be re-mined with the current student before final training.",
+      "source_caps": {
+        "korquad_v1_train": 60000
+      }
     }
   },
   "sources": {
@@ -438,6 +445,29 @@
       ],
       "benchmark_exposure": "official train qrels exposed; dev qrels and dev-only query IDs remain forbidden",
       "release_eligible": false
+    },
+    "korquad_v1_train": {
+      "loader": "hf_dataset",
+      "adapter": "qa_context",
+      "repo_id": "KorQuAD/squad_kor_v1",
+      "revision": "01aad23853355e5f4f6317eeaaa8186811424834",
+      "config": "squad_kor_v1",
+      "split": "train",
+      "observed_rows": 60407,
+      "schema": {
+        "question_field": "question",
+        "context_field": "context"
+      },
+      "bootstrap_negatives": 7,
+      "query_instruction": "Given a Korean question, retrieve the passage that contains the answer",
+      "declared_license": "cc-by-nd-4.0 in Hub metadata; upstream card text also identifies CC BY-ND 2.0 KR",
+      "language": "ko",
+      "require_hangul": true,
+      "trained_on_tasks": [
+        "SQuADKorV1"
+      ],
+      "benchmark_exposure": "original KorQuAD train split exposed; original validation and the MTEB converted test repository remain forbidden",
+      "release_eligible": false
     }
   },
   "catalog_only": {
@@ -545,6 +575,13 @@
     {
       "repo_id": "yjoonjang/squad_kor_v1",
       "blocked_splits": [
+        "test"
+      ]
+    },
+    {
+      "repo_id": "KorQuAD/squad_kor_v1",
+      "blocked_splits": [
+        "validation",
         "test"
       ]
     },

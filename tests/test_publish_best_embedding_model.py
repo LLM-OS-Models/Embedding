@@ -26,6 +26,13 @@ class PublishBestModelTests(unittest.TestCase):
             {"benchmark_adaptation": "target-adapted-legal25-general75"}
         )
         self.assertEqual(legal[0], "LLM-OS-Models/korean-legal-quantile-hn7-replay-v1")
+        squad = training_dataset_repos(
+            {"benchmark_adaptation": "target-adapted-squad50-general50"}
+        )
+        self.assertEqual(
+            squad[0],
+            "LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
+        )
 
     def test_card_requires_complete_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -41,6 +41,7 @@
 | homogeneous batching | provenance source별 16-row microbatch compiler | 50K `49,904`, 200K `199,904` rows; 모든 emitted batch 단일 source |
 | performance 1M mix | 1,000,000 rows build·strict validation·public HF upload | train SHA `094d44…3c0a`, provenance SHA `94334a…18c1` |
 | performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous length buckets | ordered train SHA `436dc7…2c00`; source remainder 총 64 rows |
+| SQuADKorV1 train-family 60K | 원본 KorQuAD train만 질문→문맥 변환·전수 감사·공개 | 60,000 rows, 7 bootstrap negatives, SHA mismatch 0; public `9d8ae811`; current-student HN/replay queue 연결 |
 | scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute + pool24 score-rank quantile7 | index persist/resume, positive-relative filter, selection/cache-contract test 통과 |
 | public model artifact contract | model card, 사용법, data/evaluation manifest, Sionic/official/clean/noise summary와 per-query rank 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
 | derived dataset publication | actual train/provenance/mining audit/manifest SHA·row·quantile contract 검증 후 공개 | 1M/법률 학습 종료 뒤 GPU 평가와 background upload하도록 연결 |
@@ -106,6 +107,10 @@ step 280은 loss `0.00352078`, margin `0.04247031`, mean negative/positive
 
 step 320은 loss `0.00353674`, margin `0.04204340`, mean negative/positive
 `0.19308548/0.73934209`로 step 280보다 악화됐다. best/promotion 판단은 변하지 않는다.
+
+step 360은 loss `0.00356961`, margin `0.04129956`, mean negative/positive
+`0.19078934/0.73078823`으로 step 320보다도 악화됐다. checkpoint 200이 계속 best이며,
+10K best를 넘지 못했으므로 50K continual-promotion gate도 닫혀 있다.
 
 현재 200-step best는 trainer의 rolling `save_total_limit=3` 삭제 범위 밖에 필수
 adapter/config/state/log만 hard-link snapshot으로 보존했다. active-run watcher가 매
@@ -209,10 +214,11 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 | 7 | 후보별 Sionic 9 전체 평가와 최선 모델 공개 | checkpoint 검증 | 9-task summary + model/data revision + model card |
 | 8 | 최고 후보 공식 Korean v1 | Sionic 선택 완료 | 6-task raw/summary 및 README 반영 |
 | 9 | 1M homogeneous LoRA scale | 1M manifest 완료 | 7,812 steps, Sionic 9/official, public model |
-| 10 | 법률 250K target-adaptation | 1M stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
-| 11 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
-| 12 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
-| 13 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
+| 10 | SQuADKorV1 train-family 60K adaptation | 1M stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
+| 11 | 법률 250K target-adaptation | 1M/SQuAD stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
+| 12 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
+| 13 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
+| 14 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
 
 ## 주장 gate
 

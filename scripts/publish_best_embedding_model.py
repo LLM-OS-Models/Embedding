@@ -268,6 +268,12 @@ def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
             "LLM-OS-Models/korean-legal-retrieval-source-native-250k",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
+    if adaptation.startswith("target-adapted") and "squad" in adaptation:
+        return [
+            "LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
+            "LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k",
+            "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
+        ]
     if adaptation.startswith("target-adapted"):
         return [
             "LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1",

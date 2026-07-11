@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-11T18:52:24.622018+00:00",
+  "inputs": {
+    "train": {
+      "path": "outputs/data/performance-v1/sionic-squad-train-60k/train.jsonl",
+      "sha256": "5def1584d2e9b62cbedb3428cc49b1e7eeed674c48ec7e514f40ec54b6a63e07"
+    },
+    "provenance": {
+      "path": "outputs/data/performance-v1/sionic-squad-train-60k/provenance.jsonl",
+      "sha256": "e26d81fc3ca5a957c36353c522d280606de0195986c2ea784b8101df45646ea5"
+    }
+  },
+  "rows": 60000,
+  "source_counts": {
+    "korquad_v1_train": 60000
+  },
+  "negative_count_distribution": {
+    "7": 60000
+  },
+  "instruction_counts": {
+    "Instruct: Given a Korean question, retrieve the passage that contains the answer": 60000
+  },
+  "query_style_heuristic": {
+    "natural_question": 59254,
+    "comma_keyword_list": 629,
+    "short_search_or_title": 91,
+    "long_statement_or_search": 26
+  },
+  "benchmark_train_exposure_rows": {
+    "SQuADKorV1": 60000
+  },
+  "query_body_below_4_chars_by_source": {},
+  "character_lengths": {
+    "query_body": {
+      "min": 5,
+      "mean": 33.80981666666667,
+      "p50": 32,
+      "p95": 57,
+      "p99": 70,
+      "max": 146
+    },
+    "positive": {
+      "min": 348,
+      "mean": 519.2851166666667,
+      "p50": 462,
+      "p95": 862,
+      "p99": 1199,
+      "max": 10012
+    },
+    "negative": {
+      "min": 348,
+      "mean": 517.1935071428571,
+      "p50": 460,
+      "p95": 858,
+      "p99": 1217,
+      "max": 10012
+    }
+  },
+  "exact_duplicates": {
+    "query_beyond_first_occurrence": 21,
+    "positive_beyond_first_occurrence": 50394
+  },
+  "contract_checks": {
+    "row_sha256_checked": 60000,
+    "row_sha256_mismatches": 0,
+    "provenance_row_index_mismatches": 0,
+    "homogeneous_batch_checked": false,
+    "homogeneous_batch_violations": 0,
+    "status": "pass"
+  },
+  "style_note": "Heuristic counts guide ablations; they are not human relevance labels."
+}

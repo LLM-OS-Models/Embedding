@@ -93,10 +93,10 @@ corpus config: id, text
 | AutoRAG | test | 평가 repo에 usable train split 없음 | 전체 평가 repo 제외 |
 | PublicHealthQA Korean | test | test만 있음 | 전체 평가 repo 제외 |
 | Belebele Korean | test | test만 있음 | 전체 평가 repo 제외 |
-| SQuADKorV1 Retrieval | test | 현재 MTEB 변환 repo는 test만 있음 | 전체 평가 repo 제외 |
+| SQuADKorV1 Retrieval | test | MTEB 변환 repo는 test만 있음; 별도 원본 KorQuAD train 60,407 존재 | MTEB repo 전면 제외, 원본 train만 격리된 60K adaptation에서 사용 |
 | LawIRKo | MTEB test | underlying storage가 `train`으로 보이지만 바로 그 내용이 평가 corpus/query/qrel | repo의 **모든 split** 제외 |
 
-따라서 `pilot_50k`는 공식 Korean-v1의 KLUE-TC, KLUE-STS, KorSTS, Ko-StrategyQA, MIRACL 계열에 supervised exposure가 있다. MIRACL은 retrieval과 reranking 두 task가 같은 family이므로 Korean-v1 여섯 task 모두에 직·간접 train-family 노출이 있는 in-domain 성능 모델로 표기한다. Sionic9에서는 MIRACL, MrTidy, MLDR, Ko-StrategyQA 4/9 task family가 노출되고, AutoRAG·PublicHealthQA·Belebele·SQuADKorV1·LawIRKo 5/9는 evaluation-row 기준 zero-shot을 유지한다.
+따라서 `pilot_50k`는 공식 Korean-v1의 KLUE-TC, KLUE-STS, KorSTS, Ko-StrategyQA, MIRACL 계열에 supervised exposure가 있다. MIRACL은 retrieval과 reranking 두 task가 같은 family이므로 Korean-v1 여섯 task 모두에 직·간접 train-family 노출이 있는 in-domain 성능 모델로 표기한다. 기본 50K/200K/1M mix의 Sionic9 노출은 MIRACL, MrTidy, MLDR, Ko-StrategyQA 4/9이고 AutoRAG·PublicHealthQA·Belebele·SQuADKorV1·LawIRKo 5/9는 evaluation-row 기준 zero-shot을 유지한다. 별도 `sionic_squad_train_60k` adaptation을 적용한 후보는 SQuADKorV1까지 5/9 train-family exposed로 바뀌며 모델 카드에 이를 별도로 기록한다.
 
 이것은 점수를 무효화하지 않지만 “zero-shot SOTA”라고 부르면 안 된다. leaderboard에는 raw score와 함께 `trained_on_tasks`를 내보낸다. F2 카드가 경고한 `mkqa_*.parquet`와 `sib200.parquet`도 현재 MTEB가 train split을 평가에 사용하므로 전부 block했다.
 
