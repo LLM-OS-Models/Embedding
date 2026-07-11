@@ -175,6 +175,21 @@ source에 분산된다. 특히 F2의 공개 training dataset list에는 Sionic 9
 계열인 MIRACL, MrTidy, MLDR가 모두 들어 있다. 그러므로 F2의 Sionic 9 결과를
 완전한 zero-shot이라고 해석하면 안 된다.
 
+고정 revision의 실제 Korean parquet metadata를 읽으면 target-family shard 규모는
+다음과 같다. 세 파일 모두 positive와 `negative_1`부터 `negative_24`까지를 가진다.
+
+| Sionic-family training shard | Rows | Explicit HN columns |
+|---|---:|---:|
+| `miracl_ko.parquet` | 753 | 24 |
+| `mrtidy_korean.parquet` | 1,294 | 24 |
+| `mldr_ko.parquet` | 2,252 | 24 |
+| **합계** | **4,299** | — |
+
+이는 공개 composite에 존재하는 row 수다. 저자들이 final 8B run에서 어느 row를
+제외했는지에 대한 stage manifest는 없으므로 exact optimizer exposure로 바꾸어
+말하지 않는다. 다만 model/dataset metadata와 official MTEB의 training-task 표시는
+F2의 Korean 결과가 완전 zero-shot이 아니라는 결론을 뒷받침한다.
+
 ### Loss와 hard negative: 코드로 확인되는 정확한 동작
 
 retrieval sample의 기본 loss는 다음과 같다.
