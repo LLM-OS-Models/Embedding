@@ -9,9 +9,15 @@
 
 clean comprehensive 보드의 첫 자체 Korean legal/public retrieval set은 **same-repository source-document-held-out, 독립성 I 등급**으로 정의한다. Z 등급이 아니다. query와 positive는 학습에 사용한 것과 같은 네 Legalize-KR repository와 같은 source-native 구조에서 나오기 때문이다. 다만 선택된 `source_document_sha256` 전체가 training provenance에 없고, 선택된 query/positive의 normalized SHA-256이 Sionic 9 및 공식 MTEB Korean 평가 blocklist에 없다는 것을 생성기와 독립 verifier가 강제한다.
 
-현재 `outputs/data/legal-performance-v1/candidates/*.jsonl`만으로는 10K를 만들 수 없다. 실측 candidate **250,000행/61,750 source documents**가 `provenance.jsonl`의 training **250,000 source_candidate_ids/61,750 source documents**와 전부 일치한다. 따라서 문서 단위 holdout 후보는 **0행**이다. 이 상태에서 row 단위 split을 만들면 같은 법령·판례 문서의 다른 조문/section이 학습과 평가에 걸쳐 섞이므로 clean comprehensive용으로 부적합하다.
+초기 250K candidate만으로는 모든 61,750 source document가 training에 노출돼 blocked됐지만,
+같은 pinned repository의 deterministic file-hash shards 12–15를 추가 추출해 문제를
+해소했다. 최종 candidate 242,675행에서 177,004행이 training document exclusion 뒤
+남았고, source document당 최대 한 pair와 source balance를 적용해 10,000행을 선택했다.
 
-생성기는 이 경우 기준을 낮추지 않는다. `blocked_insufficient_source_document_heldout_candidates` manifest만 기록하고 query/corpus/qrels는 생성하지 않으며 종료 코드 2를 반환한다. 실제 10K를 만들려면 pinned repository의 나머지 source documents를 candidate pool로 추가 추출한 뒤, 현재 training provenance를 그대로 exclusion evidence로 사용해야 한다.
+독립 verifier 결과는 training candidate/document overlap `0/0`, benchmark
+query/positive overlap `0/0`, unique query/positive/source document
+`10,000/10,000/10,000`, `verified:true`다. artifact는
+[`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1@ee1300f`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0)에 공개했다.
 
 ## 독립성 등급을 I로만 부르는 이유
 
@@ -139,29 +145,32 @@ query/corpus ID, source candidate/document SHA, emitted/normalized text SHA, ful
 
 ## build와 독립 verify
 
-현재 입력으로 정확한 blocked diagnostic을 재현한다.
+초기 capped training candidate만 넣으면 약한 row split을 만들지 않고 정확히
+`blocked_insufficient_source_document_heldout_candidates`로 종료한다. 실제 완료 artifact는
+file-hash shards 12–15의 16개 candidate JSONL을 `--candidate`로 전달해 생성했다.
 
 ```bash
 python scripts/build_legal_source_holdout.py build \
-  --output-dir outputs/evaluation/legal-source-heldout-i-v1 \
+  $(find outputs/data/legal-holdout-candidates-v1 -name '*.jsonl' -printf '--candidate %p ') \
+  --output-dir outputs/evaluation/legal-source-heldout-i-v1-shards12-15 \
   --target-size 10000
 ```
 
-현재 예상 결과는 종료 코드 2와 다음 상태다.
+완료 selection은 다음과 같다.
 
 ```text
-status: blocked_insufficient_source_document_heldout_candidates
-candidate rows: 250,000
-excluded because source document appeared in training: 250,000
-eligible before benchmark exact exclusion: 0
-target: 10,000
+status: complete
+candidate rows: 242,675
+eligible before benchmark exact exclusion: 177,004
+selected rows/source documents: 10,000 / 10,000
+admrule / statute / ordinance / precedent: 2,998 / 1,006 / 2,998 / 2,998
 ```
 
-새 source-held-out candidate를 추가한 뒤 같은 명령이 성공하면 반드시 독립 verifier를 실행한다.
+독립 verifier를 실행했다.
 
 ```bash
 python scripts/build_legal_source_holdout.py verify \
-  --output-dir outputs/evaluation/legal-source-heldout-i-v1
+  --output-dir outputs/evaluation/legal-source-heldout-i-v1-shards12-15
 ```
 
 verifier는 출력 SHA뿐 아니라 training provenance와 benchmark gzip을 다시 읽고 다음을 재계산한다.
@@ -176,9 +185,10 @@ verifier는 출력 SHA뿐 아니라 training provenance와 benchmark gzip을 다
 - full provenance의 repository/revision/document/date 일치
 - 네 repository가 training repository와 동일하다는 I 등급 조건
 
-## 실제 10K를 만드는 다음 입력 작업
+## 실제 10K를 만든 입력 작업
 
-현재 training provenance를 수정하거나 일부를 지우면 안 된다. 대신 같은 pinned revision에서 training에 아직 나오지 않은 문서를 추가 추출한다.
+training provenance를 수정하거나 일부를 지우지 않고, 같은 pinned revision에서 training에
+아직 나오지 않은 문서를 추가 추출했다.
 
 1. 네 source별 전체 또는 deterministic shard candidate를 새 JSONL로 추출한다.
 2. 기존 250K candidate와 새 candidate를 builder의 `--candidate` 반복 인자로 함께 준다.

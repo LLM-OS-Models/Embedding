@@ -35,16 +35,17 @@
 | performance 50K mix | 계획 수량 전체 build·strict validation 완료 | train SHA `b46a7be…258a`, provenance SHA `e8ccca…6031` |
 | performance 200K mix | 200,000 rows build·strict validation·공개 업로드 | train SHA `379694…e480`, provenance SHA `7243e6…17b8` |
 | 법률 source-native mix | 4개 pinned repository에서 균형 250,000 rows build·공개 업로드 | train SHA `1d8136…4c90`, provenance SHA `a1b3cd…de3e`; bootstrap negative 표시 |
-| 데이터 공개 | 50K, 200K, 법률 250K, 성능 우선 1M, benchmark blocklist | `LLM-OS-Models` HF organization의 public dataset 5개, 원격 API에서 `private=false`와 파일 확인 |
+| 데이터 공개 | 50K, 200K, 법률 250K, 성능 우선 1M, benchmark blocklist, clean 법률 holdout | `LLM-OS-Models` HF organization의 public dataset 6개, 원격 API에서 `private=false`와 파일 확인 |
 | vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | Ko-Strategy parity/처리량 측정 완료; 이 workload에서는 FA2가 더 빠름 |
 | adapter 병합/공개 | safe merge, 6-probe parity, ST contract, 카드/대용량 upload 코드 | tiny Qwen 실제 LoRA merge에서 max pair delta `4.68e-8` |
 | homogeneous batching | provenance source별 16-row microbatch compiler | 50K `49,904`, 200K `199,904` rows; 모든 emitted batch 단일 source |
 | performance 1M mix | 1,000,000 rows build·strict validation·public HF upload | train SHA `094d44…3c0a`, provenance SHA `94334a…18c1` |
-| performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous batches | ordered train SHA `ac39ea…0169`; source remainder 총 64 rows |
+| performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous length buckets | ordered train SHA `436dc7…2c00`; source remainder 총 64 rows |
 | scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute | 250K legal dry-run, index persist/resume, false-negative filter test 통과 |
 | public model artifact contract | model card, 사용법, data/evaluation manifest와 Sionic/official raw summary 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
 | benchmark blocklist | Sionic 9 + 공식 Korean 6의 exact hash artifact 15/15 | 547,245,091 bytes, 104 files, public revision `5e876f266068`; 원문·raw ID 없음 |
 | 10K exhaustive HN | 10,000×10,000 exact cosine, 4 negatives/row, drop 0 | 91.75초; negative mean `0.50020`, p95 `0.59108`; train SHA `3df507…5adc` |
+| clean 법률 retrieval holdout | 10,000 queries/docs/qrels, grade I-not-Z | training ID/document overlap 0, benchmark query/positive overlap 0, verifier pass, public `ee1300f` |
 
 ## 현재 실행 중
 
@@ -103,7 +104,7 @@ benchmark decontamination blocklist는 Sionic 9와 공식 Korean 6의 15/15 task
 - adapter probe의 positive margin `0.44580`은 세 문장 무결성 검사이지 retrieval benchmark 점수가 아니다.
 - 10K hard-negative mining과 LoRA r64 학습은 완료됐다. validation InfoNCE loss와 merge probe만으로 Comsat 우위를 주장하지 않으며 Sionic 9 전체가 끝나야 한다.
 - vLLM Ko-StrategyQA는 `0.83830`, 기존 FA2는 `0.84016`으로 `-0.00186` 차이였다. 65K-token 설정은 약 200 docs/s로 FA2보다 느렸고, 131K-token/1024-seq/95% VRAM은 75.85GiB에서 OOM이 나 공식 full run에는 쓰지 않는다.
-- clean comprehensive suite는 설계만 고정됐고 rights-safe holdout 수치는 아직 없다.
+- clean comprehensive suite의 첫 법률 source-document-held-out 10K는 고정됐지만 Qwen/Comsat/우리 모델 baseline 수치는 아직 없다.
 
 ## 주요 병목
 
@@ -164,7 +165,7 @@ F2는 45M example full FT 선례지만 우리 budget과 base는 다르다. stand
 
 ### 5. clean selection 보드 부재
 
-Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfitting이 된다. 아직 rights-safe temporal/domain holdout이 없어 public score와 독립적인 선택 근거가 부족하다.
+Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfitting이 된다. 법률/공공의 첫 source-document-held-out 10K는 확보했으며, 일반·보건·금융 temporal/domain holdout은 추가로 필요하다.
 
 해소 조건:
 

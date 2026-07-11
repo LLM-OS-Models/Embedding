@@ -54,7 +54,7 @@ row는 101개였다.
 
 ### 3. Clean Korean 종합 보드
 
-우리의 실제 모델 선택 보드입니다. public leaderboard test를 보며 튜닝하지 않고, 데이터 provenance와 중복 차단이 확인된 holdout에서만 checkpoint를 고릅니다. 아직 clean 데이터셋을 구축 중이므로 수치를 만들지 않습니다.
+우리의 실제 모델 선택 보드입니다. public leaderboard test를 보며 튜닝하지 않고, 데이터 provenance와 중복 차단이 확인된 holdout에서만 checkpoint를 고릅니다. 첫 10K 법률 source-document-held-out set은 build·독립 검증·공개를 완료했고 baseline/model 수치는 후속 queue에서 채웁니다.
 
 | 모델 | Clean retrieval | Broad semantic | Long-context | Noise/OCR robustness | Peak VRAM | 상태 |
 |---|---:|---:|---:|---:|---:|---|
@@ -89,6 +89,7 @@ row는 101개였다.
 | 법률 source-native 250K | 법령·행정규칙·판례·자치법규 균형 shard; bootstrap negative 공개 | [`LLM-OS-Models/korean-legal-retrieval-source-native-250k`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-retrieval-source-native-250k) |
 | 성능 우선 1M 데이터 | 1,000,000 rows + exact 999,936-row length-bucketed train/provenance 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-performance-1m`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/fa9cfee59356e173827ea33339c06d8d8b388acc) |
 | 평가 오염 방지 blocklist | Sionic 9 + 공식 Korean 6, 원문 없는 SHA-256 547MB | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
+| Clean 법률 retrieval 10K | training document overlap 0, benchmark exact overlap 0, 독립 verifier pass | [`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0) |
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
