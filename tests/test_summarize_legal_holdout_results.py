@@ -5,7 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.summarize_legal_holdout_results import END, START, load_rows, markdown, update_readme
+from scripts.summarize_legal_holdout_results import (
+    END,
+    START,
+    load_robustness_rows,
+    load_rows,
+    markdown,
+    update_readme,
+)
 
 
 class SummarizeLegalHoldoutTests(unittest.TestCase):
@@ -35,11 +42,36 @@ class SummarizeLegalHoldoutTests(unittest.TestCase):
             rows = load_rows(root)
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["metrics"]["ndcg_at_10"], 0.6)
-            rendered = markdown(rows)
+            robust_path = root / "robust" / "summary.json"
+            robust_path.parent.mkdir()
+            robust_path.write_text(
+                json.dumps(
+                    {
+                        "protocol_id": "legal-conversational-noise-i-v1",
+                        "model": "Qwen/Qwen3-Embedding-8B",
+                        "created_at_utc": "2026-01-03T00:00:00Z",
+                        "conditions": {
+                            "prompt_on/noise_0.05": {
+                                "ndcg_retention_vs_same_prompt_clean": 0.99,
+                                "noise_intrusion_at_10": 0.01,
+                            },
+                            "prompt_off/noise_0.05": {
+                                "ndcg_retention_vs_same_prompt_clean": 0.8,
+                                "noise_intrusion_at_10": 0.2,
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            robustness = load_robustness_rows(root / "robust")
+            rendered = markdown(rows, robustness)
             readme = root / "README.md"
             readme.write_text(f"before\n{START}\nold\n{END}\nafter\n", encoding="utf-8")
             update_readme(readme, rendered)
             self.assertIn("0.60000", readme.read_text(encoding="utf-8"))
+            self.assertIn("0.99000", readme.read_text(encoding="utf-8"))
+            self.assertIn("0.01000/0.20000", readme.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

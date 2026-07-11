@@ -33,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sionic-summary", type=Path, required=True)
     parser.add_argument("--official-summary", type=Path, required=True)
     parser.add_argument("--clean-summary", type=Path)
+    parser.add_argument("--robustness-summary", type=Path)
     parser.add_argument("--training-manifest", type=Path, required=True)
     parser.add_argument(
         "--repo-id", default="LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1"
@@ -123,6 +124,11 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     sionic = read_json(args.sionic_summary.resolve())
     official = read_json(args.official_summary.resolve())
     clean = read_json(args.clean_summary.resolve()) if args.clean_summary else None
+    robustness = (
+        read_json(args.robustness_summary.resolve())
+        if args.robustness_summary
+        else None
+    )
     training = read_json(args.training_manifest.resolve())
     if model_evidence.get("status") != "pass":
         raise ValueError("Model packaging/parity evidence did not pass")
@@ -151,28 +157,72 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         if clean.get("protocol_id") != "legal-source-document-heldout-i-v1":
             raise ValueError("Unexpected clean legal protocol")
         if resolved_local_model(clean.get("model")) != model_dir:
-            raise ValueError("Clean legal summary belongs to a different model artifact")
+            raise ValueError(
+                "Clean legal summary belongs to a different model artifact"
+            )
         if clean.get("requested_revision") != expected_revision:
-            raise ValueError("Clean legal summary revision does not match model evidence")
+            raise ValueError(
+                "Clean legal summary revision does not match model evidence"
+            )
         dataset = clean.get("dataset", {})
         if dataset.get("independence_grade") != "I" or dataset.get("not_grade") != "Z":
             raise ValueError("Clean legal independence evidence is invalid")
+    if robustness is not None:
+        if robustness.get("protocol_id") != "legal-conversational-noise-i-v1":
+            raise ValueError("Unexpected conversational noise protocol")
+        if resolved_local_model(robustness.get("model")) != model_dir:
+            raise ValueError("Robustness summary belongs to a different model artifact")
+        if robustness.get("requested_revision") != expected_revision:
+            raise ValueError(
+                "Robustness summary revision does not match model evidence"
+            )
+        robustness_dataset = robustness.get("dataset", {})
+        if (
+            robustness_dataset.get("independence_grade") != "I"
+            or robustness_dataset.get("not_grade") != "Z"
+        ):
+            raise ValueError("Robustness independence evidence is invalid")
+        expected_conditions = {
+            f"prompt_{state}/noise_{ratio}"
+            for state in ("on", "off")
+            for ratio in ("0.00", "0.01", "0.05")
+        }
+        if set(robustness.get("conditions", {})) != expected_conditions:
+            raise ValueError("Robustness summary has incomplete conditions")
+        if clean is not None:
+            clean_ndcg = float(clean["metrics"]["ndcg_at_10"])
+            robustness_clean_ndcg = float(
+                robustness["conditions"]["prompt_on/noise_0.00"]["ndcg_at_10"]
+            )
+            if abs(clean_ndcg - robustness_clean_ndcg) > 1e-12:
+                raise ValueError("Clean and robustness prompt-on baselines disagree")
     recomputed_sionic = fmean(float(value) for value in sionic["scores"].values())
     if abs(float(sionic["average"]) - recomputed_sionic) > 1e-12:
         raise ValueError("Sionic average is inconsistent with task scores")
-    official_task_mean = fmean(float(row["score"]) for row in official["scores"].values())
-    if abs(float(official["mean_task_leaderboard_points"]) - 100 * official_task_mean) > 1e-9:
+    official_task_mean = fmean(
+        float(row["score"]) for row in official["scores"].values()
+    )
+    if (
+        abs(float(official["mean_task_leaderboard_points"]) - 100 * official_task_mean)
+        > 1e-9
+    ):
         raise ValueError("Official Mean(Task) is inconsistent with task scores")
     means_by_type = official.get("means_by_type", {})
     if not means_by_type:
         raise ValueError("Official summary has no task-type means")
     official_type_mean = fmean(float(value) for value in means_by_type.values())
-    if abs(float(official["mean_task_type_leaderboard_points"]) - 100 * official_type_mean) > 1e-9:
+    if (
+        abs(
+            float(official["mean_task_type_leaderboard_points"])
+            - 100 * official_type_mean
+        )
+        > 1e-9
+    ):
         raise ValueError("Official Mean(Type) is inconsistent with type means")
     actual_model_sha = model_weights_sha256(model_dir)
     if model_evidence.get("model", {}).get("weights_sha256") != actual_model_sha:
         raise ValueError("Published model shards do not match model evidence")
-    return model_evidence, sionic, official, training, clean
+    return model_evidence, sionic, official, training, clean, robustness
 
 
 def is_full_update(evidence: dict[str, Any]) -> bool:
@@ -197,7 +247,9 @@ def training_rows(manifest: dict[str, Any]) -> str:
             return str(manifest[key])
     files = manifest.get("files", {})
     values = [value.get("rows") for value in files.values() if isinstance(value, dict)]
-    return str(max((value for value in values if isinstance(value, int)), default="unknown"))
+    return str(
+        max((value for value in values if isinstance(value, int)), default="unknown")
+    )
 
 
 def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
@@ -232,6 +284,7 @@ def build_card(
     official: dict[str, Any],
     training: dict[str, Any],
     clean: dict[str, Any] | None,
+    robustness: dict[str, Any] | None,
 ) -> str:
     delta = float(sionic["average"]) - 0.793
     full_update = is_full_update(evidence)
@@ -287,6 +340,22 @@ def build_card(
 - independence: `I` (same-repository whole-source-document-held-out), **not Z**
 
 각 query에 source-native positive qrel 하나만 있어 relevance judgment는 exhaustive하지 않다.
+"""
+    robustness_section = ""
+    if robustness is not None:
+        conditions = robustness["conditions"]
+        on_5 = conditions["prompt_on/noise_0.05"]
+        off_5 = conditions["prompt_off/noise_0.05"]
+        robustness_section = f"""
+### 대화형 구조 노이즈 강건성
+
+| Query | Noise ratio | NDCG@10 | Clean 대비 유지율 | Noise intrusion@10 |
+|---|---:|---:|---:|---:|
+| prompt on | 5% | {float(on_5['ndcg_at_10']):.5f} | {float(on_5['ndcg_retention_vs_same_prompt_clean']):.5f} | {float(on_5['noise_intrusion_at_10']):.5f} |
+| prompt off | 5% | {float(off_5['ndcg_at_10']):.5f} | {float(off_5['ndcg_retention_vs_same_prompt_clean']):.5f} | {float(off_5['noise_intrusion_at_10']):.5f} |
+
+고정된 filler/system/assistant artifact를 clean corpus의 5%만큼 추가한 paired test다.
+0/1/5% 전체 condition과 per-query rank는 `evaluation/`에 동봉한다.
 """
     if full_update:
         method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
@@ -353,6 +422,7 @@ tags:
 실행 코드는 프로젝트 repository에 보존한다.
 
 {clean_section}
+{robustness_section}
 
 ## 학습
 
@@ -446,9 +516,11 @@ benchmark한다.
 
 def main() -> None:
     args = parse_args()
-    evidence, sionic, official, training, clean = validate(args)
+    evidence, sionic, official, training, clean, robustness = validate(args)
     model_dir = args.model_dir.resolve()
-    card = build_card(args.repo_id, evidence, sionic, official, training, clean)
+    card = build_card(
+        args.repo_id, evidence, sionic, official, training, clean, robustness
+    )
     card_path = model_dir / "README.md"
     card_path.write_text(card, encoding="utf-8")
     evidence_dir = model_dir / "evaluation"
@@ -459,10 +531,19 @@ def main() -> None:
         "training_manifest.json": args.training_manifest.resolve(),
     }
     if args.clean_summary:
-        evidence_files["legal_source_heldout_summary.json"] = args.clean_summary.resolve()
+        evidence_files["legal_source_heldout_summary.json"] = (
+            args.clean_summary.resolve()
+        )
         clean_ranks = args.clean_summary.resolve().parent / "ranks.jsonl"
         if clean_ranks.is_file():
             evidence_files["legal_source_heldout_ranks.jsonl"] = clean_ranks
+    if args.robustness_summary:
+        evidence_files["conversational_noise_summary.json"] = (
+            args.robustness_summary.resolve()
+        )
+        robustness_ranks = args.robustness_summary.resolve().parent / "ranks.jsonl"
+        if robustness_ranks.is_file():
+            evidence_files["conversational_noise_ranks.jsonl"] = robustness_ranks
     for name, source in evidence_files.items():
         shutil.copy2(source, evidence_dir / name)
     raw_evidence = {

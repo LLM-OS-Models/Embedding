@@ -13,6 +13,7 @@ fi
 "$ROOT/.venv-train/bin/python" "$ROOT/scripts/summarize_legal_holdout_results.py" \
   "$ROOT/outputs/evaluation/legal-source-heldout" \
   --output "$ROOT/reports/legal-source-heldout-results.json" \
+  --robustness-root "$ROOT/outputs/evaluation/conversational-noise-robustness" \
   --readme "$ROOT/README.md"
 git add README.md reports/legal-source-heldout-results.json
 if ! git diff --cached --quiet; then

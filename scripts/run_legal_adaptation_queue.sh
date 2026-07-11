@@ -203,14 +203,26 @@ run_stage clean-legal-legal-target-adapted \
   --output-dir "$CLEAN_OUT" \
   --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" || true
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
+ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
+run_stage robustness-legal-target-adapted \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
+  --model "$MODEL_REL" --revision "$revision" --batch-size 192 \
+  --max-length 8192 --attn-implementation flash_attention_2 \
+  --output-dir "$ROBUST_OUT" \
+  --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" || true
+ROBUST_SUMMARY="$ROBUST_OUT/$safe/$revision/summary.json"
 if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
   [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
+  robustness_args=()
+  [[ -s "$ROBUST_SUMMARY" ]] && \
+    robustness_args+=(--robustness-summary "$ROBUST_SUMMARY")
   if run_stage publish-legal-target-adapted \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
     "${clean_args[@]}" \
+    "${robustness_args[@]}" \
     --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
     --upload --public; then
     run_stage record-legal-replay-result \

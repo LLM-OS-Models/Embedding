@@ -115,11 +115,84 @@ class PublishBestModelTests(unittest.TestCase):
             self.assertIn("SentenceTransformers", card)
             self.assertIn("zero-shot", card)
             publication = json.loads((model / "publication_manifest.json").read_text())
-            self.assertEqual(set(publication["evidence"]), {
-                "sionic9_summary.json",
-                "mteb_korean_v1_summary.json",
-                "training_manifest.json",
-            })
+            self.assertEqual(
+                set(publication["evidence"]),
+                {
+                    "sionic9_summary.json",
+                    "mteb_korean_v1_summary.json",
+                    "training_manifest.json",
+                },
+            )
+
+            clean_dir = root / "clean"
+            clean_dir.mkdir()
+            clean = clean_dir / "summary.json"
+            clean.write_text(
+                json.dumps(
+                    {
+                        "protocol_id": "legal-source-document-heldout-i-v1",
+                        "model": str(model),
+                        "requested_revision": "model-" + model_sha[:12],
+                        "dataset": {"independence_grade": "I", "not_grade": "Z"},
+                        "metrics": {
+                            "ndcg_at_10": 0.7,
+                            "recall_at_10": 0.8,
+                            "mrr_at_10": 0.6,
+                            "recall_at_100": 0.9,
+                        },
+                    }
+                )
+            )
+            (clean_dir / "ranks.jsonl").write_text('{"query_id":"q1"}\n')
+            robust_dir = root / "robustness"
+            robust_dir.mkdir()
+            robustness = robust_dir / "summary.json"
+            conditions = {}
+            for state in ("on", "off"):
+                for ratio in ("0.00", "0.01", "0.05"):
+                    conditions[f"prompt_{state}/noise_{ratio}"] = {
+                        "ndcg_at_10": 0.7,
+                        "ndcg_retention_vs_same_prompt_clean": 1.0,
+                        "noise_intrusion_at_10": 0.0,
+                    }
+            robustness.write_text(
+                json.dumps(
+                    {
+                        "protocol_id": "legal-conversational-noise-i-v1",
+                        "model": str(model),
+                        "requested_revision": "model-" + model_sha[:12],
+                        "dataset": {"independence_grade": "I", "not_grade": "Z"},
+                        "conditions": conditions,
+                    }
+                )
+            )
+            (robust_dir / "ranks.jsonl").write_text('{"query_id":"q1"}\n')
+            subprocess.check_call(
+                [
+                    "python",
+                    str(ROOT / "scripts/publish_best_embedding_model.py"),
+                    "--model-dir",
+                    str(model),
+                    "--sionic-summary",
+                    str(sionic),
+                    "--official-summary",
+                    str(official),
+                    "--clean-summary",
+                    str(clean),
+                    "--robustness-summary",
+                    str(robustness),
+                    "--training-manifest",
+                    str(manifest),
+                ]
+            )
+            robust_card = (model / "README.md").read_text()
+            self.assertIn("대화형 구조 노이즈 강건성", robust_card)
+            robust_publication = json.loads(
+                (model / "publication_manifest.json").read_text()
+            )
+            self.assertIn(
+                "conversational_noise_ranks.jsonl", robust_publication["evidence"]
+            )
 
             (model / "merge_report.json").unlink()
             (model / "full_tuning_report.json").write_text(
