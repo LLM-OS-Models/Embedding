@@ -17,6 +17,7 @@ PILOT_TRAIN="$PILOT_DIR/train.hn-qwen3-r095-n4.jsonl"
 PILOT_VAL="$PILOT_DIR/validation.hn-qwen3-r095-n4.jsonl"
 PERF50_DIR="$ROOT/outputs/data/performance-v1/pilot-50k"
 PERF200_DIR="$ROOT/outputs/data/performance-v1/ablation-200k"
+COMSAT_EMBED_CACHE="$ROOT/outputs/embedding-cache/comsat-official-korean"
 
 mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
@@ -67,7 +68,8 @@ if [[ ! -s "$MIRACL_RESULT" ]]; then
     run_stage "comsat-miracl-fa2-batch-$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
       --task MIRACLRetrieval --batch-size "$batch" \
-      --attn-implementation flash_attention_2
+      --attn-implementation flash_attention_2 \
+      --embedding-cache-dir "$COMSAT_EMBED_CACHE"
     [[ -s "$MIRACL_RESULT" ]] && break
   done
 fi
@@ -75,7 +77,8 @@ fi
 if [[ -s "$MIRACL_RESULT" ]]; then
   run_stage "comsat-official-korean-summary" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
-    --batch-size 192 --attn-implementation flash_attention_2
+    --batch-size 192 --attn-implementation flash_attention_2 \
+    --embedding-cache-dir "$COMSAT_EMBED_CACHE"
   run_stage "comsat-live-borda" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/compare_local_mteb_korean.py" \
     --summary "$COMSAT_ROOT/summary.json" \
