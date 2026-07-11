@@ -100,8 +100,9 @@ LR `1e-5`, legal/general 비율 `25/75`, 한 curriculum pass를 사용한다. mo
 
 1M 전체를 처음부터 refresh하기 전에 source별 loss-active rate를 10K–50K sample로
 측정한다. ko-triplet처럼 쉬운 비율이 높은 source를 우선 refresh하고 F2의 24-negative
-row는 teacher score가 양호하면 보존한다. 1M ANN은 `nlist 1024–4096`, `nprobe
-32–128`, `search_k 256–1024`의 recall/시간을 10K exact ground truth에 먼저 맞춘다.
+row는 teacher score가 양호하면 보존한다. 현재 1M 실행값은 4096-d k-means의 CPU
+병목을 피하기 위해 `nlist 1024`, training points 50K, `nprobe 32`, `search_k 256`,
+threads 64로 고정했다. 더 큰 `nlist 4096`은 recall 측정 없이 기본값으로 쓰지 않는다.
 ANN parameter는 성능을 보고 암묵적으로 바꾸지 않고 manifest에 기록한다.
 
 ## Clean과 target-adapted 분리

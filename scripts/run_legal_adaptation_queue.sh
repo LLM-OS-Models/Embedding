@@ -92,7 +92,7 @@ if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
     --model "$MINING_MODEL" --revision "$MINING_REVISION" \
     --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
     --num-negatives 7 --positive-relative-ratio .95 \
-    --nlist 512 --nprobe 32 --training-points 50000 \
+    --nlist 512 --nprobe 32 --training-points 50000 --faiss-threads 64 \
     --keep-work-dir --allow-target-adapted || exit 3
 fi
 

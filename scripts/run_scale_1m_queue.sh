@@ -112,7 +112,7 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
       --model "$CONTINUAL_BASE" --revision "$CONTINUAL_REVISION" \
       --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
       --num-negatives 7 --positive-relative-ratio .95 \
-      --nlist 4096 --nprobe 32 --training-points 200000 \
+      --nlist 1024 --nprobe 32 --training-points 50000 --faiss-threads 64 \
       --allow-target-adapted || true
   fi
   if [[ -s "$MINING_MANIFEST" && ! -s "$MINED_PROVENANCE" ]]; then
