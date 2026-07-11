@@ -152,7 +152,7 @@ done
 SELECTION="$LOG_DIR/sionic9-selection.json"
 run_stage "select-best-sionic9" \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_sionic_model.py" \
-  "$SIONIC_OUT" --output "$SELECTION"
+  "$SIONIC_OUT" --output "$SELECTION" --disqualification-root "$ROOT/outputs"
 
 best_model=""
 local_revision=""

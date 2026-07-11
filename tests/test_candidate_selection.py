@@ -67,6 +67,46 @@ class CandidateSelectionTests(unittest.TestCase):
             ).strip()
             self.assertEqual(output, "a")
 
+    def test_sionic_selection_excludes_run_level_disqualification(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            summaries = root / "summaries"
+            outputs = root / "outputs"
+            for run, average in (("clean-run", 0.80), ("leaked-run", 0.99)):
+                folder = summaries / run
+                folder.mkdir(parents=True)
+                (folder / "summary.json").write_text(
+                    json.dumps(
+                        {
+                            "model": f"artifacts/models/{run}-best-merged",
+                            "average": average,
+                            "completed_tasks": 9,
+                            "scores": {str(i): average for i in range(9)},
+                        }
+                    )
+                )
+            marker = outputs / "leaked-run" / "DISQUALIFIED.json"
+            marker.parent.mkdir(parents=True)
+            marker.write_text('{"reason":"fixture"}\n')
+            report_path = root / "selection.json"
+            subprocess.run(
+                [
+                    "python",
+                    str(ROOT / "scripts/select_best_sionic_model.py"),
+                    str(summaries),
+                    "--output",
+                    str(report_path),
+                    "--disqualification-root",
+                    str(outputs),
+                ],
+                text=True,
+                check=True,
+                capture_output=True,
+            )
+            report = json.loads(report_path.read_text())
+            self.assertTrue(report["best"]["model"].endswith("clean-run-best-merged"))
+            self.assertEqual(report["excluded"][0]["model"], "artifacts/models/leaked-run-best-merged")
+
 
 if __name__ == "__main__":
     unittest.main()
