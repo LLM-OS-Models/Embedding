@@ -30,8 +30,14 @@ class PreserveBestCheckpointTest(unittest.TestCase):
             destination = root / "v1-fixture-preserved" / "checkpoint-80"
             self.assertTrue((destination / "adapter_model.safetensors").is_file())
             self.assertTrue((destination.parent / "logging.jsonl").is_file())
+            (destination.parent / "preservation.json").unlink()
             second = preserve_current_best(root)
             self.assertEqual(second["status"], "already_preserved")
+            evidence = json.loads(
+                (destination.parent / "preservation.json").read_text()
+            )
+            self.assertEqual(evidence["step"], 80)
+            self.assertEqual(evidence["eval_loss"], 0.2)
 
 
 if __name__ == "__main__":

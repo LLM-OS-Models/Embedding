@@ -76,7 +76,9 @@ def preserve_current_best(run_dir: Path) -> dict[str, Any] | None:
         (
             path
             for path in run_dir.glob("**/checkpoint-*")
-            if path.is_dir() and complete_checkpoint(path, "adapter")
+            if path.is_dir()
+            and not path.parent.name.endswith("-preserved")
+            and complete_checkpoint(path, "adapter")
         ),
         key=lambda path: (checkpoint_step(path), str(path)),
     )
@@ -88,13 +90,23 @@ def preserve_current_best(run_dir: Path) -> dict[str, Any] | None:
     if not candidates:
         return None
     loss, step, _, best = min(candidates)
-    if "-preserved" in best.parent.name:
-        return {"status": "already_preserved", "step": step, "eval_loss": loss}
-
     preserved_parent = best.parent.with_name(best.parent.name + "-preserved")
     destination = preserved_parent / best.name
     if destination.is_dir() and complete_checkpoint(destination, "adapter"):
-        return {"status": "already_preserved", "step": step, "eval_loss": loss}
+        report = {
+            "status": "already_preserved",
+            "source": str(best),
+            "destination": str(destination),
+            "step": step,
+            "eval_loss": loss,
+        }
+        report_path = preserved_parent / "preservation.json"
+        if not report_path.is_file():
+            report_path.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        return report
     staging = preserved_parent / (best.name + ".tmp")
     if staging.exists():
         shutil.rmtree(staging)
