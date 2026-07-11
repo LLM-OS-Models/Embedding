@@ -155,3 +155,11 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 “clean/general Korean SOTA” 또는 public release는 여기에 benchmark overlap audit, clean holdout, data license/provenance gate를 추가로 통과해야 한다.
 
 이 문서는 각 장시간 평가·학습과 중요한 실패 뒤 갱신하고, 해당 commit을 GitHub에 push한다.
+
+## 야간 자동 GPU queue
+
+[`scripts/run_night_gpu_queue.sh`](../scripts/run_night_gpu_queue.sh)는 실행 중인 대형
+baseline PID가 끝난 뒤 MIRACL fallback/summary/Borda, 10K hard-negative mining,
+LoRA r64, 준비된 경우 50K 성능 mix, F2 dual-loss/MRL, LoRA·DoRA·partial·full memory
+probe를 순차 실행한다. 각 stage는 시작·종료 시각과 exit status를 남기며, 한 ablation의
+실패가 뒤의 유효한 실험을 막지 않는다. 동일 GPU에서 두 stage를 동시에 실행하지 않는다.
