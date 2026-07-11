@@ -86,7 +86,7 @@ corpus config: id, text
 | KLUE-TC | validation | `klue/klue` YNAT train 45,678 | train 1K/5K/10K/15K 사용, 노출 표시 |
 | KLUE-STS | validation | KLUE STS train 11,668; score≥3.5 positive 4,533 | 최대 4K 사용, 노출 표시 |
 | KorSTS | test | KorSTS train 5,691; score≥3.5 positive 2,036 | 최대 1.5K 사용, 노출 표시 |
-| Ko-StrategyQA | dev | train qrels 4,377, unique train query 2,242, corpus 9,251 | train query ID만 join, dev ID 제외 |
+| Ko-StrategyQA | dev | train qrels 4,377, unique train query 2,242, corpus 9,251 | train qrel ID만 출력; shared query store는 train ID로 필터하고 dev qrels는 로드하지 않음 |
 | MIRACL retrieval/reranking | dev | pinned MTEB evaluation repo에는 dev만 있음; F2가 제공한 별도 `miracl_ko` train-family 753 | F2 file만 사용, MTEB dev repo 전면 제외 |
 | MrTidy Korean | test | raw train query 1,295; F2 processed 1,294 | F2 train file 최대 1.2K 사용 |
 | MLDR Korean | dev/test | pinned MTEB repo에는 dev/test만 있음; F2 processed training-family 2,252 | F2 file만 사용, pinned dev/test 전면 제외 |
@@ -191,7 +191,7 @@ python scripts/build_performance_mix.py --phase pilot_50k --dry-run
 | F2 24-negative adapter | 2/2 생성, validator 통과 |
 | KLUE STS adapter | 2/2 생성, low-score negative pool 변환 통과 |
 | KLUE classification adapter | 2/2 생성, label negatives 변환 통과 |
-| Ko-StrategyQA qrels/query/corpus join | 2/2 생성, dev ID를 읽지 않고 통과 |
+| Ko-StrategyQA qrels/query/corpus join | 2/2 생성, train qrel ID만 출력하고 dev qrels를 로드하지 않은 채 통과 |
 | KaLM list adapter | 2/2 생성, 7-negative schema 변환 통과 |
 
 ## 현재 병목과 학습 결정
