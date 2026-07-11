@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -146,6 +147,26 @@ def local_merge_dtype(model: str) -> str:
     return "bfloat16"
 
 
+def canonical_local_revision(model: str, requested: str | None) -> str | None:
+    root = Path(model).expanduser()
+    for name in ("merge_report.json", "full_tuning_report.json"):
+        report = root / name
+        if not report.is_file():
+            continue
+        evidence = json.loads(report.read_text(encoding="utf-8"))
+        model_sha = evidence.get("model", {}).get("weights_sha256")
+        if not isinstance(model_sha, str) or len(model_sha) != 64:
+            raise ValueError(f"Invalid local model weight evidence: {report}")
+        canonical = f"model-{model_sha[:12]}"
+        if requested != canonical:
+            print(
+                f"Canonicalizing local revision {requested!r} -> {canonical!r}",
+                file=sys.stderr,
+            )
+        return canonical
+    return requested
+
+
 def validate_mteb_checkout(protocol: dict[str, Any]) -> None:
     checkout = ROOT / "third_party/mteb"
     try:
@@ -197,6 +218,7 @@ def main() -> None:
     if args.model == protocol["comsat"]["model"]:
         revision = revision or protocol["comsat"]["revision"]
         max_length = max_length or protocol["comsat"]["max_tokens"]
+    revision = canonical_local_revision(args.model, revision)
     if not revision:
         raise ValueError("--revision is required for models not pinned by this protocol")
     if not max_length:

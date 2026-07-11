@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import fmean
@@ -110,6 +111,26 @@ def local_merge_dtype(model: str) -> str:
     return "bfloat16"
 
 
+def canonical_local_revision(model: str, requested: str | None) -> str | None:
+    root = Path(model).expanduser()
+    for name in ("merge_report.json", "full_tuning_report.json"):
+        report = root / name
+        if not report.is_file():
+            continue
+        evidence = json.loads(report.read_text(encoding="utf-8"))
+        model_sha = evidence.get("model", {}).get("weights_sha256")
+        if not isinstance(model_sha, str) or len(model_sha) != 64:
+            raise ValueError(f"Invalid local model weight evidence: {report}")
+        canonical = f"model-{model_sha[:12]}"
+        if requested != canonical:
+            print(
+                f"Canonicalizing local revision {requested!r} -> {canonical!r}",
+                file=sys.stderr,
+            )
+        return canonical
+    return requested
+
+
 def main() -> None:
     args = parse_args()
     protocol = load_protocol(args.protocol)
@@ -137,6 +158,7 @@ def main() -> None:
         return
     if not args.model:
         raise ValueError("--model is required unless --list-only is used")
+    args.revision = canonical_local_revision(args.model, args.revision)
 
     import sentence_transformers
     import torch
