@@ -118,7 +118,7 @@ run_lora_training() {
     TRAIN_BATCH_SIZE=16 GRAD_ACCUM_STEPS=4 \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
   local latest
-  latest="$(find "$ROOT/outputs/$run_name" -maxdepth 1 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+  latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
   if [[ -z "$latest" || ! -s "$latest/adapter_model.safetensors" ]]; then
     local fallback_name="${run_name}-b8"
     run_stage "$fallback_name" env \
@@ -127,7 +127,7 @@ run_lora_training() {
       TRAIN_BATCH_SIZE=8 GRAD_ACCUM_STEPS=8 \
       "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
     run_name="$fallback_name"
-    latest="$(find "$ROOT/outputs/$run_name" -maxdepth 1 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+    latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
   fi
   if [[ -n "$latest" && -s "$latest/adapter_model.safetensors" ]]; then
     run_stage "$run_name-verify" \
