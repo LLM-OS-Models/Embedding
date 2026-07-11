@@ -74,6 +74,9 @@ COMMON=(
   --eval_steps 250
   --save_steps 250
   --save_total_limit 2
+  --load_best_model_at_end true
+  --metric_for_best_model eval_loss
+  --greater_is_better false
   --logging_steps 1
   --dataloader_drop_last true
   --dataloader_num_workers 2

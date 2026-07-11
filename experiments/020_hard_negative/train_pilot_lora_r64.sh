@@ -111,6 +111,9 @@ fi
   --eval_steps "${EVAL_STEPS:-40}" \
   --save_steps "${SAVE_STEPS:-40}" \
   --save_total_limit "${SAVE_TOTAL_LIMIT:-3}" \
+  --load_best_model_at_end true \
+  --metric_for_best_model eval_loss \
+  --greater_is_better false \
   --logging_steps 1 \
   --dataloader_drop_last true \
   --dataloader_num_workers "${DATALOADER_NUM_WORKERS:-2}" \
