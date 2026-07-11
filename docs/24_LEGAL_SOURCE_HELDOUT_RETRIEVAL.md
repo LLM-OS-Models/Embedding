@@ -214,6 +214,29 @@ python scripts/build_legal_source_holdout.py build \
 
 추가 candidate snapshot은 repository revision, source document SHA, extractor config SHA와 file SHA를 별도 manifest로 pin해야 한다. 동일 문서에서 조문을 바꾸어 holdout 수를 채우는 방식은 금지한다.
 
+## Exact 평가와 대화형 noise paired test
+
+[`evaluate_legal_source_holdout.py`](../scripts/evaluate_legal_source_holdout.py)는 고정 query
+instruction, source-native positive text, L2-normalized float32 dot product, TF32 off, corpus
+ID 오름차순 tie-break로 10K×10K positive rank를 계산한다. NDCG@10, Recall@10/100,
+MRR@10, 평균/중앙 rank와 10K per-query rank를 저장한다. local merged artifact는 실제
+model shard SHA에서 만든 `model-<sha12>` revision만 허용하며 embedding cache도 이
+revision과 dataset manifest SHA에 묶인다.
+
+[`evaluate_conversational_noise_robustness.py`](../scripts/evaluate_conversational_noise_robustness.py)는
+동일 corpus 뒤에 의미 없는 system/assistant/filler 문서를 0/1/5% 추가하고 query prompt
+on/off를 교차한다. clean evaluator의 prompted-query/corpus cache를 exact hit로 재사용하며,
+추가 인코딩은 raw query 10K와 noise 최대 500개뿐이다. 각 condition에서 다음을 저장한다.
+
+- positive NDCG@10/Recall@10과 mean/median rank
+- 같은 prompt의 noise 0% 대비 NDCG 유지율
+- 가장 높은 noise 문서의 rank와 intrusion@1/5/10
+- 6개 condition의 10K per-query positive/noise rank
+
+최종 후보 공개 단계는 clean summary와 robustness summary의 model weight revision,
+I-not-Z 독립성, prompt-on/noise-0 NDCG의 exact 일치를 검증한다. summary와 per-query
+rank는 모델 repository `evaluation/`에 동봉하고 README clean 표에도 자동 반영한다.
+
 ## 테스트
 
 GPU와 외부 network 없이 실행한다.
