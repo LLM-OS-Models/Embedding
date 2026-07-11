@@ -211,13 +211,19 @@ F2는 45M example full FT 선례지만 우리 budget과 base는 다르다. stand
 | 방식 | Trainable | Peak/예상 VRAM | 상태 |
 |---|---:|---:|---|
 | LoRA r32 | 87.294M | **17.07GiB 실측** | pipeline pass |
-| LoRA r64 | 174.588M | 10K **22.17GiB**, 50K long mix trainer **59.30GiB** / device **61.9GiB** 실측 | 10K 완료, 50K 320/800 검증 완료; best 200 |
+| LoRA r64 | 174.588M | 10K **22.17GiB**, 50K long mix trainer **59.30GiB** / device **61.9GiB** 실측 | 10K 완료; 50K step 600까지 best 480이나 critical overlap으로 diagnostic 전용 |
 | DoRA r32 | 약 88.695M | 17–19GiB 예상 | 대기 |
 | 마지막 4층 + norm | 771.790M | 20–25GiB 예상 | 대기 |
 | GaLore full | encoder full update | 35–45GiB 예상 | 대기 |
 | standard full AdamW | 약 7.567B encoder | 60–75GiB 예상 | OOM 가능 1-step만 먼저 |
 
 결정 gate는 동일 hard-negative data와 token budget에서 clean 품질/회귀/VRAM/GPU-hour Pareto다. 현재 기본 선택은 LoRA r64이며, 성능이 막힐 때 partial/GaLore/full 순으로 승격한다.
+
+200K LoRA 시작 직전 `admit_fa2_lora_backend.sh`가 동일 8B/r64/batch16/512 설정으로
+5 optimizer-step 실제 backward를 수행한다. 현재 SDPA 장기 실측 `23.2 s/step` 대비
+최소 1.05배 빠른 `<=22.095 s/step`이고 process가 정상 종료된 경우에만 격리
+`.venv-train-fa2`와 `flash_attention_2`를 채택한다. import 성공만으로 승격하지 않으며,
+OOM·API 오류·속도 역전·로그 파싱 실패는 모두 `.venv-train + sdpa`로 자동 fallback한다.
 
 ### 5. clean selection 보드 부재
 

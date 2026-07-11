@@ -11,6 +11,23 @@ OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
 BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
+# A real 8B backward probe, not an import check, decides whether the long
+# 200K run may switch to the isolated FA2 environment. The short probe keeps
+# the known SDPA path as an automatic fallback when FA2 fails or is slower.
+if [[ "$RUN_NAME" == *performance200k* \
+    && "${AUTO_SELECT_FA2:-1}" == 1 \
+    && "${TRAIN_ENV}" == "$ROOT/.venv-train" ]]; then
+  if TRAIN_FILE="$TRAIN_FILE" \
+      "$ROOT/experiments/070_tuning_strategy/admit_fa2_lora_backend.sh"; then
+    TRAIN_ENV="$ROOT/.venv-train-fa2"
+    ATTN_IMPL=flash_attention_2
+    echo "FA2 backend admitted by real 8B backward throughput gate" >&2
+  else
+    ATTN_IMPL=sdpa
+    echo "FA2 backend rejected; using verified SDPA fallback" >&2
+  fi
+fi
+
 # Promote the 50K model into the 200K curriculum only when its held-out loss
 # actually beats the 10K hard-negative pilot. Dataset scale alone is not a
 # sufficient promotion signal.

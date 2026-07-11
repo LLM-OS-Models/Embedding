@@ -41,6 +41,11 @@ homogeneous compiler 중 하나라도 실패할 때만 위 원본 999,936-row cu
 fallback하며 log와 model training manifest가 실제 선택을 구분한다. 이 경로는 target
 train-family 노출이 있으므로 clean zero-shot이 아니라 `performance target-adapted`다.
 
+장기 200K run부터는 FA2를 무조건 사용하지 않는다. 동일 H100에서 실제 8B LoRA
+forward/backward 5-step admission probe가 검증된 SDPA `23.2 s/step`보다 최소 1.05배
+빠를 때만 격리 FA2 환경으로 전환하고, 실패하거나 느리면 SDPA로 즉시 fallback한다.
+vLLM pooling은 평가·서빙 backend이며 gradient 학습 가속 경로로 사용하지 않는다.
+
 ## 학습
 
 | 항목 | 값 |
