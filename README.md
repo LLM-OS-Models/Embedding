@@ -1,0 +1,68 @@
+# Korean Embedding Lab
+
+한국어 검색 임베딩 모델을 연구하고, `sionic-ai/comsat-embed-ko-8b-preview`를 **오염 없이 재현 가능하게** 넘어서는 것을 목표로 하는 작업 공간입니다.
+
+기준일: **2026-07-11 (Asia/Seoul)**
+
+## 한 줄 결론
+
+- Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
+- Comsat의 `0.7930`은 일반 MTEB SOTA가 아니라, 자체 선택한 한국어 retrieval 9종의 macro `NDCG@10`입니다. Qwen3-Embedding-8B 대비 차이는 `+0.0105`입니다.
+- 가장 직접적인 학습법은 raw-text LM CPT가 아니라 `query / positive / hard negatives`를 이용한 **continued contrastive fine-tuning(InfoNCE)** 입니다.
+- 현재 첫 실험은 `Qwen/Qwen3-Embedding-8B + BF16 LoRA + InfoNCE`로 시작합니다. 공개 평가 9종은 학습·negative mining·checkpoint selection에서 차단합니다.
+
+자세한 판단은 [요약 문서](docs/00_EXECUTIVE_SUMMARY.md)부터 읽으면 됩니다.
+
+## 현재 상태
+
+| 항목 | 상태 | 위치 |
+|---|---|---|
+| Qwen3-Embedding 공식 저장소 | clone 완료 | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
+| 공식 후속학습 프레임워크 `ms-swift` | commit 고정 및 설치 중 | [`third_party/ms-swift/`](third_party/ms-swift/) |
+| Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
+| 2026-07 라이브 MTEB 조사 | 1차 완료, 모델별 심층 조사 중 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
+| 데이터 manifest / 오염 차단 | 구현 중 | [docs/05_DATA_AND_GOVERNANCE.md](docs/05_DATA_AND_GOVERNANCE.md) |
+| 첫 8B LoRA pilot | 환경 준비 중 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
+
+## 문서 지도
+
+1. [전체 결론과 의사결정](docs/00_EXECUTIVE_SUMMARY.md)
+2. [임베딩 모델과 MTEB가 실제로 재는 것](docs/01_EMBEDDINGS_AND_MTEB.md)
+3. [Comsat 주장·점수·오염 가능성 감사](docs/02_COMSAT_AUDIT.md)
+4. [2026년 7월 최고 모델과 방법론](docs/03_SOTA_MODELS_2026-07.md)
+5. [논문 기반 학습 레시피](docs/04_TRAINING_RECIPE.md)
+6. [데이터, 라이선스, contamination 정책](docs/05_DATA_AND_GOVERNANCE.md)
+7. [Qwen3 논문과 후속 연구](docs/06_LITERATURE_REVIEW.md)
+8. [실행 및 재현 runbook](docs/07_RUNBOOK.md)
+
+## 실험 지도
+
+실험 번호는 실행 순서가 아니라 비교 축을 나타냅니다. 각 폴더에 가설, 데이터 revision, config, 로그, 결과를 남깁니다.
+
+| 폴더 | 비교할 것 |
+|---|---|
+| [`000_baseline`](experiments/000_baseline/) | Qwen/Comsat 및 평가 파이프라인 재현 |
+| [`010_qwen3_8b_ko_lora`](experiments/010_qwen3_8b_ko_lora/) | 첫 clean Korean contrastive LoRA |
+| [`020_hard_negative`](experiments/020_hard_negative/) | BM25/dense/reranker negative와 false-negative filtering |
+| [`030_teacher_distillation`](experiments/030_teacher_distillation/) | reranker/강한 embedder의 soft-label distillation |
+| [`040_long_context`](experiments/040_long_context/) | 512/2K/4K/8K 길이·evidence 위치 curriculum |
+| [`050_model_merge`](experiments/050_model_merge/) | checkpoint/domain adapter 평균·SLERP |
+| [`060_backbone_ablation`](experiments/060_backbone_ablation/) | Qwen 0.6B/4B/8B, Nemotron, Gemma 계열 비교 |
+
+## 원칙
+
+- 공개 test 점수를 반복해서 보고 checkpoint를 고르지 않습니다.
+- 모든 데이터 행에 `source`, `revision/date`, `license`, `sha256`, `generator`, `prompt_version`을 남깁니다.
+- 공개 9개 benchmark의 query, qrel, corpus 및 near-duplicate를 차단한 `clean-zero-shot` 결과를 주 결과로 냅니다.
+- benchmark train split을 쓰는 별도 실험은 `supervised/in-domain`으로 명시합니다.
+- 평균 점수뿐 아니라 per-task 변화, bootstrap confidence interval, 원 Qwen 다국어 성능 회귀, 속도/메모리를 함께 봅니다.
+
+## 환경
+
+- GPU: NVIDIA H100 80GB 1장
+- Python: 3.10
+- 첫 backbone: `Qwen/Qwen3-Embedding-8B`
+- 프레임워크: Qwen 공식 가이드가 연결하는 `ms-swift`
+- 계산: last-token pooling, L2 normalization, cosine/dot-product retrieval
+
+실제 명령과 pinned revision은 [runbook](docs/07_RUNBOOK.md)에 기록합니다.

@@ -1,0 +1,6 @@
+[submodule "Qwen3-Embedding"]
+	path = Qwen3-Embedding
+	url = https://github.com/QwenLM/Qwen3-Embedding.git
+[submodule "third_party/ms-swift"]
+	path = third_party/ms-swift
+	url = https://github.com/modelscope/ms-swift.git

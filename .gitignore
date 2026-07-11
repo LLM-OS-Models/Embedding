@@ -1,0 +1,47 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Model and dataset caches
+.cache/
+cache/
+data/raw/
+data/processed/
+data/cache/
+artifacts/
+outputs/
+output/
+runs/
+wandb/
+
+# Large ML artifacts
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.gguf
+*.parquet
+*.arrow
+*.npy
+*.npz
+
+# Logs and temporary files
+*.log
+*.tmp
+*.lock
+tmp/
+.DS_Store
