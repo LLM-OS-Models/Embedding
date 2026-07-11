@@ -20,16 +20,26 @@ def _canonical_cache_options(kwargs: dict[str, Any]) -> dict[str, Any] | None:
         return None
     if kwargs.get("output_value", "sentence_embedding") != "sentence_embedding":
         return None
+    if kwargs.get("pool") is not None or kwargs.get("chunk_size") is not None:
+        return None
     allowed = {
         "batch_size",
         "device",
         "prompt_name",
         "prompt",
         "normalize_embeddings",
+        "task",
         "truncate_dim",
         "precision",
     }
-    non_output = {"convert_to_tensor", "convert_to_numpy", "output_value", "show_progress_bar"}
+    non_output = {
+        "chunk_size",
+        "convert_to_numpy",
+        "convert_to_tensor",
+        "output_value",
+        "pool",
+        "show_progress_bar",
+    }
     if set(kwargs) - allowed - non_output:
         return None
     options = {key: kwargs.get(key) for key in sorted(allowed) if key in kwargs}
@@ -148,26 +158,26 @@ class ResumableSentenceTransformer(SentenceTransformer):
         self.embedding_cache_misses = 0
         super().__init__(*args, **kwargs)
 
-    def encode(self, sentences: Any, *args: Any, **kwargs: Any) -> Any:
+    def encode(self, inputs: Any, *args: Any, **kwargs: Any) -> Any:
         if args:
-            return super().encode(sentences, *args, **kwargs)
-        if isinstance(sentences, str):
-            return super().encode(sentences, *args, **kwargs)
-        if not isinstance(sentences, (list, tuple)) or not sentences:
-            return super().encode(sentences, *args, **kwargs)
+            return super().encode(inputs, *args, **kwargs)
+        if isinstance(inputs, str):
+            return super().encode(inputs, *args, **kwargs)
+        if not isinstance(inputs, (list, tuple)) or not inputs:
+            return super().encode(inputs, *args, **kwargs)
         options = _canonical_cache_options(kwargs)
-        if options is None or not all(isinstance(item, str) for item in sentences):
-            return super().encode(sentences, *args, **kwargs)
+        if options is None or not all(isinstance(item, str) for item in inputs):
+            return super().encode(inputs, *args, **kwargs)
         key = embedding_cache_key(
             namespace=self._embedding_cache_namespace,
-            sentences=sentences,
+            sentences=inputs,
             options=options,
         )
-        cached = self._exact_embedding_cache.load(key, len(sentences))
+        cached = self._exact_embedding_cache.load(key, len(inputs))
         if cached is not None:
             self.embedding_cache_hits += 1
             return cached
-        result = super().encode(sentences, *args, **kwargs)
+        result = super().encode(inputs, *args, **kwargs)
         array = np.asarray(result)
         if array.dtype == np.float32 and array.ndim == 2:
             self._exact_embedding_cache.store(key, array)
