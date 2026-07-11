@@ -190,13 +190,12 @@ MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$CURRICULUM_MANIFEST")"
 (( MAX_STEPS > 0 )) || exit 6
 TRAIN_ENV="$ROOT/.venv-train"
 TRAIN_ATTN=sdpa
-if [[ -x "$ROOT/.venv-train-fa2/bin/swift" ]] && \
-    run_stage "probe-${TARGET_KIND}-fa2-backward" env TRAIN_ENV="$ROOT/.venv-train-fa2" \
-      ATTN_IMPL=flash_attention_2 PROBE_SUFFIX="${TARGET_KIND}-fa2" DATA="$VAL_FILE" \
-      MAX_LENGTH=512 "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" lora_r64; then
+FA2_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
+if [[ -s "$FA2_ADMISSION" ]] && jq -e '.admitted == true' "$FA2_ADMISSION" >/dev/null; then
   TRAIN_ENV="$ROOT/.venv-train-fa2"
   TRAIN_ATTN=flash_attention_2
 fi
+echo "[$(timestamp)] ${TARGET_KIND} training backend=$TRAIN_ATTN env=$TRAIN_ENV admission=$FA2_ADMISSION"
 
 train_target() {
   local output_name="$1" batch="$2" accum="$3"

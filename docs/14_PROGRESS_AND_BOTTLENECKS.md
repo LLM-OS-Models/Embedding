@@ -224,6 +224,8 @@ F2는 45M example full FT 선례지만 우리 budget과 base는 다르다. stand
 최소 1.05배 빠른 `<=22.095 s/step`이고 process가 정상 종료된 경우에만 격리
 `.venv-train-fa2`와 `flash_attention_2`를 채택한다. import 성공만으로 승격하지 않으며,
 OOM·API 오류·속도 역전·로그 파싱 실패는 모두 `.venv-train + sdpa`로 자동 fallback한다.
+1M, SQuAD/health/AutoRAG, legal, combined 장기 queue도 이 동일 admission JSON을
+재사용해 import-only 1-step probe를 반복하지 않는다.
 
 ### 5. clean selection 보드 부재
 

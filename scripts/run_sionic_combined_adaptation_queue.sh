@@ -145,13 +145,12 @@ MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$MANIFEST")"
 
 TRAIN_ENV="$ROOT/.venv-train"
 TRAIN_ATTN=sdpa
-if [[ -x "$ROOT/.venv-train-fa2/bin/swift" ]] && \
-    run_stage probe-combined-fa2-backward env TRAIN_ENV="$ROOT/.venv-train-fa2" \
-      ATTN_IMPL=flash_attention_2 PROBE_SUFFIX=combined-fa2 DATA="$VAL_FILE" \
-      MAX_LENGTH=512 "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" lora_r64; then
+FA2_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
+if [[ -s "$FA2_ADMISSION" ]] && jq -e '.admitted == true' "$FA2_ADMISSION" >/dev/null; then
   TRAIN_ENV="$ROOT/.venv-train-fa2"
   TRAIN_ATTN=flash_attention_2
 fi
+echo "[$(timestamp)] combined training backend=$TRAIN_ATTN env=$TRAIN_ENV admission=$FA2_ADMISSION"
 train_combined() {
   local name="$1" batch="$2" accum="$3"
   run_stage "train-$name" env TRAIN_ENV="$TRAIN_ENV" ATTN_IMPL="$TRAIN_ATTN" \
