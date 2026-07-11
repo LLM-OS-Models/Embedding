@@ -97,7 +97,12 @@ TRAINING_MANIFEST="$HOMOGENEOUS_MANIFEST"
 TRAIN_HARD_NEGATIVES=4
 
 if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
-  if [[ ! -s "$MINING_MANIFEST" ]]; then
+  if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
+      --manifest "$MINING_MANIFEST" --model "$CONTINUAL_BASE" \
+      --revision "$CONTINUAL_REVISION" 2>/dev/null; then
+    rm -f "$MINING_MANIFEST" "$MINED_TRAIN" "$MINING_AUDIT" \
+      "$MINED_PROVENANCE" "$MINED_HOMOGENEOUS_TRAIN" \
+      "$MINED_HOMOGENEOUS_PROVENANCE" "$MINED_HOMOGENEOUS_MANIFEST"
     run_stage "mine-performance-1m-current-student" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/mine_faiss_hard_negatives.py" \
       --input "$DATA_DIR/train.jsonl" --output "$MINED_TRAIN" \

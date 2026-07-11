@@ -78,7 +78,12 @@ else
   echo "[$(timestamp)] 1M merged model unavailable; using pinned Qwen base"
 fi
 
-if [[ ! -s "$MINING_MANIFEST" ]]; then
+if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
+    --manifest "$MINING_MANIFEST" --model "$MINING_MODEL" \
+    --revision "$MINING_REVISION" 2>/dev/null; then
+  rm -f "$MINING_MANIFEST" "$MINED" "$AUDIT" "$MINED_PROVENANCE" \
+    "$ORDERED" "$ORDERED_PROVENANCE" "$ORDERED_MANIFEST" \
+    "$CURRICULUM" "$CURRICULUM_PROVENANCE" "$CURRICULUM_MANIFEST"
   run_stage legal-faiss-hard-negative-mining \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/mine_faiss_hard_negatives.py" \
     --input "$BOOTSTRAP" --output "$MINED" \

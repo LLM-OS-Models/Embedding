@@ -83,6 +83,23 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def local_model_weights_sha256(model: str) -> str | None:
+    """Fingerprint local model shards so mutable paths cannot poison caches."""
+    root = Path(model).expanduser()
+    if not root.is_dir():
+        return None
+    shards = sorted(root.glob("model*.safetensors"))
+    if not shards:
+        return None
+    digest = hashlib.sha256()
+    for shard in shards:
+        digest.update(shard.name.encode() + b"\0")
+        with shard.open("rb") as handle:
+            for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                digest.update(block)
+    return digest.hexdigest()
+
+
 def validate_args(args: argparse.Namespace, rows: int, corpus: int) -> None:
     positive = (
         "max_seq_length",
@@ -110,7 +127,13 @@ def validate_args(args: argparse.Namespace, rows: int, corpus: int) -> None:
         raise ValueError("At least two rows and documents are required")
 
 
-def cache_namespace(args: argparse.Namespace, input_sha: str, role: str, rows: int) -> dict:
+def cache_namespace(
+    args: argparse.Namespace,
+    input_sha: str,
+    role: str,
+    rows: int,
+    model_weights_sha256: str | None,
+) -> dict:
     return {
         "schema": 1,
         "input_sha256": input_sha,
@@ -118,6 +141,7 @@ def cache_namespace(args: argparse.Namespace, input_sha: str, role: str, rows: i
         "rows": rows,
         "model": args.model,
         "revision": args.revision,
+        "model_weights_sha256": model_weights_sha256,
         "max_seq_length": args.max_seq_length,
         "model_dtype": args.model_dtype,
         "attention": args.attn_implementation,
@@ -263,6 +287,7 @@ def main() -> None:
     corpus, corpus_lookup = canonical_documents(row.positive for row in rows)
     validate_args(args, len(rows), len(corpus))
     input_sha = file_hash(args.input)
+    model_weights_sha = local_model_weights_sha256(args.model)
     plan = {
         "rows": len(rows),
         "corpus": len(corpus),
@@ -292,8 +317,12 @@ def main() -> None:
 
     started = time.monotonic()
     model, _, encoder_device, effective_dtype = load_encoder(args)
-    query_namespace = cache_namespace(args, input_sha, "queries", len(rows))
-    corpus_namespace = cache_namespace(args, input_sha, "positive_corpus", len(corpus))
+    query_namespace = cache_namespace(
+        args, input_sha, "queries", len(rows), model_weights_sha
+    )
+    corpus_namespace = cache_namespace(
+        args, input_sha, "positive_corpus", len(corpus), model_weights_sha
+    )
     query_embeddings, query_dimension, query_resumed = encode_or_resume(
         model, [row.query for row in rows], work_dir / "queries.f32", query_namespace, args.encode_batch_size
     )
@@ -399,6 +428,7 @@ def main() -> None:
         },
         "model": args.model,
         "revision": args.revision,
+        "model_weights_sha256": model_weights_sha,
         "encoder_device": encoder_device,
         "effective_model_dtype": effective_dtype,
         "faiss_version": __import__("faiss").__version__,
