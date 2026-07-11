@@ -85,6 +85,11 @@ ordered curriculum은 source-homogeneous 계약을 유지하면서 length bucket
 후속 200K/1M/법률 run은 `truncation_strategy=right`를 명시해 긴 row를 삭제하지 않고
 512-token boundary에서 보존한다.
 
+50K held-out loss는 step 40의 `0.00365536`에서 step 80의 `0.00357340`으로
+개선됐고 mean negative similarity도 `0.24456 → 0.22343`으로 내려갔다. 다만 10K best
+`0.00338515`보다 아직 나쁘므로 continual promotion gate는 열리지 않았다. 후반
+checkpoint가 이 기준을 실제로 넘는 경우에만 200K가 50K에서 이어 학습한다.
+
 `performance_1m` 1,000,000-row base mix와 999,936-row/62,496-batch homogeneous 파생
 파일은 build를 마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에
 공개됐고, GPU campaign은 완료된 manifest를 자동 감지해 scale run에 사용한다.
