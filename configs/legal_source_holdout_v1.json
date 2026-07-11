@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "artifact_id": "korean-legal-public-source-heldout-retrieval-v1",
+  "purpose": "A deterministic same-repository, whole-source-document-held-out Korean legal/public-administration retrieval set for the clean comprehensive board.",
+  "independence": {
+    "grade": "I",
+    "label": "same-repository source-document-held-out",
+    "not_grade": "Z",
+    "reason": "Queries and passages come from the same pinned Legalize-KR repositories and source-native schemas used for training, but every selected source_document_sha256 is absent from training provenance."
+  },
+  "defaults": {
+    "target_size": 10000,
+    "seed": 20260712,
+    "maximum_pairs_per_source_document": 1,
+    "minimum_query_characters": 2,
+    "minimum_positive_characters": 64,
+    "require_source_date": true,
+    "relevance_score": 1
+  },
+  "inputs": {
+    "candidate_glob": "outputs/data/legal-performance-v1/candidates/*.jsonl",
+    "training_provenance": "outputs/data/legal-performance-v1/provenance.jsonl",
+    "benchmark_blocklist_root": "outputs/decontamination/benchmark_blocklist",
+    "decontamination_policy": "configs/decontamination_policy.json",
+    "benchmark_hash_file_names": [
+      "query_text.sha256.gz",
+      "corpus_text.sha256.gz",
+      "evaluation_text.sha256.gz"
+    ]
+  },
+  "required_repositories": [
+    "legalize-kr/admrule-kr",
+    "legalize-kr/legalize-kr",
+    "legalize-kr/ordinance-kr",
+    "legalize-kr/precedent-kr"
+  ],
+  "source_date_field_priority": [
+    "선고일자",
+    "시행일자",
+    "공포일자",
+    "발령일자"
+  ],
+  "selection": {
+    "source_balance": "seeded stable-rank round-robin across repositories",
+    "rank_material": "seed, repository, source_candidate_id, normalized query SHA-256, normalized positive SHA-256",
+    "exact_deduplication": [
+      "source_candidate_id",
+      "normalized query SHA-256",
+      "normalized positive SHA-256"
+    ],
+    "training_exclusion": [
+      "source_candidate_id",
+      "entire source_document_sha256"
+    ],
+    "benchmark_exclusion": [
+      "normalized query SHA-256",
+      "normalized positive SHA-256"
+    ]
+  },
+  "output_contract": {
+    "queries": "queries.jsonl: _id, text, metadata",
+    "corpus": "corpus.jsonl: _id, title, text, metadata",
+    "qrels": "qrels.jsonl: query-id, corpus-id, score",
+    "provenance": "provenance.jsonl: full pinned source provenance and all exclusion/selection evidence",
+    "manifest": "manifest.json: deterministic inputs, hashes, counts, source balance, assertions, and independence grade"
+  }
+}

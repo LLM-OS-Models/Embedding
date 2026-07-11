@@ -36,8 +36,10 @@ Qwen3-Embedding-8B를 한국어 retrieval에 적응시킬 때 LoRA의 낮은 메
 
 Qwen3-Embedding checkpoint에는 `lm_head.weight`가 없지만 ms-swift loader는 약 621M parameter의 임의 BF16 head를 만든 뒤 embedding forward에서 사용하지 않는다. full/partial/GaLore에서는 이 미사용 head를 반드시 `--freeze_parameters lm_head`로 동결한다.
 
-현재 격리 학습 환경에는 FlashAttention 2가 설치돼 production probe와 LoRA/F2
-quality run에 사용한다. bitsandbytes, Q-GaLore, DeepSpeed는 기본 의존으로 두지
+학습 queue는 격리 train 환경에서 `flash_attn` import를 먼저 확인하고, 설치돼 있으면
+FlashAttention 2, 없으면 PyTorch SDPA를 production probe와 LoRA/F2 quality run에
+사용한다. 평가용 MTEB 환경의 FlashAttention 2 설치 여부와 혼동하지 않는다.
+bitsandbytes, Q-GaLore, DeepSpeed는 기본 의존으로 두지
 않는다. 비양자 GaLore는 ms-swift 내부 구현으로 별도 package 없이 쓸 수 있다. 단일
 GPU에서는 ZeRO/FSDP 통신 이득도 없다. memory probe는 더 이상 64-token smoke로
 낙관 측정하지 않고 mined training row, max length 512, FA2에서 실행한다.

@@ -27,11 +27,15 @@
 | 공식 #1 | `codefuse-ai/F2LLM-v2-8B` | 1 | **75.11** | 72.68 | 73.42 | 66% | MTEB live |
 | 공식 #2 | `codefuse-ai/F2LLM-v2-14B` | 2 | 74.85 | 72.43 | 72.33 | 66% | MTEB live |
 | 공식 #3 | `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | 3 | **77.01** | **75.92** | 72.15 | 16% | MTEB live |
-| 비교 | `sionic-ai/comsat-embed-ko-8b-preview` | — | 측정 중 | 측정 중 | 측정 중 | 별도 감사 | 동일 protocol 로컬 run |
+| 로컬 재현 | `sionic-ai/comsat-embed-ko-8b-preview` | **6 if inserted** | **73.32** | **70.06** | **76.77** | 별도 감사 | 동일 protocol, 6/6 완료 |
 | 비교 | `Qwen/Qwen3-Embedding-8B` | — | — | — | — | — | 공식 미제출 |
 | 우리 모델 | smoke LoRA r32 | — | 미측정 | 미측정 | 미측정 | 100% | pipeline 검증 전용 |
 
 `F2LLM-v2-8B`는 Borda 1위지만 단순 평균 1위는 PwC입니다. PwC는 6개 중 5개 평가 계열을 학습한 in-domain specialist이므로 zero-shot 일반화와 구분합니다. 전체 task별 값과 방법론 감사는 [Korean leaderboard 문서](docs/08_KOREAN_LEADERBOARD_AND_F2LLM.md)에 있습니다.
+
+Comsat 행은 공식 제출이 아니라 pinned local reproduction을 2026-07-12 live 137-row
+board에 가상 삽입한 값이다. 공식 rank 재계산은 137/137 일치했고, complete official
+row는 101개였다.
 
 ### 2. Sionic Korean retrieval 9종
 
@@ -115,6 +119,7 @@
 22. [Qwen3 임베딩 vLLM·TEI·FA2 서빙](docs/21_QWEN3_EMBEDDING_SERVING.md)
 23. [1M scale 학습·평가 실행 계약](docs/22_SCALE_1M_EXECUTION.md)
 24. [250K–1M FAISS hard-negative mining](docs/23_SCALABLE_HARD_NEGATIVE_MINING.md)
+25. [법률·공공 source-document-held-out 종합 평가](docs/24_LEGAL_SOURCE_HELDOUT_RETRIEVAL.md)
 
 ## 실험 지도
 

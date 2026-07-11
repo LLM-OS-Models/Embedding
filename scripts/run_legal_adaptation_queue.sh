@@ -42,7 +42,11 @@ fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
-export ATTN_IMPL=flash_attention_2
+if "$ROOT/.venv-train/bin/python" -c 'import flash_attn' >/dev/null 2>&1; then
+  export ATTN_IMPL=flash_attention_2
+else
+  export ATTN_IMPL=sdpa
+fi
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 run_stage() {
@@ -136,13 +140,17 @@ train_legal() {
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }
 
+primary_status=0
 if ! find "$ROOT/outputs/$RUN_NAME" -maxdepth 3 -type d -name "checkpoint-$MAX_STEPS" -print -quit 2>/dev/null | grep -q .; then
-  train_legal "$RUN_NAME" 8 8
+  train_legal "$RUN_NAME" 8 8 || primary_status=$?
 fi
-checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
+checkpoint=""
+if (( primary_status == 0 )); then
+  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
+fi
 if [[ -z "$checkpoint" ]]; then
   fallback="${RUN_NAME}-b4"
-  train_legal "$fallback" 4 16
+  train_legal "$fallback" 4 16 || exit 6
   RUN_NAME="$fallback"
   MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
   MODEL_DIR="$ROOT/$MODEL_REL"
@@ -180,17 +188,18 @@ run_stage official-korean-legal-target-adapted \
 
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
 if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
-  run_stage publish-legal-target-adapted \
+  if run_stage publish-legal-target-adapted \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
     --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
-    --upload --public
-  run_stage record-legal-replay-result \
-    "$ROOT/scripts/commit_campaign_result.sh" \
-    --stage legal-replay --model "$MODEL_REL" \
-    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
-    --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
+    --upload --public; then
+    run_stage record-legal-replay-result \
+      "$ROOT/scripts/commit_campaign_result.sh" \
+      --stage legal-replay --model "$MODEL_REL" \
+      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
+      --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
+  fi
 fi
 
 echo "[$(timestamp)] legal target-adaptation queue complete"

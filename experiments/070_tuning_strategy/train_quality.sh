@@ -53,7 +53,7 @@ COMMON=(
   --dataset "$TRAIN_FILE"
   --val_dataset "$VAL_FILE"
   --load_from_cache_file false
-  --attn_impl flash_attention_2
+  --attn_impl "${ATTN_IMPL:-sdpa}"
   --torch_dtype bfloat16
   --max_length 512
   --per_device_train_batch_size "$TRAIN_BATCH_SIZE"

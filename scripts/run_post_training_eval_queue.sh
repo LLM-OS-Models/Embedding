@@ -139,19 +139,20 @@ if [[ -s "$SELECTION" ]]; then
     [[ -s "$training_manifest" ]] || training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/manifest.json"
   fi
   if [[ -s "$official_summary" && -s "$sionic_summary" && -s "$training_manifest" ]]; then
-    run_stage "publish-best-public-model" env HF_TOKEN="${HF_TOKEN:-}" \
+    if run_stage "publish-best-public-model" env HF_TOKEN="${HF_TOKEN:-}" \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
       --model-dir "$best_abs" \
       --sionic-summary "$sionic_summary" \
       --official-summary "$official_summary" \
       --training-manifest "$training_manifest" \
       --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
-      --upload --public
-    run_stage "record-pilot-best-result" \
-      "$ROOT/scripts/commit_campaign_result.sh" \
-      --stage pilot-best --model "$best_model" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
-      --sionic-summary "$sionic_summary" --official-summary "$official_summary"
+      --upload --public; then
+      run_stage "record-pilot-best-result" \
+        "$ROOT/scripts/commit_campaign_result.sh" \
+        --stage pilot-best --model "$best_model" \
+        --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
+        --sionic-summary "$sionic_summary" --official-summary "$official_summary"
+    fi
   fi
 fi
 

@@ -6,6 +6,7 @@ set -uo pipefail
 # later useful stages from running.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/night-queue-20260711}"
 COMSAT_REV="a5cc22b651c1b2e51cdd8bf671774ae93584f0ab"
@@ -87,7 +88,13 @@ fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
-export ATTN_IMPL="${ATTN_IMPL:-flash_attention_2}"
+if "$ROOT/.venv-train/bin/python" -c 'import flash_attn' >/dev/null 2>&1; then
+  DEFAULT_TRAIN_ATTN=flash_attention_2
+else
+  DEFAULT_TRAIN_ATTN=sdpa
+fi
+export ATTN_IMPL="${ATTN_IMPL:-$DEFAULT_TRAIN_ATTN}"
+echo "[$(timestamp)] training attention backend=$ATTN_IMPL"
 
 if [[ -n "$WAIT_PID" ]]; then
   echo "[$(timestamp)] waiting for pid=$WAIT_PID"
@@ -147,24 +154,32 @@ run_lora_training() {
   if (( max_steps > 1000 )); then
     interval=250
   fi
+  local train_status=0
   run_stage "$run_name" env \
     RUN_NAME="$run_name" TRAIN_FILE="$train_file" VAL_FILE="$PILOT_VAL" \
     MAX_STEPS="$max_steps" EVAL_STEPS="$interval" SAVE_STEPS="$interval" \
     TRAIN_BATCH_SIZE=16 GRAD_ACCUM_STEPS=4 \
     TRAIN_DATALOADER_SHUFFLE="$dataloader_shuffle" \
-    "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
+    "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh" || train_status=$?
   local latest
-  latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+  latest=""
+  if (( train_status == 0 )); then
+    latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+  fi
   if [[ -z "$latest" || ! -s "$latest/adapter_model.safetensors" ]]; then
     local fallback_name="${run_name}-b8"
+    local fallback_status=0
     run_stage "$fallback_name" env \
       RUN_NAME="$fallback_name" TRAIN_FILE="$train_file" VAL_FILE="$PILOT_VAL" \
       MAX_STEPS="$max_steps" EVAL_STEPS="$interval" SAVE_STEPS="$interval" \
       TRAIN_BATCH_SIZE=8 GRAD_ACCUM_STEPS=8 \
       TRAIN_DATALOADER_SHUFFLE="$dataloader_shuffle" \
-      "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
+      "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh" || fallback_status=$?
     run_name="$fallback_name"
-    latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+    latest=""
+    if (( fallback_status == 0 )); then
+      latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+    fi
   fi
   if [[ -n "$latest" && -s "$latest/adapter_model.safetensors" ]]; then
     run_stage "$run_name-verify" \
@@ -196,27 +211,30 @@ if perf200_ready && [[ -s "$PILOT_VAL" ]]; then
 fi
 
 if [[ -s "$PILOT_TRAIN" && -s "$PILOT_VAL" ]]; then
-  run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64" env \
+  if run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64" env \
     RUN_NAME=qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64 \
     F2_DUAL_TEMPERATURE=.05 USE_F2_MRL=0 \
-    "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"
-  screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64
-  run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64" env \
+    "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"; then
+    screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64
+  fi
+  if run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64" env \
     RUN_NAME=qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64 \
     F2_DUAL_TEMPERATURE=.02 USE_F2_MRL=0 \
-    "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"
-  screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64
-  run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64" env \
+    "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"; then
+    screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64
+  fi
+  if run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64" env \
     RUN_NAME=qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64 \
     F2_DUAL_TEMPERATURE=.05 USE_F2_MRL=1 \
-    "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"
-  screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64
+    "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"; then
+    screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64
+  fi
 fi
 
 LAST4_PROBE_OK=0
 for mode in lora_r64 dora_r32 last4 galore standard_full; do
   if run_stage "memory-probe-$mode" env \
-    DATA="$PILOT_TRAIN" MAX_LENGTH=512 ATTN_IMPL=flash_attention_2 \
+    DATA="$PILOT_TRAIN" MAX_LENGTH=512 ATTN_IMPL="$ATTN_IMPL" \
     "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" "$mode"; then
     [[ "$mode" == last4 ]] && LAST4_PROBE_OK=1
   fi

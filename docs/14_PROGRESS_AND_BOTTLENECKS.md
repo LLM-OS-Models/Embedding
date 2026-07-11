@@ -47,7 +47,7 @@
 
 ## 현재 실행 중
 
-Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
+Comsat의 공식 `MTEB(kor, v1)` 6개를 모두 직접 측정했다.
 
 | Task | Local official-protocol score |
 |---|---:|
@@ -56,14 +56,13 @@ Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
 | KLUE-STS | 0.8631865 |
 | KorSTS | 0.7943686 |
 | MIRACLReranking | 0.6846700 |
-| MIRACLRetrieval | 실행 중: 1,486,752 documents |
+| MIRACLRetrieval | 0.6952600 |
 
-마지막 retrieval은 H100 1장, FlashAttention 2, batch 224에서 실행 중이다. 2026-07-12
-00:26 KST 기준 50K corpus chunk 20개, 즉 1,000,000 document embedding을 atomic cache에
-저장했고 GPU utilization 100%, 약 59.3GiB VRAM을 사용했다. exact
-float32 embedding cache를 켜고 MTEB의 50K corpus chunk가 끝날 때마다 약 819MB씩
-atomic 저장한다. 실측 GPU 메모리는 corpus batch에 따라 약 47–60GiB이며 GPU compute
-구간은 100%다. 완료 전 5-task 평균을 공식 6-task 평균이나 Borda rank로 쓰지 않는다.
+마지막 retrieval은 H100 1장, FlashAttention 2, batch 224에서 1,486,752 documents를
+완료했다. exact float32 embedding cache는 MTEB 50K corpus chunk마다 약 819MB를 atomic
+저장했고, 실측 GPU 메모리는 corpus batch에 따라 약 47–60GiB였다. 6-task Mean(Task)은
+73.3172, Mean(Type)은 70.0636이다. 2026-07-12 live 137-row board에 가상 삽입하면 Borda
+6위이며 공식 row 자체가 아니다. 완료 즉시 GPU는 10K hard-negative mining으로 넘어갔다.
 
 `performance_1m` 1,000,000-row base mix와 999,936-row/62,496-batch homogeneous 파생
 파일은 build를 마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에

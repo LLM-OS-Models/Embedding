@@ -45,6 +45,33 @@ protocol parity 모두에서 현재 Comsat full-corpus 기본값은 FA2이며, v
 
 Raw cache와 query-level predictions는 `outputs/evaluation/sionic9/` 아래에 보존되며 Git에는 대용량 artifact를 넣지 않습니다. 최종 모델 카드에는 전체 9개가 완료된 run의 hash와 공개 artifact URL을 연결합니다.
 
+## 2026-07-12 Comsat 공식 MTEB Korean v1 로컬 재현
+
+Model revision `a5cc22b651c1b2e51cdd8bf671774ae93584f0ab`, MTEB `2.18.0`,
+FlashAttention 2, H100 80GB, task-specific query/document prompt contract로 6/6을
+완료했다.
+
+| Task | Type | Score |
+|---|---|---:|
+| KLUE-TC | Classification | 0.521387 |
+| MIRACLReranking | Reranking | 0.684670 |
+| MIRACLRetrieval | Retrieval | **0.695260** |
+| Ko-StrategyQA | Retrieval | 0.840160 |
+| KLUE-STS | STS | 0.863187 |
+| KorSTS | STS | 0.794369 |
+
+- Mean(Task): **73.3172** leaderboard points
+- Mean(Type): **70.0636** leaderboard points
+- Retrieval type mean: **0.767710**
+- live board에 가상 삽입한 Borda rank: **6** (`755` points)
+- official row rank 재현: `137/137`; complete official rows `101`
+- 공식 제출 행이 아니라 exact protocol의 local reproduction
+
+가상 삽입 시 task rank는 Ko-StrategyQA 2, MIRACLReranking 2, KorSTS 20, KLUE-TC
+32, KLUE-STS 16, MIRACLRetrieval 1이었다. raw result는
+`outputs/evaluation/mteb_korean_v1/`에, live comparison response hash와 neighbors는
+`outputs/evaluation/mteb_korean_v1/comsat-live-comparison.json`에 보존한다.
+
 ### PwC 길이 표기 주의
 
 공식 MTEB metadata는 514 tokens로 보이지만 XLM-R position table에서 실제 tokenizer max length는 content 512와 special tokens를 구분해야 합니다. 직접 `max_seq_length=514`로 덮어쓰면 position index 오류가 발생했고, 공식 model revision에 512를 적용한 run은 정상 완료했습니다. 성공 결과만 위 표에 사용했습니다.
