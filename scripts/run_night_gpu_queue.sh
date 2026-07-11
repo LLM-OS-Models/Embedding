@@ -18,6 +18,7 @@ PILOT_VAL="$PILOT_DIR/validation.hn-qwen3-r095-n4.jsonl"
 PERF50_DIR="$ROOT/outputs/data/performance-v1/pilot-50k"
 PERF200_DIR="$ROOT/outputs/data/performance-v1/ablation-200k"
 COMSAT_EMBED_CACHE="$ROOT/outputs/embedding-cache/comsat-official-korean"
+EARLY_SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain"
 
 mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
@@ -46,6 +47,34 @@ perf200_ready() {
   [[ -s "$PERF200_DIR/train.jsonl" && -s "$PERF200_DIR/manifest.json" ]] || return 1
   [[ "$(jq -r '.phase + ":" + (.built_rows | tostring)' "$PERF200_DIR/manifest.json")" == \
     "ablation_200k:200000" ]]
+}
+
+screen_lora_run() {
+  local run_name="$1"
+  local run_dir="$ROOT/outputs/$run_name"
+  local checkpoint
+  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
+    "$run_dir" --print-path 2>/dev/null)" || return 0
+  [[ -n "$checkpoint" && -s "$checkpoint/adapter_model.safetensors" ]] || return 0
+  run_stage "$run_name-verify-best" \
+    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+    --adapter "$checkpoint" --data "$PILOT_VAL" \
+    --output "$run_dir/verification-best.json" || return 0
+  local merged_rel="artifacts/models/${run_name}-best-merged"
+  local merged="$ROOT/$merged_rel"
+  if [[ ! -s "$merged/merge_report.json" ]]; then
+    run_stage "$run_name-merge-best" \
+      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+      --adapter "$checkpoint" --output-dir "$merged" \
+      --device cuda --dtype bfloat16 --local-files-only || return 0
+  fi
+  run_stage "$run_name-sionic7-early" \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
+    --model "$merged_rel" --batch-size 192 --max-length 8192 \
+    --attn-implementation flash_attention_2 --output-dir "$EARLY_SIONIC_OUT" \
+    --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9/$run_name" \
+    --task MLDR --task AutoRAG --task Ko-StrategyQA --task PublicHealthQA \
+    --task Belebele --task SQuADKorV1 --task LawIRKo
 }
 
 if [[ -f "$ROOT/.env" ]]; then
@@ -139,6 +168,7 @@ run_lora_training() {
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
       --adapter "$latest" --data "$PILOT_VAL" \
       --output "$ROOT/outputs/$run_name/verification.json"
+    screen_lora_run "$run_name"
   fi
 }
 
@@ -167,14 +197,17 @@ if [[ -s "$PILOT_TRAIN" && -s "$PILOT_VAL" ]]; then
     RUN_NAME=qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64 \
     F2_DUAL_TEMPERATURE=.05 USE_F2_MRL=0 \
     "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"
+  screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64
   run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64" env \
     RUN_NAME=qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64 \
     F2_DUAL_TEMPERATURE=.02 USE_F2_MRL=0 \
     "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"
+  screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64
   run_stage "qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64" env \
     RUN_NAME=qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64 \
     F2_DUAL_TEMPERATURE=.05 USE_F2_MRL=1 \
     "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"
+  screen_lora_run qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64
 fi
 
 LAST4_PROBE_OK=0

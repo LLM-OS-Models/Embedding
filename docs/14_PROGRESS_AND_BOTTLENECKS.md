@@ -186,7 +186,10 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 [`scripts/run_night_gpu_queue.sh`](../scripts/run_night_gpu_queue.sh)는 실행 중인 대형
 baseline PID가 끝난 뒤 MIRACL fallback/summary/Borda, 10K hard-negative mining,
 LoRA r64, 준비된 50K/200K 성능 mix, F2 dual-loss/MRL, LoRA·DoRA·partial·full memory
-probe를 순차 실행한다. 각 stage는 시작·종료 시각과 exit status를 남기며, 한 ablation의
+probe를 순차 실행한다. 각 LoRA/F2 run의 best-validation checkpoint는 즉시 safe merge하고
+대형 MIRACL/MrTidy를 제외한 Sionic 7-task early screen을 실행한다. 이 result와 exact
+embedding cache는 후속 9-task pass가 그대로 재사용한다. 각 stage는 시작·종료 시각과
+exit status를 남기며, 한 ablation의
 실패가 뒤의 유효한 실험을 막지 않는다. 동일 GPU에서 두 stage를 동시에 실행하지 않는다.
 
 그 다음 [`scripts/run_post_training_eval_queue.sh`](../scripts/run_post_training_eval_queue.sh)가
