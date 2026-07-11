@@ -45,8 +45,13 @@ SERVED_MODEL_NAME=qwen3-embedding-8b \
 MAX_MODEL_LEN=8192 \
 MAX_NUM_BATCHED_TOKENS=65536 \
 MAX_NUM_SEQS=512 \
+DTYPE=bfloat16 \
 scripts/serve_vllm_embedding.sh
 ```
+
+공개 model card가 FP32 strict-parity merge/evaluation을 명시하면 재현 실행도
+`DTYPE=float32`로 맞춘다. BF16으로 내리는 것은 운영상 가능한 별도 최적화지만,
+FP32와 같은 leaderboard 점수라고 간주하지 않고 task별 회귀를 다시 측정한다.
 
 8B에서 무조건 32K context를 열면 scheduler/KV·activation 여유가 줄어 짧은 요청의
 처리량이 악화될 수 있다. 실제 traffic의 p99 길이에 맞춰 2K/4K/8K/16K/32K를
