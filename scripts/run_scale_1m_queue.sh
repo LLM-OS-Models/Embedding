@@ -179,6 +179,22 @@ if [[ -z "$checkpoint" ]]; then
     "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 3
 fi
 
+DATA_UPLOAD_PID=""
+if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
+  run_stage "upload-derived-performance-1m" \
+    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
+    --train "$MINED_HOMOGENEOUS_TRAIN" \
+    --provenance "$MINED_HOMOGENEOUS_PROVENANCE" \
+    --manifest "$MINED_HOMOGENEOUS_MANIFEST" \
+    --mining-manifest "$MINING_MANIFEST" --mining-audit "$MINING_AUDIT" \
+    --repo-id LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1 \
+    --title "Korean Embedding Performance 1M Quantile HN7" \
+    --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
+    --upload --public >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
+  DATA_UPLOAD_PID=$!
+  echo "[$(timestamp)] derived dataset upload started pid=$DATA_UPLOAD_PID"
+fi
+
 run_stage "verify-$RUN_NAME" \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
   --adapter "$checkpoint" --data "$VAL_FILE" --model "$CONTINUAL_BASE" \
@@ -250,5 +266,12 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   fi
 fi
 run_stage "record-clean-legal-results" "$ROOT/scripts/commit_clean_legal_results.sh" || true
+if [[ -n "$DATA_UPLOAD_PID" ]]; then
+  if wait "$DATA_UPLOAD_PID"; then
+    echo "[$(timestamp)] derived performance 1M dataset upload complete"
+  else
+    echo "[$(timestamp)] derived performance 1M dataset upload failed; see log" >&2
+  fi
+fi
 
 echo "[$(timestamp)] 1M scale queue complete"

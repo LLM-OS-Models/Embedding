@@ -167,6 +167,19 @@ if [[ -z "$checkpoint" ]]; then
   checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 6
 fi
 
+run_stage upload-derived-legal-replay \
+  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
+  --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
+  --manifest "$CURRICULUM_MANIFEST" \
+  --mining-manifest "$MINING_MANIFEST" --mining-audit "$AUDIT" \
+  --repo-id LLM-OS-Models/korean-legal-quantile-hn7-replay-v1 \
+  --title "Korean Legal Quantile HN7 with General Replay" \
+  --source-dataset LLM-OS-Models/korean-legal-retrieval-source-native-250k \
+  --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
+  --upload --public >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
+DATA_UPLOAD_PID=$!
+echo "[$(timestamp)] derived legal dataset upload started pid=$DATA_UPLOAD_PID"
+
 run_stage verify-legal-adapter \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
   --adapter "$checkpoint" --data "$VAL_FILE" --model "$MINING_MODEL" \
@@ -235,5 +248,10 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   fi
 fi
 run_stage record-clean-legal-results "$ROOT/scripts/commit_clean_legal_results.sh" || true
+if wait "$DATA_UPLOAD_PID"; then
+  echo "[$(timestamp)] derived legal dataset upload complete"
+else
+  echo "[$(timestamp)] derived legal dataset upload failed; see log" >&2
+fi
 
 echo "[$(timestamp)] legal target-adaptation queue complete"

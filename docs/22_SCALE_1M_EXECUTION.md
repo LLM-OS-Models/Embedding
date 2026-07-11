@@ -54,6 +54,9 @@ microbatch 순서만 전역 shuffle한다. source별 16 미만 remainder는 mani
 같은 global batch를 유지한다. 학습 완료 후
 adapter reload, safe merge parity, Sionic 9종 전체, 공식 Korean v1 전체를 실행한다.
 결과가 나쁘더라도 숨기지 않고 별도 1M 모델/manifest에 연결한다.
+current-student quantile-HN 파생 curriculum을 사용한 경우 exact train/provenance/mining
+audit/manifest는 학습 종료 직후 GPU 평가와 겹쳐 백그라운드로
+`LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1`에 공개한다.
 
 ```bash
 WAIT_PID=<post-training-eval-pid> bash scripts/run_scale_1m_queue.sh

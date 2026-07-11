@@ -99,6 +99,11 @@ LR `1e-5`, legal/general 비율 `25/75`, 한 curriculum pass를 사용한다. mo
 법률 250K와 general 1M 두 dataset, target-adapted 표기, curriculum manifest를 함께
 싣는다.
 
+최종 exact legal25/general75 train·provenance와 mining audit/manifest는 모델 평가와
+동시에 `LLM-OS-Models/korean-legal-quantile-hn7-replay-v1` dataset repository로
+공개한다. publisher는 file SHA/row 수, quantile/pool24/HN7 계약을 다시 검증하고
+target-adapted·non-commercial·upstream 권리 비승계 문구를 card에 강제한다.
+
 ## 1M 적용
 
 1M 전체를 처음부터 refresh하기 전에 source별 loss-active rate를 10K–50K sample로
