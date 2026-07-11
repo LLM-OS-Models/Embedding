@@ -56,6 +56,24 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def copy_json_tree(source_root: Path, destination_root: Path) -> list[dict[str, Any]]:
+    copied: list[dict[str, Any]] = []
+    if not source_root.is_dir():
+        return copied
+    for source in sorted(source_root.rglob("*.json")):
+        relative = source.relative_to(source_root)
+        destination = destination_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        copied.append(
+            {
+                "path": str(destination.relative_to(destination_root.parent.parent)),
+                "sha256": sha256(destination),
+            }
+        )
+    return copied
+
+
 def model_weights_sha256(root: Path) -> str:
     digest = hashlib.sha256()
     shards = sorted(root.glob("model*.safetensors"))
@@ -308,7 +326,8 @@ tags:
 - protocol: `{official['protocol_id']}`
 
 이 결과는 pinned MTEB protocol의 로컬 실행이며 MTEB leaderboard 제출 행 자체는
-아니다. raw JSON과 실행 코드는 프로젝트 repository에 보존한다.
+아니다. task별 MTEB raw result JSON은 이 model repository의 `evaluation/raw/`에,
+실행 코드는 프로젝트 repository에 보존한다.
 
 ## 학습
 
@@ -416,6 +435,16 @@ def main() -> None:
     }
     for name, source in evidence_files.items():
         shutil.copy2(source, evidence_dir / name)
+    raw_evidence = {
+        "sionic9": copy_json_tree(
+            args.sionic_summary.resolve().parent / "mteb_cache",
+            evidence_dir / "raw" / "sionic9",
+        ),
+        "mteb_korean_v1": copy_json_tree(
+            args.official_summary.resolve().parent / "mteb_cache",
+            evidence_dir / "raw" / "mteb_korean_v1",
+        ),
+    }
     evidence_name = (
         "full_tuning_report.json" if is_full_update(evidence) else "merge_report.json"
     )
@@ -431,6 +460,7 @@ def main() -> None:
         "evidence": {
             name: {"sha256": sha256(evidence_dir / name)} for name in evidence_files
         },
+        "raw_evaluation_json": raw_evidence,
         "model_weights_evidence_sha256": weights_sha(evidence),
     }
     (model_dir / "publication_manifest.json").write_text(
