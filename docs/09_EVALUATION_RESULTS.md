@@ -19,6 +19,8 @@ Run: `qwen3-embedding-8b-ko-smoke-r32/v1-20260711-210119`, checkpoint 20, Qwen b
 
 BF16 embedding norms were `0.99856–1.00044`, within the explicit `5e-3` normalization tolerance. Reload status is `pass`. The 32-row validation loss was effectively zero from the start because the supplied negative passages were too easy; this run validates plumbing only and is excluded from all performance leaderboards.
 
+검증된 checkpoint-20 adapter는 `LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`에 private artifact로 업로드했다(HF commit `0f949faf5d01edc549fb11745bd26da3af7addc3`). allowlist에는 adapter weight/config, sanitized verification/manifest/model card만 포함되며 raw examples, optimizer/scheduler, trainer/RNG state, logs, local path는 포함하지 않는다. 데이터 라이선스가 미명시이므로 public 전환은 금지한다.
+
 ## 2026-07-11 evaluator parity — AutoRAG
 
 Protocol: `sionic9-fixed-prompt-v1`의 AutoRAG slice, full corpus, NDCG@10, query-only fixed prompt, MTEB `2.18.0` commit `193e3f66`, H100 80GB, normalized cosine/IP.
