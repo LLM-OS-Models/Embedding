@@ -476,23 +476,49 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
         trust_remote_code=args.trust_remote_code,
         local_files_only=args.local_files_only,
     )
-    base = AutoModelForCausalLM.from_pretrained(
-        args.base_model, **_load_kwargs(args, dtype)
-    )
-    if base.config.architectures != ["Qwen3ForCausalLM"]:
-        raise RuntimeError(
-            f"Unexpected base architecture: {base.config.architectures!r}"
+    def load_merge_probe(load_dtype: Any) -> tuple[Any, ParityMetrics]:
+        base = AutoModelForCausalLM.from_pretrained(
+            args.base_model, **_load_kwargs(args, load_dtype)
         )
-    peft_model = PeftModel.from_pretrained(
-        base,
-        str(adapter_dir),
-        is_trainable=False,
-        low_cpu_mem_usage=True,
-    )
-    before = encode_probe(peft_model, tokenizer, args.probe_max_length)
-    merged = peft_model.merge_and_unload(safe_merge=True, progressbar=True)
-    after = encode_probe(merged, tokenizer, args.probe_max_length)
-    metrics = parity_metrics(before, after)
+        if base.config.architectures != ["Qwen3ForCausalLM"]:
+            raise RuntimeError(
+                f"Unexpected base architecture: {base.config.architectures!r}"
+            )
+        peft_model = PeftModel.from_pretrained(
+            base,
+            str(adapter_dir),
+            is_trainable=False,
+            low_cpu_mem_usage=True,
+        )
+        before = encode_probe(peft_model, tokenizer, args.probe_max_length)
+        merged_model = peft_model.merge_and_unload(safe_merge=True, progressbar=True)
+        after = encode_probe(merged_model, tokenizer, args.probe_max_length)
+        return merged_model, parity_metrics(before, after)
+
+    def parity_passes(value: ParityMetrics) -> bool:
+        return (
+            value.minimum_row_cosine >= args.min_row_cosine
+            and value.maximum_absolute_difference <= args.max_absolute_difference
+            and value.maximum_pairwise_score_difference
+            <= args.max_pairwise_score_difference
+        )
+
+    effective_dtype = args.dtype
+    merged, metrics = load_merge_probe(dtype)
+    if not parity_passes(metrics) and args.dtype != "float32":
+        # PEFT keeps trained adapter matrices in FP32. Folding a large/high-rank
+        # update directly into a BF16 base can lose enough information to move
+        # retrieval scores. Retry in FP32 instead of weakening the parity gate.
+        del merged
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        effective_dtype = "float32"
+        print(
+            "BF16 adapter folding missed the parity gate; retrying an exact "
+            "FP32 merge.",
+            file=sys.stderr,
+        )
+        merged, metrics = load_merge_probe(torch.float32)
     if metrics.minimum_row_cosine < args.min_row_cosine:
         raise RuntimeError(
             "LoRA/merged embedding parity failed: minimum row cosine "
@@ -544,7 +570,8 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
         },
         "merge": {
             "safe_merge": True,
-            "dtype": args.dtype,
+            "requested_dtype": args.dtype,
+            "dtype": effective_dtype,
             "device": args.device,
             "max_shard_size": args.max_shard_size,
         },

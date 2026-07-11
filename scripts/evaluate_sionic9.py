@@ -101,6 +101,15 @@ def gpu_name() -> str | None:
         return None
 
 
+def local_merge_dtype(model: str) -> str:
+    report = Path(model).expanduser() / "merge_report.json"
+    if report.is_file():
+        evidence = json.loads(report.read_text(encoding="utf-8"))
+        if evidence.get("merge", {}).get("dtype") == "float32":
+            return "float32"
+    return "bfloat16"
+
+
 def main() -> None:
     args = parse_args()
     protocol = load_protocol(args.protocol)
@@ -134,6 +143,10 @@ def main() -> None:
     import transformers
     from sentence_transformers import SentenceTransformer
 
+    evaluation_dtype = local_merge_dtype(args.model)
+    torch_dtype = torch.float32 if evaluation_dtype == "float32" else torch.bfloat16
+    effective_batch_size = min(args.batch_size, 96) if evaluation_dtype == "float32" else args.batch_size
+
     model_class = SentenceTransformer
     model_extra: dict[str, Any] = {}
     if args.embedding_cache_dir is not None:
@@ -147,7 +160,7 @@ def main() -> None:
             "embedding_cache_namespace": (
                 f"{args.model}@{args.revision or 'unresolved'}|"
                 f"protocol={protocol['protocol_id']}|max={args.max_length}|"
-                f"attn={args.attn_implementation}|"
+                f"attn={args.attn_implementation}|dtype={evaluation_dtype}|"
                 f"prompts={json.dumps({'query': protocol['query_prompt'], 'document': protocol['document_prompt']}, sort_keys=True)}"
             ),
         }
@@ -159,7 +172,7 @@ def main() -> None:
         trust_remote_code=args.trust_remote_code,
         model_kwargs={
             "attn_implementation": args.attn_implementation,
-            "torch_dtype": torch.bfloat16,
+            "torch_dtype": torch_dtype,
         },
         tokenizer_kwargs={"padding_side": "left"},
         **model_extra,
@@ -186,7 +199,7 @@ def main() -> None:
         overwrite_strategy="always" if args.overwrite else "only-missing",
         prediction_folder=prediction_folder,
         encode_kwargs={
-            "batch_size": args.batch_size,
+            "batch_size": effective_batch_size,
             "normalize_embeddings": True,
             "show_progress_bar": True,
         },
@@ -216,9 +229,11 @@ def main() -> None:
             "sentence_transformers": sentence_transformers.__version__,
             "mteb": mteb.__version__,
             "gpu": gpu_name(),
-            "batch_size": args.batch_size,
+            "batch_size": effective_batch_size,
+            "requested_batch_size": args.batch_size,
             "max_length": args.max_length,
             "attention": args.attn_implementation,
+            "torch_dtype": evaluation_dtype,
             "embedding_cache_dir": (
                 str(args.embedding_cache_dir.resolve())
                 if args.embedding_cache_dir is not None
