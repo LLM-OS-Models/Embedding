@@ -75,6 +75,11 @@ audit/manifest는 학습 종료 직후 GPU 평가와 겹쳐 백그라운드로
 row-hash/batch contract가 실제 publisher 입력과 일치해야 한다. report도 dataset card와
 `metadata/training_data_quality_audit.json`에 포함한다.
 
+파생 HN curriculum도 학습 직전에 15-task blocklist를 다시 전수 검사한다. mining이
+기존 positive corpus 안에서만 후보를 고르더라도 `--fail-on-critical`이 0이 아니면
+학습과 HF 파생 데이터 공개를 모두 중단한다. legal25/replay75 파생 curriculum에도
+같은 gate와 overlap audit 첨부를 적용한다.
+
 ```bash
 WAIT_PID=<post-training-eval-pid> bash scripts/run_scale_1m_queue.sh
 ```

@@ -21,6 +21,7 @@ CURRICULUM="$DATA_DIR/train.faiss-r095-n7.legal25-replay75.jsonl"
 CURRICULUM_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.legal25-replay75.jsonl"
 CURRICULUM_MANIFEST="$DATA_DIR/faiss-r095-n7.legal25-replay75.manifest.json"
 CURRICULUM_QUALITY_AUDIT="$DATA_DIR/faiss-r095-n7.legal25-replay75.quality-audit.json"
+CURRICULUM_OVERLAP_AUDIT="$DATA_DIR/faiss-r095-n7.legal25-replay75.benchmark-overlap-audit.json"
 VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
 RUN_NAME="qwen3-embedding-8b-ko-legal25-replay75-lora-r64"
 MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
@@ -175,6 +176,11 @@ run_stage audit-legal25-general75-curriculum \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/audit_embedding_training_data.py" \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --output "$CURRICULUM_QUALITY_AUDIT" --expected-batch-size 16 || exit 6
+run_stage audit-legal25-general75-benchmark-overlap \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
+  --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
+  --blocklist-root "$ROOT/outputs/decontamination/benchmark_blocklist" \
+  --output "$CURRICULUM_OVERLAP_AUDIT" --fail-on-critical || exit 6
 
 MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$CURRICULUM_MANIFEST")"
 if (( MAX_STEPS < 1 )); then
@@ -230,6 +236,7 @@ retry_stage upload-derived-legal-replay 3 \
   --manifest "$CURRICULUM_MANIFEST" \
   --mining-manifest "$MINING_MANIFEST" --mining-audit "$AUDIT" \
   --quality-audit "$CURRICULUM_QUALITY_AUDIT" \
+  --benchmark-overlap-audit "$CURRICULUM_OVERLAP_AUDIT" \
   --repo-id LLM-OS-Models/korean-legal-quantile-hn7-replay-v1 \
   --title "Korean Legal Quantile HN7 with General Replay" \
   --source-dataset LLM-OS-Models/korean-legal-retrieval-source-native-250k \
