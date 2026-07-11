@@ -237,7 +237,12 @@ candidate source가 수백만 건/수 GB여도 전부 RAM에 올리지 않는다
 7. `(seed, generated_id, candidate_id)` SHA 순서로 pool에서 7개 표집
 8. strict training row exact dedup
 
-top 7만 쓰지 않고 top-24에서 deterministic sampling하는 이유는 F2식 난도 pool을 유지하면서 한두 개 near-positive가 모든 epoch/행을 지배하는 것을 줄이기 위해서다. 완전한 top-k ablation은 config의 `selection_strategy`를 `top_k`로 바꿔 비교한다.
+top 7만 쓰지 않고 top-24의 score-rank quantile 7개를 균등하게 고르는 이유는 F2식
+난도 pool을 유지하면서 한두 개 near-positive가 모든 epoch/행을 지배하는 것을 줄이고,
+reranker teacher의 high/mid/low relevance 분포를 보존하기 위해서다. pool을 score
+내림차순·candidate ID 오름차순으로 고정한 뒤 양 끝을 포함하는 rank anchor를 정수
+산술로 계산하므로 실행마다 동일하다. 완전한 top-k와 기존 hash sample ablation은 config의
+`selection_strategy`를 각각 `top_k`, `hash_sample_from_top_pool`로 바꿔 비교한다.
 
 출력 training row는 정확히 다음 구조다.
 

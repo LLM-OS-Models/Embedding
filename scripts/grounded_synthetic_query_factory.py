@@ -46,9 +46,7 @@ CODE_FENCE_RE = re.compile(r"\A\s*```(?:json)?\s*(.*?)\s*```\s*\Z", re.DOTALL | 
 
 
 def canonical_bytes(value: Any) -> bytes:
-    return (
-        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
-    ).encode("utf-8")
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -68,9 +66,7 @@ def file_sha256(path: Path) -> str:
 
 
 def normalize_source_text(value: str) -> str:
-    return unicodedata.normalize(
-        "NFC", value.replace("\r\n", "\n").replace("\r", "\n")
-    ).strip()
+    return unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n")).strip()
 
 
 def normalize_match_text(value: str) -> str:
@@ -176,9 +172,7 @@ class AtomicJSONL:
 def atomic_write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
-    encoded = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
-        "utf-8"
-    )
+    encoded = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
     try:
         with temp.open("wb") as handle:
             handle.write(encoded)
@@ -190,9 +184,7 @@ def atomic_write_json(path: Path, value: Any) -> None:
         raise
 
 
-def validate_candidate(
-    raw: dict[str, Any], config: dict[str, Any], path: Path, line_number: int
-) -> dict[str, Any]:
+def validate_candidate(raw: dict[str, Any], config: dict[str, Any], path: Path, line_number: int) -> dict[str, Any]:
     contract = config["input_contract"]
     missing = [field for field in contract["required_fields"] if field not in raw]
     if missing:
@@ -225,9 +217,7 @@ def validate_candidate(
 
 def allowed_locators(candidate: dict[str, Any]) -> list[str]:
     provenance = candidate["provenance"]
-    section = provenance.get("section_heading") or provenance.get(
-        "positive_section_heading"
-    )
+    section = provenance.get("section_heading") or provenance.get("positive_section_heading")
     path = provenance.get("path")
     candidates: list[Any] = [
         f"{path}#{section}" if path and section else None,
@@ -334,9 +324,13 @@ def command_prepare(args: argparse.Namespace) -> int:
                 raise ValueError(f"{args.input}:{line_number}: duplicate id {candidate['id']}")
             seen_ids.add(candidate["id"])
             if args.shard_count > 1:
-                shard = int.from_bytes(
-                    hashlib.sha256(candidate["id"].encode("utf-8")).digest()[:8], "big"
-                ) % args.shard_count
+                shard = (
+                    int.from_bytes(
+                        hashlib.sha256(candidate["id"].encode("utf-8")).digest()[:8],
+                        "big",
+                    )
+                    % args.shard_count
+                )
                 if shard != args.shard_index:
                     counters["candidates_outside_shard"] += 1
                     continue
@@ -366,9 +360,7 @@ def command_prepare(args: argparse.Namespace) -> int:
 
 def extract_response_content(raw: dict[str, Any]) -> Any:
     value: Any = raw.get("response", raw)
-    if isinstance(value, dict) and all(
-        field in value for field in ("query", "answer", "evidence_quote", "citation")
-    ):
+    if isinstance(value, dict) and all(field in value for field in ("query", "answer", "evidence_quote", "citation")):
         return value
     if isinstance(value, dict) and isinstance(value.get("choices"), list) and value["choices"]:
         choice = value["choices"][0]
@@ -414,27 +406,26 @@ def character_coverage(query: str, positive: str) -> float:
     positive_chars = "".join(normalize_match_text(positive).split())
     if not query_chars:
         return 1.0
-    longest_copy = difflib.SequenceMatcher(
-        None, query_chars, positive_chars, autojunk=False
-    ).find_longest_match().size
+    longest_copy = difflib.SequenceMatcher(None, query_chars, positive_chars, autojunk=False).find_longest_match().size
     return longest_copy / len(query_chars)
 
 
 def validate_generation(
-    request: dict[str, Any], raw_response: dict[str, Any], config: dict[str, Any], mode: str
+    request: dict[str, Any],
+    raw_response: dict[str, Any],
+    config: dict[str, Any],
+    mode: str,
 ) -> dict[str, Any]:
     response, raw_hash = parse_response_object(raw_response)
     required = set(config["generation"]["response_contract"]["required_fields"])
     if set(response) != required:
-        raise ValueError(
-            f"response fields must be exactly {sorted(required)}, got {sorted(response)}"
-        )
+        raise ValueError(f"response fields must be exactly {sorted(required)}, got {sorted(response)}")
     validation = config["validation"]
-    query = require_string(
-        response["query"], "query", minimum=int(validation["minimum_query_characters"])
-    )
+    query = require_string(response["query"], "query", minimum=int(validation["minimum_query_characters"]))
     answer = require_string(
-        response["answer"], "answer", minimum=int(validation["minimum_answer_characters"])
+        response["answer"],
+        "answer",
+        minimum=int(validation["minimum_answer_characters"]),
     )
     evidence = require_string(
         response["evidence_quote"],
@@ -456,15 +447,13 @@ def validate_generation(
         raise ValueError("answer is not an exact normalized span of evidence_quote")
     if validation["require_exact_evidence_in_positive"] and evidence_match not in positive_match:
         raise ValueError("evidence_quote is not an exact normalized span of positive")
-    if validation["reject_query_equal_to_source_query"] and normalize_match_text(
-        query
-    ) == normalize_match_text(request["source_native_query"]):
+    if validation["reject_query_equal_to_source_query"] and normalize_match_text(query) == normalize_match_text(
+        request["source_native_query"]
+    ):
         raise ValueError("generated query exactly equals source-native query")
     coverage = character_coverage(query, request["positive"])
     if coverage > float(validation["maximum_query_positive_character_coverage"]):
-        raise ValueError(
-            f"query-positive character coverage {coverage:.6f} exceeds configured maximum"
-        )
+        raise ValueError(f"query-positive character coverage {coverage:.6f} exceeds configured maximum")
     citation = response["citation"]
     citation_fields = set(config["generation"]["response_contract"]["citation_fields"])
     if not isinstance(citation, dict) or set(citation) != citation_fields:
@@ -530,9 +519,7 @@ def endpoint_url(endpoint: dict[str, Any]) -> str:
     return endpoint["base_url"].rstrip("/") + "/" + endpoint["chat_completions_path"].lstrip("/")
 
 
-def call_endpoint(
-    request_record_value: dict[str, Any], endpoint: dict[str, Any]
-) -> dict[str, Any]:
+def call_endpoint(request_record_value: dict[str, Any], endpoint: dict[str, Any]) -> dict[str, Any]:
     body = json.dumps(request_record_value["api_request"], ensure_ascii=False).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     key_name = endpoint.get("api_key_env")
@@ -547,8 +534,16 @@ def call_endpoint(
                 payload = json.loads(response.read().decode("utf-8"))
                 if not isinstance(payload, dict):
                     raise ValueError("endpoint returned a non-object JSON response")
-                return {"request_id": request_record_value["request_id"], "response": payload}
-        except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+                return {
+                    "request_id": request_record_value["request_id"],
+                    "response": payload,
+                }
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
             error = exc
             if attempt + 1 < attempts:
                 time.sleep(min(2**attempt, 4))
@@ -578,15 +573,17 @@ def command_generate(args: argparse.Namespace) -> int:
         resolved = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
             future_to_id = {
-                executor.submit(call_endpoint, request, endpoint): request["request_id"]
-                for request in requests
+                executor.submit(call_endpoint, request, endpoint): request["request_id"] for request in requests
             }
             for future in concurrent.futures.as_completed(future_to_id):
                 request_id = future_to_id[future]
                 try:
                     resolved[request_id] = future.result()
                 except Exception as exc:
-                    resolved[request_id] = {"request_id": request_id, "endpoint_error": str(exc)}
+                    resolved[request_id] = {
+                        "request_id": request_id,
+                        "endpoint_error": str(exc),
+                    }
     counters: Counter[str] = Counter()
     duplicate_keys: set[tuple[str, str]] = set()
     with ExitStack() as stack:
@@ -672,9 +669,7 @@ def initialize_candidate_index(connection: sqlite3.Connection) -> None:
     )
 
 
-def build_candidate_index(
-    path: Path, config: dict[str, Any], database: Path
-) -> tuple[sqlite3.Connection, int]:
+def build_candidate_index(path: Path, config: dict[str, Any], database: Path) -> tuple[sqlite3.Connection, int]:
     database.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(str(database))
     initialize_candidate_index(connection)
@@ -803,9 +798,7 @@ def parse_score(value: Any, field: str, config: dict[str, Any]) -> float:
     return result
 
 
-def candidate_from_index(
-    connection: sqlite3.Connection, candidate_id: str
-) -> tuple[str, str, str, dict[str, Any]]:
+def candidate_from_index(connection: sqlite3.Connection, candidate_id: str) -> tuple[str, str, str, dict[str, Any]]:
     row = connection.execute(
         "SELECT positive, positive_normalized, positive_sha256, provenance_json FROM candidates WHERE id=?",
         (candidate_id,),
@@ -813,6 +806,20 @@ def candidate_from_index(
     if row is None:
         raise ValueError(f"teacher score references missing candidate id {candidate_id}")
     return row[0], row[1], row[2], json.loads(row[3])
+
+
+def evenly_spaced_rank_indices(pool_size: int, selected_size: int) -> list[int]:
+    """Return deterministic nearest rank-quantile anchors including both ends."""
+
+    if selected_size < 1 or pool_size < selected_size:
+        raise ValueError("rank quantiles require pool_size >= selected_size >= 1")
+    if selected_size == 1:
+        return [0]
+    denominator = selected_size - 1
+    indices = [(index * (pool_size - 1) + denominator // 2) // denominator for index in range(selected_size)]
+    if len(set(indices)) != selected_size:
+        raise RuntimeError("rank quantile anchors unexpectedly collided")
+    return indices
 
 
 def select_hard_negatives(
@@ -852,9 +859,7 @@ def select_hard_negatives(
     positive = positive_rows[0]
     teacher = config["teacher_scoring"]
     if positive.score < float(teacher["minimum_positive_score"]):
-        raise PolicyDrop(
-            f"positive score {positive.score} is below minimum {teacher['minimum_positive_score']}"
-        )
+        raise PolicyDrop(f"positive score {positive.score} is below minimum {teacher['minimum_positive_score']}")
     positive_hash = generated["positive_sha256"]
     if positive.text_sha256 != positive_hash or positive.text != generated["positive"]:
         raise ValueError("validated positive no longer matches the pinned source candidate")
@@ -900,15 +905,19 @@ def select_hard_negatives(
     strategy = policy["selection_strategy"]
     if strategy == "top_k":
         selected = pool[:needed]
+        selected_pool_indices = list(range(needed))
     elif strategy == "hash_sample_from_top_pool":
         seed = str(config["seed"])
         selected = sorted(
             pool,
-            key=lambda item: sha256_text(
-                "\0".join((seed, generated["generated_id"], item.candidate_id))
-            ),
+            key=lambda item: sha256_text("\0".join((seed, generated["generated_id"], item.candidate_id))),
         )[:needed]
         selected.sort(key=lambda item: (-item.score, item.candidate_id))
+        selected_ids = {item.candidate_id for item in selected}
+        selected_pool_indices = [index for index, item in enumerate(pool) if item.candidate_id in selected_ids]
+    elif strategy == "score_rank_quantiles":
+        selected_pool_indices = evenly_spaced_rank_indices(len(pool), needed)
+        selected = [pool[index] for index in selected_pool_indices]
     else:
         raise ValueError(f"unsupported selection strategy: {strategy}")
     audit = {
@@ -921,6 +930,10 @@ def select_hard_negatives(
         "scored_document_count": len(scored),
         "eligible_count": len(eligible),
         "top_pool_count": len(pool),
+        "selection_strategy": strategy,
+        "selected_pool_indices_zero_based": selected_pool_indices,
+        "selected_score_min": min(item.score for item in selected),
+        "selected_score_max": max(item.score for item in selected),
         "exclusion_counts": dict(sorted(exclusion_counts.items())),
     }
     return selected, audit
@@ -966,10 +979,7 @@ def command_compile(args: argparse.Namespace) -> int:
                     raise ValueError(f"{generated_id}: generation must be an object")
                 generator_identities.add(
                     json.dumps(
-                        {
-                            key: generation_identity.get(key)
-                            for key in ("mode", "model", "temperature")
-                        },
+                        {key: generation_identity.get(key) for key in ("mode", "model", "temperature")},
                         ensure_ascii=False,
                         sort_keys=True,
                         separators=(",", ":"),
@@ -986,9 +996,7 @@ def command_compile(args: argparse.Namespace) -> int:
                 counters["score_rows_matched"] += 1
                 score_row = json.loads(payload[0])
                 try:
-                    negatives, selection_audit = select_hard_negatives(
-                        generated, score_row, candidate_db, config
-                    )
+                    negatives, selection_audit = select_hard_negatives(generated, score_row, candidate_db, config)
                 except PolicyDrop as exc:
                     counters["dropped_score_or_negative_policy"] += 1
                     if config["hard_negative_selection"]["insufficient_policy"] == "error":
@@ -997,10 +1005,17 @@ def command_compile(args: argparse.Namespace) -> int:
                 scorer = selection_audit.get("scorer")
                 if scorer is not None:
                     scorer_identities.add(
-                        json.dumps(scorer, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                        json.dumps(
+                            scorer,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
                     )
                 train_row = ms_swift_row(
-                    generated["query"], generated["positive"], [item.text for item in negatives]
+                    generated["query"],
+                    generated["positive"],
+                    [item.text for item in negatives],
                 )
                 encoded = canonical_bytes(train_row)
                 identity = sha256_bytes(encoded)
@@ -1054,9 +1069,7 @@ def command_compile(args: argparse.Namespace) -> int:
                 counters["rows_emitted"] += 1
                 counters[f"style:{generated['style']}"] += 1
             if train_writer.rows < 2:
-                raise ValueError(
-                    f"compile emitted {train_writer.rows} rows; at least two are required"
-                )
+                raise ValueError(f"compile emitted {train_writer.rows} rows; at least two are required")
             train_meta = train_writer.metadata()
             audit_meta = audit_writer.metadata()
         unused_scores = score_count - counters["score_rows_matched"]
@@ -1218,9 +1231,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--shard-index", type=int, default=0)
     prepare.set_defaults(function=command_prepare)
 
-    generate = subparsers.add_parser(
-        "generate", help="Resolve request JSONL and validate grounded generations"
-    )
+    generate = subparsers.add_parser("generate", help="Resolve request JSONL and validate grounded generations")
     generate.add_argument("--requests", type=Path, required=True)
     generate.add_argument("--mode", choices=("offline", "endpoint"), required=True)
     generate.add_argument("--responses", type=Path)
@@ -1231,9 +1242,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--concurrency", type=int)
     generate.set_defaults(function=command_generate)
 
-    compile_parser = subparsers.add_parser(
-        "compile", help="Apply teacher scores and emit strict ms-swift JSONL"
-    )
+    compile_parser = subparsers.add_parser("compile", help="Apply teacher scores and emit strict ms-swift JSONL")
     compile_parser.add_argument("--candidates", type=Path, required=True)
     compile_parser.add_argument("--validated", type=Path, required=True)
     compile_parser.add_argument("--scores", type=Path, required=True)

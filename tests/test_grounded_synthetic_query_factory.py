@@ -21,10 +21,7 @@ def read_jsonl(path: Path) -> list[dict]:
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
     path.write_text(
-        "".join(
-            json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
-            for row in rows
-        ),
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n" for row in rows),
         encoding="utf-8",
     )
 
@@ -128,10 +125,11 @@ class GroundedSyntheticFactorySmokeTest(unittest.TestCase):
             for generated in generated_rows:
                 positive_id = generated["source_candidate_id"]
                 negatives = [item for item in candidate_ids if item != positive_id]
-                documents = [
-                    {"candidate_id": positive_id, "reranker_score": 0.99}
-                ] + [
-                    {"candidate_id": candidate_id, "reranker_score": 0.84 - index * 0.01}
+                documents = [{"candidate_id": positive_id, "reranker_score": 0.99}] + [
+                    {
+                        "candidate_id": candidate_id,
+                        "reranker_score": 0.84 - index * 0.01,
+                    }
                     for index, candidate_id in enumerate(negatives)
                 ]
                 score_rows.append(
@@ -174,7 +172,11 @@ class GroundedSyntheticFactorySmokeTest(unittest.TestCase):
                 str(manifest),
             )
             subprocess.run(
-                [sys.executable, str(ROOT / "scripts" / "validate_embedding_jsonl.py"), str(output)],
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "validate_embedding_jsonl.py"),
+                    str(output),
+                ],
                 cwd=ROOT,
                 check=True,
                 capture_output=True,
@@ -185,6 +187,17 @@ class GroundedSyntheticFactorySmokeTest(unittest.TestCase):
             self.assertEqual(len(train_rows), 4)
             self.assertEqual(len(audit_rows), 4)
             self.assertTrue(all(len(row["negative_messages"]) == 7 for row in train_rows))
+            for row in audit_rows:
+                selection = row["teacher_selection"]
+                self.assertEqual(selection["selection_strategy"], "score_rank_quantiles")
+                indices = selection["selected_pool_indices_zero_based"]
+                self.assertEqual(indices[0], 0)
+                self.assertEqual(indices[-1], selection["top_pool_count"] - 1)
+                self.assertEqual(len(indices), 7)
+                self.assertEqual(len(set(indices)), 7)
+                selected_scores = [item["score"] for item in row["negatives"]]
+                self.assertEqual(min(selected_scores), selection["selected_score_min"])
+                self.assertEqual(max(selected_scores), selection["selected_score_max"])
 
             second_output = work / "train-second.jsonl"
             second_audit = work / "audit-second.jsonl"

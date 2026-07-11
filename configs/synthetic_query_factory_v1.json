@@ -111,7 +111,7 @@
     "positive_relative_ratio": 0.95,
     "minimum_negative_score": 0.05,
     "absolute_positive_margin": 0.0,
-    "selection_strategy": "hash_sample_from_top_pool",
+    "selection_strategy": "score_rank_quantiles",
     "exclude_same_candidate": true,
     "exclude_duplicate_positive_text": true,
     "exclude_query_text_match": true,
