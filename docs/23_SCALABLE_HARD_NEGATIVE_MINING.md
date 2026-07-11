@@ -69,8 +69,10 @@ input/output index를 이용해 provenance를 투영한다.
 ```
 
 법률만 한 epoch 더 돌리면 일반 검색·STS·다국어 표현이 회귀할 수 있다. 실제 campaign은
-위 법률 batch 250K를 primary 25%로 두고, 공개된 `performance_1m` homogeneous
-batch에서 750K를 replay 75%로 뽑아 두 번째 1M curriculum을 만든다. row를 섞지 않고
+위 법률 batch 250K를 primary 25%로 두고, `performance_1m` homogeneous batch에서
+750K를 replay 75%로 뽑아 두 번째 1M curriculum을 만든다. scale stage의 current-student
+mined homogeneous artifact가 있으면 그것을 우선하고, 없을 때만 공개 원본 order를 쓴다.
+row를 섞지 않고
 완전한 16-row source-homogeneous batch 단위로만 전역 shuffle한다.
 
 ```bash

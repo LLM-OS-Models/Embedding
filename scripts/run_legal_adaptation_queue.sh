@@ -17,6 +17,12 @@ ORDERED_MANIFEST="$DATA_DIR/faiss-r095-n7.homogeneous-b16.manifest.json"
 GENERAL_DIR="$ROOT/outputs/data/performance-v1/performance-1m"
 GENERAL_TRAIN="$GENERAL_DIR/train.homogeneous-b16.jsonl"
 GENERAL_PROVENANCE="$GENERAL_DIR/provenance.homogeneous-b16.jsonl"
+if [[ -s "$GENERAL_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json" \
+    && -s "$GENERAL_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl" \
+    && -s "$GENERAL_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl" ]]; then
+  GENERAL_TRAIN="$GENERAL_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl"
+  GENERAL_PROVENANCE="$GENERAL_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl"
+fi
 CURRICULUM="$DATA_DIR/train.faiss-r095-n7.legal25-replay75.jsonl"
 CURRICULUM_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.legal25-replay75.jsonl"
 CURRICULUM_MANIFEST="$DATA_DIR/faiss-r095-n7.legal25-replay75.manifest.json"
