@@ -208,6 +208,23 @@ source별 accepted/examined/rejected 수와 hash를 manifest에 보존한다. `t
 strict ms-swift schema 검증을 통과했다. 이 build 완료는 데이터 품질이나 모델 성능
 결과가 아니며, 후속 10K/50K 학습과 retrieval 평가로 판단한다.
 
+### 실제 200K/1M build와 exact training order
+
+200K와 1M도 생성·검증·공개를 완료했다. source shortcut을 줄이기 위한 단일-source
+microbatch는 유지하되, 같은 source 안에서 max text-character length proxy로 정렬한 뒤
+16-row batch를 만들고 batch 순서만 결정론적으로 섞었다. 200K에서 random source-homogeneous
+order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으로
+46.77% 감소했다. 실제 row proxy 합 대비 잔여 padding은 0.31%다.
+
+| Phase | Ordered rows | Ordered train SHA-256 | Public dataset revision |
+|---|---:|---|---|
+| 200K | 199,904 | `59b08c0691caaa02e7520e9c98cf31f890679a82262ead789c1a7614f8baf285` | [`2872bfd`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/2872bfd02fe65cabf37cc29c08b66865bc3e58a4) |
+| 1M | 999,936 | `436dc7486578f6f077bef9f4479bc0d98310d855306bd2aad0c0d40fffbf2c00` | [`fa9cfee`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/fa9cfee59356e173827ea33339c06d8d8b388acc) |
+
+두 repository에 base `train.jsonl`/provenance뿐 아니라 exact
+`train.homogeneous-b16-length-bucketed.jsonl`, 대응 provenance, manifest까지 공개했다.
+따라서 모델 카드의 training SHA에서 실제 입력 순서를 그대로 복원할 수 있다.
+
 ## 현재 병목과 학습 결정
 
 현재 병목은 “데이터를 못 찾음”이 아니다.
