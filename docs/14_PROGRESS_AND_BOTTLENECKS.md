@@ -136,6 +136,11 @@ query와 match했다. 따라서 50K run은 loss/속도/pipeline diagnostic에는
 winner selection과 대표 모델 공개에서는 `DISQUALIFIED.json`으로 자동 제외한다. 다음
 200K active input은 critical row 12개를 교체해 final critical overlap 0을 확인했다.
 
+같은 blocklist로 checkpoint selection에 쓰는 512-row exhaustive-HN validation도 별도
+감사했다. query/positive/negative 전체에서 critical query/evaluation text, declared
+train-family, shared retrieval corpus match가 모두 0이다. 따라서 200K/1M run의 held-out
+loss 선택은 공개 Sionic 9나 공식 Korean 6의 원문을 직접 본 validation signal이 아니다.
+
 현재 200-step best는 trainer의 rolling `save_total_limit=3` 삭제 범위 밖에 필수
 adapter/config/state/log만 hard-link snapshot으로 보존했다. active-run watcher가 매
 15초마다 더 낮은 validation loss를 확인해 새 best를 교체 보존한다. 후속 run은

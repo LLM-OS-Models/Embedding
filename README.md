@@ -105,7 +105,7 @@ row는 101개였다.
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
-| 10K exhaustive HN + LoRA r64 | 160 steps 완료, best step 80; exact 15-task text overlap 0; FP32 strict-parity 재병합 대기 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
+| 10K exhaustive HN + LoRA r64 | 160 steps 완료, best step 80; train 10,000 + validation 512 모두 15-task exact text overlap 0; FP32 strict-parity 재병합 대기 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
 | 50K LoRA r64 | step 480 best loss 0.00350491; step 600까지 개선 없음. trainer data의 eval-query hash 4개 때문에 diagnostic 전용·public selection 자동 제외 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
 
 ## 문서 지도
