@@ -251,14 +251,15 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 | 7 | 후보별 Sionic 9 전체 평가와 최선 모델 공개 | checkpoint 검증 | 9-task summary + model/data revision + model card |
 | 8 | 최고 후보 공식 Korean v1 | Sionic 선택 완료 | 6-task raw/summary 및 README 반영 |
 | 9 | 1M homogeneous LoRA scale | 1M manifest 완료 | 7,812 steps, Sionic 9/official, public model |
-| 10 | SQuADKorV1 train-family 60K adaptation | 1M stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
-| 11 | PublicHealth health-domain 100K adaptation | 1M/SQuAD stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
-| 12 | AutoRAG domain 100K adaptation | 1M/SQuAD/health stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
-| 13 | 법률 250K target-adaptation | 1M/SQuAD/health/AutoRAG stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
-| 14 | combined target 400K | 네 target mining + legal stage 종료 | multidomain audit, LoRA, Sionic 9/official/clean, public model/data |
-| 15 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
-| 16 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
-| 17 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
+| 10 | MIRACL/MrTidy/MLDR train-family 4K long adaptation | 1M stage 종료 | 2K current-student HN7, 50:50 replay, Sionic 9/official, public model/data |
+| 11 | SQuADKorV1 train-family 60K adaptation | retrieval-family stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
+| 12 | PublicHealth health-domain 100K adaptation | 1M/SQuAD stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
+| 13 | AutoRAG domain 100K adaptation | 1M/SQuAD/health stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
+| 14 | 법률 250K target-adaptation | 1M/SQuAD/health/AutoRAG stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
+| 15 | combined target 400K | 다섯 target mining + legal stage 종료 | multidomain audit, LoRA, Sionic 9/official/clean, public model/data |
+| 16 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
+| 17 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
+| 18 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
 
 ## 주장 gate
 
