@@ -537,6 +537,16 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
             f"{args.max_pairwise_score_difference:.9f}"
         )
 
+    # Qwen's embedding checkpoint intentionally has no lm_head weights even
+    # though its config names Qwen3ForCausalLM. Transformers initializes a
+    # random head on CausalLM load; it is unrelated to last-token embeddings,
+    # non-deterministic, and very large. Preserve the upstream encoder-only
+    # artifact contract instead of publishing that random tensor.
+    omitted_heads: list[str] = []
+    if getattr(merged, "lm_head", None) is not None:
+        merged.lm_head = None
+        omitted_heads.append("lm_head")
+
     # Saving only happens after numerical parity has passed.  The caller keeps
     # this in a temporary sibling and atomically renames it after all checks.
     merged.save_pretrained(
@@ -574,6 +584,7 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
             "dtype": effective_dtype,
             "device": args.device,
             "max_shard_size": args.max_shard_size,
+            "omitted_random_untrained_heads": omitted_heads,
         },
         "probe": {
             "rows": [
