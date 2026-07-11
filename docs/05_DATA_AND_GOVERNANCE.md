@@ -92,6 +92,49 @@ top-1 dense candidate를 무조건 negative로 쓰지 않습니다. Nemotron/NV-
 
 검사는 exact normalized hash, URL/title/article ID, 5-gram MinHash, embedding near-duplicate 순서로 수행합니다. benchmark 문서에서 query를 생성한 후 삭제하는 것은 늦습니다. 생성 전 corpus 단계에서 차단합니다.
 
+### 재현 가능한 블록리스트 생성
+
+`scripts/build_benchmark_blocklist.py`는 `configs/sionic9_protocol.json`과
+`configs/mteb_korean_v1_protocol.json`의 고정 태스크를 함께 읽습니다. 현재
+MTEB checkout, 정확한 dataset revision, subset, split, license가 protocol과
+일치하지 않으면 원문을 내려받기 전에 중단합니다. Sionic 9뿐 아니라 공식
+Korean v1의 KLUE-TC·KLUE-STS·KorSTS·MIRACL reranking도 같은 차단 대상입니다.
+
+```bash
+# 네트워크 다운로드 없이 15개 protocol task와 revision만 검증
+PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
+  scripts/build_benchmark_blocklist.py --list-only
+
+# 실제 다운로드/쓰기 없이 선택 및 resume 동작 확인
+PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
+  scripts/build_benchmark_blocklist.py --task AutoRAG --task KLUE-STS --dry-run
+
+# 태스크 하나를 생성; 완료된 동일 fingerprint는 기본적으로 건너뜀
+PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
+  scripts/build_benchmark_blocklist.py --task AutoRAG
+
+# 선택 의존성 datasketch가 있을 때 character 5-gram MinHash도 생성
+PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
+  scripts/build_benchmark_blocklist.py --task AutoRAG --minhash required
+```
+
+기본 출력은 ignored 경로
+`outputs/decontamination/benchmark_blocklist/<protocol>/<task>/<subset>/<split>/`에
+생깁니다. `query_text.sha256.gz`, `corpus_text.sha256.gz`, ID/qrel 관계 해시와
+`manifest.json`, `_SUCCESS`만 남기며 원 query, 문서, source ID는 남기지
+않습니다. 각 gzip은 정렬되고 timestamp가 0으로 고정됩니다. manifest에는
+protocol/policy SHA, MTEB commit, dataset revision/license, occurrence와 unique
+hash 수, 산출물 SHA가 기록됩니다. task 디렉터리와 root manifest는 atomic
+rename으로 갱신되며, resume 때 `_SUCCESS`와 모든 파일 SHA를 다시 확인합니다.
+
+정규화와 범위는 `configs/decontamination_policy.json`에 고정했습니다.
+NFKC, zero-width 제거, 공백 축약 후 SHA-256을 계산하되 casefold는 하지
+않습니다. Retrieval/Reranking은 protocol의 평가 split만, Classification/STS는
+few-shot 학습 split까지 포함한 loaded split 전체를 차단합니다. MinHash는
+공간 비용이 크므로 기본 off이며 exact/ID 차단 뒤 필요한 실험에서만 켭니다.
+embedding near-duplicate 검사는 학습 문서 encoder 선택에 의존하므로 이
+CPU-only 빌더와 분리합니다.
+
 ## 평가 분리
 
 - `dev-clean`: 공개 benchmark와 겹치지 않는 내부 개발셋

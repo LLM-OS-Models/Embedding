@@ -1,0 +1,62 @@
+{
+  "policy_id": "korean-benchmark-decontamination-v1",
+  "schema_version": 1,
+  "normalization": {
+    "id": "unicode-nfkc-whitespace-v1",
+    "unicode_form": "NFKC",
+    "remove_zero_width": true,
+    "normalize_line_endings": true,
+    "collapse_whitespace": true,
+    "casefold": false
+  },
+  "scope": {
+    "retrieval_splits": "protocol_eval_split_only",
+    "non_retrieval_splits": "all_loaded_splits",
+    "hash_text_fields_separately": true,
+    "hash_title_text_combination": true,
+    "hash_query_instruction_combination": true,
+    "hash_ids": true,
+    "hash_qrel_relations": true,
+    "hash_reranking_candidate_relations": true
+  },
+  "text_field_names": [
+    "text",
+    "title",
+    "sentence1",
+    "sentence2",
+    "query",
+    "question",
+    "answer",
+    "context",
+    "passage",
+    "document",
+    "positive",
+    "negative",
+    "premise",
+    "hypothesis"
+  ],
+  "id_field_names": [
+    "id",
+    "_id",
+    "guid",
+    "query-id",
+    "query_id",
+    "corpus-id",
+    "corpus_id",
+    "document-id",
+    "document_id"
+  ],
+  "minhash": {
+    "default": "off",
+    "shingle_unit": "character",
+    "shingle_size": 5,
+    "num_perm": 128,
+    "seed": 42,
+    "minimum_normalized_characters": 20
+  },
+  "artifact_policy": {
+    "contains_source_text": false,
+    "contains_source_ids": false,
+    "usage": "evaluation-only blocklist; never use benchmark text for generation, mining, training, distillation, or checkpoint selection"
+  }
+}

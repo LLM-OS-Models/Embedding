@@ -1,0 +1,753 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "korean-embedding-rights-safe-data-factory-v1",
+  "as_of": "2026-07-11",
+  "documentation": "docs/13_RIGHTS_SAFE_DATA_FACTORY.md",
+  "disclaimer": "Conservative engineering policy, not legal advice or a warranty of rights. Unknown or ambiguous rights are denied by default.",
+  "scope": {
+    "target_rows": 1000000,
+    "target_language": "Korean-first with limited cross-lingual replay",
+    "intended_release": "Publicly redistributable query-positive-negative training rows with source-level attribution and revisions",
+    "separate_performance_track": "This policy does not block a separately labeled non-commercial performance-research track. Data, weights, manifests, and model cards from that track must remain segregated and must not claim rights-safe/public-release status."
+  },
+  "status_enum": {
+    "go": "Eligible after automated per-item gates; no unresolved source-level review.",
+    "conditional_go": "Potentially eligible, but every listed review must be resolved before release.",
+    "hold": "Do not ingest into a release build until source-level review is resolved.",
+    "no_go": "Do not use in the redistributable v1 build.",
+    "no_go_training": "May be readable for evaluation, but must never enter training, mining, prompts, or validation."
+  },
+  "default_policy": {
+    "unknown_source_status": "no_go",
+    "unknown_license_status": "no_go",
+    "missing_license_evidence_status": "no_go",
+    "missing_revision_status": "no_go",
+    "third_party_rights_unknown_status": "hold",
+    "personal_data_unknown_status": "hold",
+    "license_inference_from_public_access": false,
+    "license_inference_from_government_domain": false,
+    "license_inference_from_open_api_label": false,
+    "allow_secrets_in_config_or_manifest": false
+  },
+  "row_plan": {
+    "primary": [
+      {
+        "source_id": "kogl_type0_text",
+        "target_rows": 100000
+      },
+      {
+        "source_id": "kogl_type1_text",
+        "target_rows": 300000
+      },
+      {
+        "source_id": "korean_law_primary_text",
+        "target_rows": 250000
+      },
+      {
+        "source_id": "kowiki_cc_by_sa",
+        "target_rows": 180000
+      },
+      {
+        "source_id": "pmc_oa_cc0_ccby",
+        "target_rows": 120000
+      },
+      {
+        "source_id": "us_federal_cdc_direct_works",
+        "target_rows": 50000
+      }
+    ],
+    "primary_total": 1000000,
+    "fallback_if_us_federal_review_fails": [
+      {
+        "source_id": "kogl_type1_text",
+        "additional_rows": 30000
+      },
+      {
+        "source_id": "korean_law_primary_text",
+        "additional_rows": 20000
+      }
+    ],
+    "optional_v1_1_not_counted": [
+      {
+        "source_id": "opendart_structured_facts",
+        "maximum_rows": 60000,
+        "replacement_rule": "Replace lower-quality duplicate-heavy rows only after written rights and redistribution clearance."
+      }
+    ]
+  },
+  "sources": [
+    {
+      "source_id": "kogl_type0_text",
+      "name": "KOGL Type 0 public text works",
+      "status": "conditional_go",
+      "review_required": true,
+      "review_types": [
+        "item_level_license_scope",
+        "third_party_rights",
+        "privacy_and_sensitive_data"
+      ],
+      "planned_rows": 100000,
+      "language": [
+        "ko"
+      ],
+      "official_urls": {
+        "collection": "https://www.kogl.or.kr/recommend/recommendList.do",
+        "license_terms": "https://www.kogl.or.kr/info/license.do",
+        "publisher_guidance": "https://www.kogl.or.kr/info/publicGuide.do",
+        "metadata_candidate": "https://www.data.go.kr/data/15088592/fileData.do",
+        "public_data_policy": "https://www.data.go.kr/ugs/selectPortalPolicyView.do"
+      },
+      "license": {
+        "id": "KOGL-0",
+        "name": "공공누리 제0유형 자유이용",
+        "commercial_use": true,
+        "adaptation": true,
+        "attribution_required": false,
+        "moral_rights_and_non_endorsement_still_apply": true,
+        "evidence_must_be_item_specific": true
+      },
+      "include": [
+        "Korean textual works whose item and attachment are explicitly marked KOGL Type 0",
+        "HTML or text-bearing PDF after third-party elements are removed"
+      ],
+      "exclude": [
+        "Type 1 through 4 when not separately authorized for this source adapter",
+        "AI-Type-only works",
+        "missing or board-level-only markings whose attachment scope is ambiguous",
+        "photos, figures, trademarks, fonts, software, comments, personal data, or third-party excerpts"
+      ],
+      "revision_rule": "Store item URL, attachment URL, item modified timestamp, retrieved_at, raw SHA-256, parsed-text SHA-256, and a hash of the item-level license evidence page.",
+      "go_no_go_rule": "GO per item only when Type 0 applies to the exact text payload and all rights/privacy flags are false; otherwise HOLD or NO_GO."
+    },
+    {
+      "source_id": "kogl_type1_text",
+      "name": "KOGL Type 1 public text works",
+      "status": "conditional_go",
+      "review_required": true,
+      "review_types": [
+        "item_level_license_scope",
+        "attribution_coverage",
+        "third_party_rights",
+        "privacy_and_sensitive_data"
+      ],
+      "planned_rows": 300000,
+      "language": [
+        "ko"
+      ],
+      "official_urls": {
+        "collection": "https://www.kogl.or.kr/recommend/recommendList.do",
+        "license_terms": "https://www.kogl.or.kr/info/license.do",
+        "free_use_guidance": "https://www.kogl.or.kr/info/freeUse.do",
+        "publisher_guidance": "https://www.kogl.or.kr/info/publicGuide.do",
+        "public_data_policy": "https://www.data.go.kr/ugs/selectPortalPolicyView.do"
+      },
+      "license": {
+        "id": "KOGL-1",
+        "name": "공공누리 제1유형 출처표시",
+        "commercial_use": true,
+        "adaptation": true,
+        "attribution_required": true,
+        "required_attribution_fields": [
+          "publisher",
+          "work_title",
+          "author_if_provided",
+          "year_if_provided",
+          "canonical_url",
+          "license_id",
+          "license_url"
+        ],
+        "moral_rights_and_non_endorsement_still_apply": true,
+        "evidence_must_be_item_specific": true
+      },
+      "include": [
+        "Korean textual works whose item and attachment are explicitly marked KOGL Type 1",
+        "Government reports, guidance, notices, and educational text after section-level rights filtering"
+      ],
+      "exclude": [
+        "Types 2, 3, and 4",
+        "AI-Type-only works because training-data resale is restricted",
+        "attachments not covered by the visible Type 1 marker",
+        "third-party charts, photos, long quotations, trademarks, personal data, and externally authored appendices"
+      ],
+      "revision_rule": "Persist exact attribution text, item and attachment URLs, source modified time, retrieval time, raw and parsed SHA-256, and license-evidence hash.",
+      "go_no_go_rule": "GO per item only with exact Type 1 scope and machine-verified attribution coverage; any missing attribution or third-party ambiguity is HOLD."
+    },
+    {
+      "source_id": "korean_law_primary_text",
+      "name": "Korean statutes, treaties, and administrative-rule primary text",
+      "status": "conditional_go",
+      "review_required": true,
+      "review_types": [
+        "official_api_approval",
+        "approved_use_matches_public_dataset_release",
+        "primary_text_vs_editorial_layer",
+        "privacy_and_sensitive_data"
+      ],
+      "planned_rows": 250000,
+      "language": [
+        "ko"
+      ],
+      "official_urls": {
+        "copyright_act_article_7": "https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0007&lsiSeq=283335&urlMode=lsScJoRltInfoR",
+        "copyright_act_article_93": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029423451",
+        "open_data_terms_and_application": "https://open.law.go.kr/LSO/information/guide.do",
+        "api_manual": "https://open.law.go.kr/LSO/openApi/openApiManual.do",
+        "api_catalog": "https://open.law.go.kr/LSO/openApi/guideList.do",
+        "list_url_template": "https://www.law.go.kr/DRF/lawSearch.do?OC={APPROVED_OC}&target=eflaw&type=JSON&display=100&page={PAGE}",
+        "body_url_template": "https://www.law.go.kr/DRF/lawService.do?OC={APPROVED_OC}&target=eflaw&type=JSON&MST={MST}"
+      },
+      "credential_reference": {
+        "environment_variable": "LAW_OPEN_DATA_OC",
+        "must_never_be_serialized": true
+      },
+      "rights_basis": {
+        "primary_text": "Korean Copyright Act Article 7 exclusions for specified official legal texts",
+        "delivery_layer": "The official LAW OPEN DATA page states broad reuse including commercial use but requires application and approval",
+        "database_caveat": "Do not infer that Article 7 eliminates selection, arrangement, database, API, or editorial rights"
+      },
+      "include": [
+        "Officially returned current and historical statute text",
+        "Treaty and administrative-rule primary text when the approved API and Article 7 basis are documented",
+        "Article, paragraph, item, effective-date, promulgation, and ministry metadata returned by the approved API"
+      ],
+      "exclude": [
+        "Easy-law editorial explanations and authored summaries",
+        "Foreign-law or privately authored translations",
+        "University, corporation, or public-institution internal rules without a separate license basis",
+        "Court decisions in v1 because privacy and third-party quotation review is unresolved",
+        "Images, form scans, and annex files whose rights or accessibility are not verified"
+      ],
+      "revision_rule": "Store MST/ID, promulgation and effective dates, API target, response retrieval time, response SHA-256, normalized article SHA-256, and API approval record ID without the credential.",
+      "go_no_go_rule": "GO only under an active official API approval matching public dataset release, and only for primary legal text; editorial or privacy-ambiguous layers are NO_GO."
+    },
+    {
+      "source_id": "kowiki_cc_by_sa",
+      "name": "Korean Wikipedia dated article dump",
+      "status": "conditional_go",
+      "review_required": true,
+      "review_types": [
+        "share_alike_packaging",
+        "revision_level_attribution",
+        "benchmark_overlap",
+        "third_party_or_quoted_material"
+      ],
+      "planned_rows": 180000,
+      "language": [
+        "ko"
+      ],
+      "official_urls": {
+        "latest_index_for_discovery_only": "https://dumps.wikimedia.org/kowiki/latest/",
+        "dated_dump_template": "https://dumps.wikimedia.org/kowiki/{YYYYMMDD}/kowiki-{YYYYMMDD}-pages-articles-multistream.xml.bz2",
+        "dated_checksum_template": "https://dumps.wikimedia.org/kowiki/{YYYYMMDD}/kowiki-{YYYYMMDD}-sha1sums.txt",
+        "terms_section_7": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use#7._Licensing_of_Content"
+      },
+      "license": {
+        "compliance_path": "CC-BY-SA-4.0",
+        "terms_also_list": "GFDL",
+        "commercial_use": true,
+        "adaptation": true,
+        "attribution_required": true,
+        "share_alike_required": true,
+        "separate_output_shard": "wikipedia_cc_by_sa"
+      },
+      "required_source_fields": [
+        "page_id",
+        "revision_id",
+        "title",
+        "oldid_url",
+        "history_url",
+        "dump_date",
+        "dump_filename",
+        "dump_sha1",
+        "raw_sha256"
+      ],
+      "include": [
+        "Current main-namespace prose from a dated pages-articles dump after benchmark decontamination"
+      ],
+      "exclude": [
+        "Images and media",
+        "quoted or imported text with incompatible notices",
+        "tables when cell-level provenance cannot be retained",
+        "MIRACL, KorQuAD, SQuADKor, or other benchmark exact and near-duplicate passages"
+      ],
+      "revision_rule": "Resolve latest to an immutable YYYYMMDD directory, verify the official checksum, compute SHA-256, and store page/revision IDs. Never use the word latest as a revision.",
+      "go_no_go_rule": "GO only as a separately licensed and attributed share-alike shard after packaging and benchmark-overlap review."
+    },
+    {
+      "source_id": "pmc_oa_cc0_ccby",
+      "name": "PMC Open Access articles with per-article CC0 or CC BY",
+      "status": "conditional_go",
+      "review_required": true,
+      "review_types": [
+        "per_article_license",
+        "third_party_elements",
+        "retraction_and_removed_license_status",
+        "medical_safety"
+      ],
+      "planned_rows": 120000,
+      "language": [
+        "en",
+        "ko-generated-query"
+      ],
+      "official_urls": {
+        "oa_subset_policy": "https://pmc.ncbi.nlm.nih.gov/tools/openftlist/",
+        "copyright_notice": "https://pmc.ncbi.nlm.nih.gov/about/copyright/",
+        "oa_api": "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi",
+        "oa_api_by_id_template": "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id={PMCID}",
+        "oa_ftp_root": "https://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_package/"
+      },
+      "license": {
+        "allow_machine_readable_families": [
+          "CC0-1.0",
+          "CC-BY-2.0",
+          "CC-BY-2.5",
+          "CC-BY-3.0",
+          "CC-BY-4.0"
+        ],
+        "deny_families": [
+          "CC-BY-NC",
+          "CC-BY-ND",
+          "CC-BY-NC-ND",
+          "CC-BY-NC-SA",
+          "Other",
+          "custom",
+          "missing"
+        ],
+        "article_statement_overrides_repository_label": true
+      },
+      "required_source_fields": [
+        "pmcid",
+        "doi_if_present",
+        "journal",
+        "article_title",
+        "authors",
+        "license_id",
+        "license_url",
+        "copyright_statement",
+        "oa_api_updated",
+        "retracted",
+        "package_url",
+        "package_sha256"
+      ],
+      "include": [
+        "JATS abstract and prose body for whitelisted articles",
+        "Korean grounded queries over English evidence for cross-lingual replay"
+      ],
+      "exclude": [
+        "All non-whitelisted or absent licenses",
+        "Author Manuscript records without an explicit accepted license",
+        "Retracted records",
+        "Figures, tables, captions, supplementary files, and third-party credited material",
+        "Expired emergency reuse records",
+        "Individual diagnosis or treatment query generation"
+      ],
+      "revision_rule": "Store OA API license and updated fields, the article's own license statement, PMCID/DOI, package URL, package SHA-256, and retrieval time; recheck status immediately before release.",
+      "go_no_go_rule": "GO per article only if its current explicit machine-readable license is whitelisted, retracted=false, and all extracted sections are free of separate third-party credits."
+    },
+    {
+      "source_id": "us_federal_cdc_direct_works",
+      "name": "Direct U.S. federal employee works exposed through CDC Content Services",
+      "status": "hold",
+      "review_required": true,
+      "review_types": [
+        "global_redistribution_legal_review",
+        "federal_employee_authorship",
+        "contractor_and_third_party_rights",
+        "cdc_no_substantive_change_condition",
+        "medical_safety"
+      ],
+      "planned_rows": 50000,
+      "language": [
+        "en",
+        "ko-generated-query"
+      ],
+      "official_urls": {
+        "usc_17_105": "https://uscode.house.gov/view.xhtml?edition=2023&num=0&req=granuleid%3AUSC-2023-title17-section105",
+        "govinfo_policy": "https://www.govinfo.gov/about/policies",
+        "cdc_use_policy": "https://www.cdc.gov/other/agencymaterials.html",
+        "cdc_api_reference": "https://tools.cdc.gov/api/docs/info.aspx",
+        "cdc_list_template": "https://tools.cdc.gov/api/v2/resources/media?mediatypes=HTML&sourceacronym=CDC&max={N}&pagenum={PAGE}",
+        "cdc_content_template": "https://tools.cdc.gov/api/v2/resources/media/{MEDIA_ID}/content"
+      },
+      "rights_basis": {
+        "us_rule": "17 U.S.C. 105 for qualifying works prepared by U.S. Government officers or employees as part of official duties",
+        "not_covered_automatically": [
+          "contractor or grantee works",
+          "state or local government works",
+          "transferred copyrights",
+          "third-party content",
+          "protection outside the United States"
+        ],
+        "cdc_conditions": [
+          "agency attribution",
+          "non-endorsement disclaimer",
+          "no substantive content change",
+          "state that original material is available free on the agency site"
+        ]
+      },
+      "include": [
+        "Text items whose metadata and page establish direct CDC federal authorship and no third-party copyright notice"
+      ],
+      "exclude": [
+        "Contractor, grantee, partner, state, local, or externally sourced content",
+        "Images, logos, trademarks, quotations, and linked third-party text",
+        "Any item with missing source, authorship, attribution, or copyright status"
+      ],
+      "revision_rule": "Store media ID, source and owning organization, source URL, publication and modification dates, API response SHA-256, content SHA-256, retrieved_at, and policy revision hash.",
+      "go_no_go_rule": "HOLD until written global redistribution and transformation review is complete. If unresolved, use the specified KOGL/law fallback and release zero CDC rows."
+    },
+    {
+      "source_id": "opendart_structured_facts",
+      "name": "OpenDART narrowly selected structured disclosure facts",
+      "status": "no_go",
+      "review_required": true,
+      "review_types": [
+        "written_fss_or_rightsholder_redistribution_clearance",
+        "database_rights",
+        "submitter_expression_vs_unadorned_fields",
+        "api_terms_and_rate_limits"
+      ],
+      "planned_rows": 0,
+      "official_urls": {
+        "introduction": "https://opendart.fss.or.kr/intro/main.do",
+        "terms": "https://opendart.fss.or.kr/intro/terms.do",
+        "api_catalog": "https://opendart.fss.or.kr/intro/infoApiList.do",
+        "disclosure_guide": "https://opendart.fss.or.kr/guide/main.do?apiGrpCd=DS001",
+        "raw_document_template": "https://opendart.fss.or.kr/api/document.xml?crtfc_key={KEY}&rcept_no={RCEPT_NO}"
+      },
+      "credential_reference": {
+        "environment_variable": "OPENDART_API_KEY",
+        "must_never_be_serialized": true
+      },
+      "include_after_clearance_only": [
+        "Explicitly approved company codes, dates, filing identifiers, and isolated numeric fields"
+      ],
+      "exclude": [
+        "Narrative filing text",
+        "Full tables, notes, auditor reports, attachments, and copyrighted submitter expression",
+        "Any field set whose systematic extraction or redistribution scope is not cleared"
+      ],
+      "revision_rule": "If later approved, store receipt number, API field set, response date, response SHA-256, exact clearance record ID, and no credential.",
+      "go_no_go_rule": "NO_GO for v1. Written rights and redistribution clearance is mandatory before changing status or planned_rows."
+    }
+  ],
+  "excluded_sources": [
+    {
+      "source_id": "kogl_types_2_3_4",
+      "status": "no_go",
+      "review_required": false,
+      "reason": "Non-commercial and/or no-derivatives conditions conflict with the v1 public commercial adaptable dataset goal.",
+      "official_url": "https://www.kogl.or.kr/info/license.do"
+    },
+    {
+      "source_id": "kogl_ai_type_only",
+      "status": "no_go",
+      "review_required": false,
+      "reason": "The AI type allows model training under conditions but prohibits resale of AI training data made from the work; it is not sufficient for this redistributable training-data product.",
+      "official_url": "https://www.kogl.or.kr/info/license.do"
+    },
+    {
+      "source_id": "aihub_default",
+      "status": "no_go",
+      "review_required": true,
+      "reason": "AIHub describes non-commercial research/development use and requires separate discussion for dataset sales; per-dataset rightsholders and redistribution terms vary. Download or training access is not public redistribution permission.",
+      "official_url": "https://aihub.or.kr/intrcn/guid/usagepolicy.do?currMenu=151&topMenu=105",
+      "exception_rule": "A specific dataset may be reconsidered only with explicit written downstream redistribution and commercial-use permission from all relevant rightsholders."
+    },
+    {
+      "source_id": "klue_benchmark",
+      "status": "no_go_training",
+      "review_required": false,
+      "reason": "CC-BY-SA-4.0 availability does not cure official MTEB Korean benchmark contamination.",
+      "official_url": "https://github.com/KLUE-benchmark/KLUE"
+    },
+    {
+      "source_id": "korquad_benchmark",
+      "status": "no_go_training",
+      "review_required": false,
+      "reason": "Official benchmark exposure plus the published CC BY-ND 2.0 KR condition; do not use in training, mining, prompts, or validation.",
+      "official_url": "https://korquad.github.io/"
+    },
+    {
+      "source_id": "miracl_benchmark",
+      "status": "no_go_training",
+      "review_required": false,
+      "reason": "Queries/qrels/corpus are direct official MTEB targets. Repository labels do not replace underlying Wikipedia corpus obligations.",
+      "official_url": "https://github.com/project-miracl/miracl"
+    },
+    {
+      "source_id": "unlicensed_aggregates_including_ko_triplet",
+      "status": "no_go",
+      "review_required": true,
+      "reason": "Aggregates with absent dataset license or heterogeneous upstream rights are default-deny for public redistribution, even if useful in a segregated smoke or non-commercial track."
+    }
+  ],
+  "benchmark_blocklist": {
+    "activation_stage": "stage_0_before_source_download_or_content_ingest",
+    "must_precede": [
+      "source_selection",
+      "chunking",
+      "query_generation",
+      "teacher_verification",
+      "negative_index_building",
+      "training"
+    ],
+    "block_all_available_splits": true,
+    "blocked_artifacts": [
+      "queries",
+      "qrels",
+      "corpora",
+      "positive_and_negative_documents",
+      "titles",
+      "canonical_urls",
+      "page_article_document_ids",
+      "few_shot_examples",
+      "teacher_prompt_examples"
+    ],
+    "suites": [
+      {
+        "suite_id": "mteb_korean_v1",
+        "tasks": [
+          "KLUE-TC",
+          "KLUE-STS",
+          "KorSTS",
+          "Ko-StrategyQA",
+          "MIRACLRetrieval-ko",
+          "MIRACLReranking-ko"
+        ]
+      },
+      {
+        "suite_id": "sionic9",
+        "protocol_config": "configs/sionic9_protocol.json",
+        "tasks": [
+          "MIRACLRetrieval-ko",
+          "MrTidyRetrieval-korean",
+          "MultiLongDocRetrieval-ko",
+          "AutoRAGRetrieval",
+          "Ko-StrategyQA",
+          "PublicHealthQA-korean",
+          "BelebeleRetrieval-kor_Hang-kor_Hang",
+          "SQuADKorV1Retrieval",
+          "LawIRKo"
+        ]
+      },
+      {
+        "suite_id": "known_upstream_repositories",
+        "repositories": [
+          "https://github.com/KLUE-benchmark/KLUE",
+          "https://korquad.github.io/",
+          "https://github.com/project-miracl/miracl",
+          "https://huggingface.co/datasets/miracl/miracl",
+          "https://huggingface.co/datasets/miracl/miracl-corpus"
+        ]
+      },
+      {
+        "suite_id": "internal_comprehensive_holdouts",
+        "rule": "Freeze and hash every internal or future external evaluation set before the first training source ingest; append its manifest hash without exposing private test content."
+      }
+    ],
+    "matching": {
+      "normalization_version": "unicode-nfkc-whitespace-url-v1",
+      "exact_sha256": {
+        "action": "reject"
+      },
+      "source_specific_id_or_url": {
+        "action": "reject"
+      },
+      "token_5gram_minhash": {
+        "num_perm": 128,
+        "jaccard_threshold": 0.8,
+        "action": "reject"
+      },
+      "embedding_near_duplicate": {
+        "cosine_threshold": 0.94,
+        "action": "quarantine_for_human_review_not_auto_accept"
+      }
+    },
+    "required_row_field": "benchmark_blocklist_revision",
+    "audit_output_must_not_contain_benchmark_text": true
+  },
+  "pipeline": {
+    "stages": [
+      {
+        "id": "stage_0_benchmark_seal",
+        "inputs": "Pinned evaluation revisions",
+        "outputs": "Read-only blocklist manifest with source IDs, normalized hashes, MinHash signatures, and a signed manifest SHA-256"
+      },
+      {
+        "id": "stage_1_rights_and_revision",
+        "reject_on_missing": [
+          "canonical_url",
+          "source_revision",
+          "content_sha256",
+          "license_id",
+          "license_evidence_url",
+          "publisher",
+          "third_party_rights_status",
+          "personal_data_status"
+        ]
+      },
+      {
+        "id": "stage_2_clean_and_chunk",
+        "passage_token_ranges": [
+          [
+            128,
+            512
+          ],
+          [
+            512,
+            4096
+          ]
+        ],
+        "remove": [
+          "navigation",
+          "advertising",
+          "comments",
+          "long third-party quotations",
+          "personal identifiers",
+          "license-incompatible figures and tables",
+          "benchmark collisions"
+        ]
+      },
+      {
+        "id": "stage_3_grounded_generation",
+        "query_type_percent": {
+          "short_search": 30,
+          "natural_question": 20,
+          "requirements_exceptions_numbers_time": 15,
+          "long_document_section": 15,
+          "cross_lingual_ko_to_en": 10,
+          "colloquial_typo_ocr_abbreviation": 5,
+          "multi_hop": 5
+        },
+        "generator_outputs": [
+          "query",
+          "answer",
+          "evidence_span",
+          "supporting_chunk_ids",
+          "claim_atoms"
+        ],
+        "teacher_requirements": [
+          "Model and service terms permit redistribution of generated dataset outputs",
+          "Exact model revision, decoding config, and prompt SHA-256 are recorded",
+          "No benchmark examples appear in prompts",
+          "No unsupported facts may be added"
+        ]
+      },
+      {
+        "id": "stage_4_verify_and_mine",
+        "automated_coverage_percent": 100,
+        "checks": [
+          "independent entailment",
+          "answerability",
+          "claim atom support",
+          "number date negation preservation",
+          "false-negative and multi-positive detection",
+          "license compatibility",
+          "benchmark exclusion"
+        ],
+        "negative_sources": [
+          "BM25 within an approved compatible shard",
+          "current embedding model within an approved compatible shard",
+          "same-domain sibling documents"
+        ],
+        "negative_rejections": [
+          "partial or alternate answer",
+          "duplicate positive chunk",
+          "unresolved very-high positive-relative similarity",
+          "benchmark content",
+          "license-incompatible source"
+        ]
+      },
+      {
+        "id": "stage_5_human_audit",
+        "coverage": {
+          "all_teacher_disagreements_and_safety_flags_percent": 100,
+          "legal_and_health_stratified_min_percent": 10,
+          "other_source_query_type_stratified_min_percent": 2,
+          "release_anchor_rows_fully_reviewed": 5000
+        },
+        "acceptance": {
+          "global_sample_precision_min": 0.98,
+          "per_source_sample_precision_min": 0.95,
+          "below_threshold_action": "hold_entire_batch_and_regenerate"
+        }
+      }
+    ],
+    "multi_hop_license_rule": "Combine evidence only inside the same output shard or an explicitly reviewed compatible-license pair; inherit all attribution and share-alike duties.",
+    "teacher_independence_rule": "The verifier must be a different model/revision or independently trained checkpoint from the generator; self-approval alone is invalid."
+  },
+  "required_document_fields": [
+    "source_document_id",
+    "source_id",
+    "canonical_url",
+    "publisher",
+    "work_title",
+    "author_if_available",
+    "published_at_if_available",
+    "modified_at_if_available",
+    "retrieved_at",
+    "source_revision",
+    "raw_content_sha256",
+    "parsed_content_sha256",
+    "license_id",
+    "license_url",
+    "license_evidence_url",
+    "license_evidence_sha256",
+    "attribution_text",
+    "third_party_rights_status",
+    "personal_data_status",
+    "retraction_or_removal_status",
+    "parser_revision",
+    "benchmark_blocklist_revision",
+    "release_status"
+  ],
+  "required_training_row_fields": [
+    "row_id",
+    "query",
+    "positives",
+    "negatives",
+    "source_id",
+    "source_document_ids",
+    "canonical_urls",
+    "source_revisions",
+    "content_sha256s",
+    "license_ids",
+    "license_evidence_urls",
+    "attribution_ids",
+    "transform_chain",
+    "generator_model_revision",
+    "generator_prompt_sha256",
+    "verifier_model_revision",
+    "verification_results",
+    "human_audit_status",
+    "benchmark_blocklist_revision",
+    "output_shard",
+    "release_status"
+  ],
+  "release_artifacts": [
+    "SOURCES.jsonl",
+    "ATTRIBUTION.md",
+    "ATTRIBUTION.jsonl",
+    "TRANSFORMS.json",
+    "BLOCKLIST_AUDIT.json",
+    "REMOVALS.jsonl",
+    "DATASET_CARD.md"
+  ],
+  "release_gate": {
+    "required": [
+      "All source-level conditional reviews are resolved in writing",
+      "Every row has an allowed exact license and item-level evidence",
+      "Every row has immutable source revision and content hash",
+      "Attribution coverage is 100 percent",
+      "No secret, API credential, personal identifier, unresolved third-party right, or retracted source is present",
+      "Zero exact, source-ID, URL, or MinHash benchmark collision",
+      "Zero unresolved embedding-near-duplicate quarantine item",
+      "Human audit thresholds pass globally and per source",
+      "Shard and combined-package license compatibility is reviewed",
+      "Independent pre-release legal review is complete",
+      "Dataset card states limitations and does not provide legal certainty"
+    ],
+    "on_failure": "Do not publish the affected row, shard, dataset, adapter, or model as rights-safe. Quarantine or route only to the separately governed non-commercial research track."
+  }
+}
