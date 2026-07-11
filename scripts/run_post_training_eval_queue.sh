@@ -131,9 +131,9 @@ if [[ -s "$SELECTION" ]]; then
   official_summary="$OFFICIAL_OUT/$safe_model_name/$local_revision/summary.json"
   sionic_summary="$(jq -r '.best.summary' "$SELECTION")"
   if [[ "$best_model" == *performance200k* ]]; then
-    training_manifest="$ROOT/outputs/data/performance-v1/ablation-200k/manifest.json"
+    training_manifest="$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json"
   elif [[ "$best_model" == *performance50k* ]]; then
-    training_manifest="$ROOT/outputs/data/performance-v1/pilot-50k/manifest.json"
+    training_manifest="$ROOT/outputs/data/performance-v1/pilot-50k/homogeneous-b16.manifest.json"
   else
     training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/train.hn-qwen3-r095-n4.jsonl.manifest.json"
     [[ -s "$training_manifest" ]] || training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/manifest.json"
