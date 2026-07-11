@@ -16,6 +16,12 @@ Qwen3-Embedding-8B의 1M data-scale 효과를 측정한다.
 250K를 아직 섞지 않는다. 법률/합성은 1M base curve 뒤 별도 adapter로 비교해 일반
 성능 회귀와 LawIR/AutoRAG target adaptation을 분리한다.
 
+실제 build SHA-256은 train `094d443e05cc27e4e764b5bfa253cf02c36ec769fbf7cd1e43fd937d73ec3c0a`,
+provenance `94334a0ef5dad83169fc8f00fc6705173c606f5976ef8365469fe1bc721b18c1`다.
+homogeneous compiler는 999,936 rows/62,496 batches를 내고 source remainder 64 rows를
+제외했다. ordered train SHA-256은
+`ac39ea777f112ce9c2211c0e2410ddd399c7feb5e487629730d4d086f5b90169`다.
+
 ## 학습
 
 | 항목 | 값 |
