@@ -92,6 +92,7 @@
 13. [논문·모델별 데이터와 학습 방법 매트릭스](docs/12_PAPER_DATA_METHOD_MATRIX.md)
 14. [100만 행 공개 가능 데이터 공장](docs/13_RIGHTS_SAFE_DATA_FACTORY.md)
 15. [진행 현황, 병목과 다음 의사결정](docs/14_PROGRESS_AND_BOTTLENECKS.md)
+16. [F2LLM-v2-8B와 Comsat 계보·레시피 정밀 감사](docs/16_F2LLM_COMSAT_RECIPE_AUDIT.md)
 
 ## 실험 지도
 
