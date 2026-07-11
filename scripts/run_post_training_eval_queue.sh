@@ -183,7 +183,8 @@ clean_models=(
   "Qwen/Qwen3-Embedding-8B|1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
   "sionic-ai/comsat-embed-ko-8b-preview|a5cc22b651c1b2e51cdd8bf671774ae93584f0ab"
 )
-if [[ -n "$best_model" && -n "$local_revision" ]]; then
+if [[ -n "$best_model" && -n "$local_revision" \
+    && ! -s "$CLEAN_OUT/${best_model//\//__}/$local_revision/summary.json" ]]; then
   clean_models+=("$best_model|$local_revision")
 fi
 for spec in "${clean_models[@]}"; do
