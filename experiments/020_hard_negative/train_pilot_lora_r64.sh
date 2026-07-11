@@ -11,6 +11,39 @@ OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
 BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
+# Promote the 50K model into the 200K curriculum only when its held-out loss
+# actually beats the 10K hard-negative pilot. Dataset scale alone is not a
+# sufficient promotion signal.
+if [[ "${ENABLE_VALIDATED_CONTINUAL_BASE:-1}" == 1 \
+    && "$RUN_NAME" == *performance200k* \
+    && "$BASE_MODEL" == Qwen/Qwen3-Embedding-8B ]]; then
+  candidate_run="$ROOT/outputs/qwen3-embedding-8b-ko-performance50k-lora-r64"
+  candidate_model="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance50k-lora-r64-best-merged"
+  if [[ ! -s "$candidate_model/merge_report.json" ]]; then
+    candidate_model="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance50k-lora-r64-b8-best-merged"
+    candidate_run="$ROOT/outputs/qwen3-embedding-8b-ko-performance50k-lora-r64-b8"
+  fi
+  pilot_run="$ROOT/outputs/qwen3-embedding-8b-ko-hn10k-lora-r64"
+  if [[ -s "$candidate_model/merge_report.json" ]] && \
+      PROJECT_ROOT="$ROOT" CANDIDATE_RUN="$candidate_run" PILOT_RUN="$pilot_run" \
+      "$TRAIN_ENV/bin/python" - <<'PY'
+import json, os, subprocess, sys
+selector = os.path.join(os.environ['PROJECT_ROOT'], 'scripts', 'select_best_checkpoint.py')
+def loss(path):
+    raw = subprocess.check_output([sys.executable, selector, path], text=True)
+    return json.loads(raw).get('selected_eval_loss')
+candidate = loss(os.environ['CANDIDATE_RUN'])
+pilot = loss(os.environ['PILOT_RUN'])
+raise SystemExit(0 if candidate is not None and pilot is not None and candidate < pilot else 1)
+PY
+  then
+    BASE_MODEL="$candidate_model"
+    BASE_REVISION=""
+    LEARNING_RATE="${LEARNING_RATE:-1e-5}"
+    echo "validated continual base promoted: $BASE_MODEL" >&2
+  fi
+fi
+
 if [[ -f "$ROOT/.env" ]]; then
   HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
   export HF_TOKEN

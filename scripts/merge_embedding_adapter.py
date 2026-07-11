@@ -458,6 +458,15 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
 
     adapter_dir = args.adapter.expanduser().resolve()
     adapter = validate_adapter(adapter_dir)
+    reference = adapter["config"].get("base_model_name_or_path")
+    if (
+        args.base_model == DEFAULT_BASE_MODEL
+        and isinstance(reference, str)
+        and Path(reference).is_dir()
+        and Path(reference).name != DEFAULT_BASE_REVISION
+    ):
+        args.base_model = reference
+        args.base_revision = ""
     validate_adapter_base_reference(
         adapter["config"], args.base_model, args.base_revision
     )

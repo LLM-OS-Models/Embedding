@@ -33,6 +33,18 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    adapter_config = json.loads(
+        (args.adapter / "adapter_config.json").read_text(encoding="utf-8")
+    )
+    reference = adapter_config.get("base_model_name_or_path")
+    default_revision = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+    if (
+        args.model == "Qwen/Qwen3-Embedding-8B"
+        and isinstance(reference, str)
+        and Path(reference).is_dir()
+        and Path(reference).name != default_revision
+    ):
+        args.model = reference
     row = json.loads(args.data.read_text(encoding="utf-8").splitlines()[0])
     groups = [
         row["messages"],
