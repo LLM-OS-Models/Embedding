@@ -70,6 +70,7 @@ mkdir -p "$OUTPUT_DIR"
   --logging_steps 1 \
   --dataloader_drop_last true \
   --dataloader_num_workers "${DATALOADER_NUM_WORKERS:-2}" \
+  --train_dataloader_shuffle "${TRAIN_DATALOADER_SHUFFLE:-true}" \
   --dataset_num_proc 1 \
   --seed "${SEED:-42}" \
   --report_to none \

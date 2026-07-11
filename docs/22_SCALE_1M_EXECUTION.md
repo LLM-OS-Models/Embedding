@@ -26,11 +26,14 @@ Qwen3-Embedding-8B의 1M data-scale 효과를 측정한다.
 | attention | FlashAttention 2 |
 | max length | 512 |
 | global batch | 16 × accumulation 8 = 128 |
-| steps | 7,813, 약 1 epoch |
+| steps | homogeneous manifest의 `floor(output_rows / 128)`, 약 1 epoch |
 | LR | 2e-5 cosine, warmup 5% |
 | checkpoint | 500 steps, minimum validation loss 선택 |
 
-batch16 OOM 시 batch8/accumulation16으로 같은 global batch를 유지한다. 학습 완료 후
+source별 row를 먼저 shuffle하고 16-row source-homogeneous microbatch로 나눈 뒤
+microbatch 순서만 전역 shuffle한다. source별 16 미만 remainder는 manifest에 기록하고
+제외하며 trainer의 추가 shuffle을 끈다. batch16 OOM 시 batch8/accumulation16으로
+같은 global batch를 유지한다. 학습 완료 후
 adapter reload, safe merge parity, Sionic 9종 전체, 공식 Korean v1 전체를 실행한다.
 결과가 나쁘더라도 숨기지 않고 별도 1M 모델/manifest에 연결한다.
 

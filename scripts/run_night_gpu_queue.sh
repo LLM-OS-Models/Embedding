@@ -110,6 +110,8 @@ run_lora_training() {
   local train_file="$2"
   local max_steps="$3"
   local interval=40
+  local dataloader_shuffle=true
+  [[ "$train_file" == *homogeneous-b16* ]] && dataloader_shuffle=false
   if (( max_steps > 1000 )); then
     interval=250
   fi
@@ -117,6 +119,7 @@ run_lora_training() {
     RUN_NAME="$run_name" TRAIN_FILE="$train_file" VAL_FILE="$PILOT_VAL" \
     MAX_STEPS="$max_steps" EVAL_STEPS="$interval" SAVE_STEPS="$interval" \
     TRAIN_BATCH_SIZE=16 GRAD_ACCUM_STEPS=4 \
+    TRAIN_DATALOADER_SHUFFLE="$dataloader_shuffle" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
   local latest
   latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
@@ -126,6 +129,7 @@ run_lora_training() {
       RUN_NAME="$fallback_name" TRAIN_FILE="$train_file" VAL_FILE="$PILOT_VAL" \
       MAX_STEPS="$max_steps" EVAL_STEPS="$interval" SAVE_STEPS="$interval" \
       TRAIN_BATCH_SIZE=8 GRAD_ACCUM_STEPS=8 \
+      TRAIN_DATALOADER_SHUFFLE="$dataloader_shuffle" \
       "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
     run_name="$fallback_name"
     latest="$(find "$ROOT/outputs/$run_name" -maxdepth 3 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
@@ -143,13 +147,19 @@ if [[ -s "$PILOT_TRAIN" && -s "$PILOT_VAL" ]]; then
 fi
 
 if perf50_ready && [[ -s "$PILOT_VAL" ]]; then
+  perf50_train="$PERF50_DIR/train.jsonl"
+  [[ -s "$PERF50_DIR/homogeneous-b16.manifest.json" ]] && \
+    perf50_train="$PERF50_DIR/train.homogeneous-b16.jsonl"
   run_lora_training "qwen3-embedding-8b-ko-performance50k-lora-r64" \
-    "$PERF50_DIR/train.jsonl" 800
+    "$perf50_train" 800
 fi
 
 if perf200_ready && [[ -s "$PILOT_VAL" ]]; then
+  perf200_train="$PERF200_DIR/train.jsonl"
+  [[ -s "$PERF200_DIR/homogeneous-b16.manifest.json" ]] && \
+    perf200_train="$PERF200_DIR/train.homogeneous-b16.jsonl"
   run_lora_training "qwen3-embedding-8b-ko-performance200k-lora-r64" \
-    "$PERF200_DIR/train.jsonl" 3125
+    "$perf200_train" 3125
 fi
 
 if [[ -s "$PILOT_TRAIN" && -s "$PILOT_VAL" ]]; then
@@ -175,14 +185,20 @@ done
 # The 50K builder may have completed while the ablations ran.
 if perf50_ready && [[ -s "$PILOT_VAL" \
       && ! -d "$ROOT/outputs/qwen3-embedding-8b-ko-performance50k-lora-r64" ]]; then
+  perf50_train="$PERF50_DIR/train.jsonl"
+  [[ -s "$PERF50_DIR/homogeneous-b16.manifest.json" ]] && \
+    perf50_train="$PERF50_DIR/train.homogeneous-b16.jsonl"
   run_lora_training "qwen3-embedding-8b-ko-performance50k-lora-r64" \
-    "$PERF50_DIR/train.jsonl" 800
+    "$perf50_train" 800
 fi
 
 if perf200_ready && [[ -s "$PILOT_VAL" \
       && ! -d "$ROOT/outputs/qwen3-embedding-8b-ko-performance200k-lora-r64" ]]; then
+  perf200_train="$PERF200_DIR/train.jsonl"
+  [[ -s "$PERF200_DIR/homogeneous-b16.manifest.json" ]] && \
+    perf200_train="$PERF200_DIR/train.homogeneous-b16.jsonl"
   run_lora_training "qwen3-embedding-8b-ko-performance200k-lora-r64" \
-    "$PERF200_DIR/train.jsonl" 3125
+    "$perf200_train" 3125
 fi
 
 echo "[$(timestamp)] GPU queue complete"
