@@ -231,6 +231,8 @@ def validate_adapter(adapter_dir: Path) -> dict[str, Any]:
                 "learning_rate",
                 "max_steps",
                 "loss_type",
+                "attn_impl",
+                "torch_dtype",
                 "truncation_strategy",
                 "seed",
             )

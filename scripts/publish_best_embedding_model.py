@@ -409,12 +409,16 @@ def build_card(
 - packaged probe maximum norm error: `{evidence['probe']['metrics']['maximum_norm_error']}`
 - packaged probe positive margin: `{evidence['probe']['metrics']['positive_margin']}`"""
     else:
+        training_arguments = evidence.get("adapter", {}).get("training", {}).get(
+            "arguments", {}
+        )
         method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
 - method: LoRA continued contrastive fine-tuning, InfoNCE/explicit negatives
 - LoRA rank/alpha/dropout: `{adapter.get('r')}` / `{adapter.get('lora_alpha')}` / `{adapter.get('lora_dropout')}`
 - target modules: `{', '.join(adapter.get('target_modules') or [])}`
 - adapter weight SHA-256: `{weights_sha(evidence)}`
 - merge requested/effective dtype: `{evidence.get('merge', {}).get('requested_dtype', merge_dtype)}` / `{merge_dtype}`
+- training attention/dtype: `{training_arguments.get('attn_impl', 'not recorded')}` / `{training_arguments.get('torch_dtype', 'not recorded')}`
 - actual trainer rows after tokenization/filtering: `{evidence.get('adapter', {}).get('training', {}).get('actual_train_rows', 'not recorded')}`
 - merge minimum probe cosine: `{evidence['probe']['metrics']['minimum_row_cosine']}`
 - merge maximum pairwise score delta: `{evidence['probe']['metrics']['maximum_pairwise_score_difference']}`"""
