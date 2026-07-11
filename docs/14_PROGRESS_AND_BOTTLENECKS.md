@@ -32,7 +32,7 @@
 | benchmark seal | Sionic 9 + 공식 Korean 6의 ID/text/qrel fingerprint | deterministic gzip/manifest 빌더 검증 통과 |
 | 공개 가능 데이터 공장 | KOGL·법률·Wikipedia·PMC·CDC 1,000,000행 계획 | source/revision/license 및 생성·검수 gate 고정 |
 | 10K private pilot 입력 | train 10,000 / validation 512, hash 검증 | source license 미명시로 public release 불가 |
-| vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | GPU parity는 아직 실행 전 |
+| vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | Ko-Strategy parity/처리량 측정 완료; 이 workload에서는 FA2가 더 빠름 |
 
 ## 현재 실행 중
 
@@ -54,7 +54,7 @@ Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
 - 288-row LoRA의 loss는 첫 step부터 거의 0이었다. negative가 너무 쉬워 pipeline 검사 외 의미가 없다.
 - adapter probe의 positive margin `0.44580`은 세 문장 무결성 검사이지 retrieval benchmark 점수가 아니다.
 - 10K 데이터는 준비됐지만 hard-negative 실제 mining과 학습은 GPU 대형 평가 뒤에 실행한다.
-- vLLM은 설치만 완료했고 SentenceTransformers/AutoRAG parity gate 전에는 공식 수치 생성에 쓰지 않는다.
+- vLLM Ko-StrategyQA는 `0.83830`, 기존 FA2는 `0.84016`으로 `-0.00186` 차이였다. 65K-token 설정은 약 200 docs/s로 FA2보다 느렸고, 131K-token/1024-seq/95% VRAM은 75.85GiB에서 OOM이 나 공식 full run에는 쓰지 않는다.
 - clean comprehensive suite는 설계만 고정됐고 rights-safe holdout 수치는 아직 없다.
 
 ## 주요 병목
@@ -92,8 +92,8 @@ MIRACL Korean corpus만 약 149만 문서다. 일반 SentenceTransformers batch 
 해소 조건:
 
 - 현재 Comsat run은 중단하지 않고 완료
-- vLLM 0.24에서 32문장 cosine/top-k 및 AutoRAG parity 통과
-- 이후 base/우리 후보의 반복 평가에 vLLM continuous batching 사용
+- backend마다 짧은 throughput/parity gate를 먼저 실행하고 vLLM이 실제로 빠른 모델·길이에서만 continuous batching 사용
+- Comsat MIRACL은 FA2 batch 224를 사용하고 peak/처리량에 따라 208/192 fallback
 - official board에 이미 신뢰할 값이 있는 모델은 불필요하게 재실행하지 않음
 
 ### 4. LoRA 대 full FT 결정

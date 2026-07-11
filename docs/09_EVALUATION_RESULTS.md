@@ -34,6 +34,15 @@ Protocol: `sionic9-fixed-prompt-v1`의 AutoRAG slice, full corpus, NDCG@10, quer
 
 Qwen 수치가 반올림까지 일치하고 Comsat/F2도 0.002 이내이므로 task/split/prompt/corpus 설정이 Sionic 표와 대체로 일치합니다. 남은 차이는 모델 revision, MTEB/Transformers version, numeric kernel 차이로 설명 가능한 범위입니다.
 
+### vLLM backend gate
+
+공식 Korean `Ko-StrategyQA`에서 Comsat을 별도 vLLM 0.24 backend로 측정한 값은
+`0.83830`이고, pinned SentenceTransformers+FA2 값은 `0.84016`이다. vLLM 65K-token
+설정은 약 200 docs/s로 이 workload의 FA2보다 느렸다. 131K-token/1024-seq/95%
+설정은 75.85GiB 사용 뒤 추가 activation 할당에서 OOM이 났다. 따라서 속도와
+protocol parity 모두에서 현재 Comsat full-corpus 기본값은 FA2이며, vLLM 결과는
+별도 backend 실험으로만 보존한다.
+
 Raw cache와 query-level predictions는 `outputs/evaluation/sionic9/` 아래에 보존되며 Git에는 대용량 artifact를 넣지 않습니다. 최종 모델 카드에는 전체 9개가 완료된 run의 hash와 공개 artifact URL을 연결합니다.
 
 ### PwC 길이 표기 주의
