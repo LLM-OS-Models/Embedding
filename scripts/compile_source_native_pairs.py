@@ -81,14 +81,16 @@ def choose_negatives(
 ) -> list[dict[str, Any]]:
     if len(pool) <= count:
         raise ValueError(f"Source pool is too small for {row['id']}")
-    ordered = sorted(
-        (candidate for candidate in pool if candidate["id"] != row["id"]),
-        key=lambda candidate: stable_hash(str(seed), row["id"], candidate["id"]),
-    )
     selected = []
     positive = row["positive"].strip()
     query = row["query"].strip()
-    for candidate in ordered:
+    # Pools are sorted once in main. Per-row hashing selects a deterministic
+    # cyclic starting point without the previous O(rows * pool log pool) sort.
+    start = int(stable_hash(str(seed), row["id"], "negative-offset")[:16], 16) % len(pool)
+    for offset in range(len(pool)):
+        candidate = pool[(start + offset) % len(pool)]
+        if candidate["id"] == row["id"]:
+            continue
         text = candidate["positive"].strip()
         if not text or text == positive or text == query:
             continue
@@ -116,6 +118,8 @@ def main() -> None:
     by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in candidates:
         by_source[source_key(row)].append(row)
+    for pool in by_source.values():
+        pool.sort(key=lambda row: stable_hash(str(args.seed), "source-pool", row["id"]))
 
     train_handle, train_temp = atomic_text_writer(args.output.resolve())
     provenance_handle, provenance_temp = atomic_text_writer(
