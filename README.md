@@ -102,7 +102,7 @@ row는 101개였다.
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
 | 10K exhaustive HN + LoRA r64 | 160 steps 완료, best step 80; FP32 strict-parity 재병합 대기 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
-| 50K LoRA r64 | 280/800 검증 완료, H100 100%, trainer 59.30GiB/device 약 61.8GiB; best step 200 loss 0.00351495 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
+| 50K LoRA r64 | 320/800 검증 완료, H100 100%, trainer 59.30GiB/device 약 61.9GiB; best step 200 loss 0.00351495 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
 
 ## 문서 지도
 
