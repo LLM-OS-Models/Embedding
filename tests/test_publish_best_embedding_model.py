@@ -55,6 +55,13 @@ class PublishBestModelTests(unittest.TestCase):
             autorag[0],
             "LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
         )
+        retrieval = training_dataset_repos(
+            {"benchmark_adaptation": "target-adapted-retrieval-family50-general50"}
+        )
+        self.assertEqual(
+            retrieval[0],
+            "LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
+        )
         combined = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-sionic-combined-v1"}
         )

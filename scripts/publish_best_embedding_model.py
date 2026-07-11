@@ -265,6 +265,7 @@ def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
     if adaptation.startswith("target-adapted") and "combined" in adaptation:
         return [
             "LLM-OS-Models/korean-embedding-sionic-combined-replay-v1",
+            "LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-sionic-health-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
@@ -293,6 +294,12 @@ def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
         return [
             "LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-sionic-autorag-100k",
+            "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
+        ]
+    if adaptation.startswith("target-adapted") and "retrieval-family" in adaptation:
+        return [
+            "LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
+            "LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if adaptation.startswith("target-adapted"):

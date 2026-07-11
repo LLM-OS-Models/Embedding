@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-11T21:02:58.496075+00:00",
+  "inputs": {
+    "train": {
+      "path": "outputs/data/performance-v1/sionic-retrieval-train-family-4146/train.jsonl",
+      "sha256": "6837367935ea56912375fe6a476360eb7dd0efcc0100459901e92a44029b7c60"
+    },
+    "provenance": {
+      "path": "outputs/data/performance-v1/sionic-retrieval-train-family-4146/provenance.jsonl",
+      "sha256": "9d97802b378b6c2d3bd15824db2ab3a680315f9ee6fb95492b16778c093d015e"
+    }
+  },
+  "rows": 4146,
+  "source_counts": {
+    "f2_mldr_ko_train": 2246,
+    "f2_mrtidy_korean_train": 1200,
+    "f2_miracl_ko_train": 700
+  },
+  "negative_count_distribution": {
+    "7": 4146
+  },
+  "instruction_counts": {
+    "Instruct: Given a question, retrieve relevant documents that can help answer the question": 170,
+    "Instruct: Given a question, retrieve documents that answer the question": 163,
+    "Instruct: Given a question, retrieve documents that can help answer the question.": 161,
+    "Instruct: Given a question, retrieve passages that can help answer the question.": 158,
+    "Instruct: Given a question, retrieve relevant documents that answer the question": 155,
+    "Instruct: Given a question, retrieve relevant documents that answer the question.": 152,
+    "Instruct: Given a question, retrieve documents that can help answer the question": 150,
+    "Instruct: Given a question, retrieve passages that can help answer the question": 149,
+    "Instruct: Given a question, retrieve relevant passages that can help answer the question.": 147,
+    "Instruct: Given a question, retrieve relevant passages that can help answer the question": 145,
+    "Instruct: Given a question, retrieve documents that answer the question.": 145,
+    "Instruct: Given a question, retrieve relevant documents that can help answer the question.": 135,
+    "Instruct: Given a question, retrieve passages that answer the question": 132,
+    "Instruct: Given a question, retrieve relevant passages that answer the question": 131,
+    "Instruct: Given a question, retrieve passages that answer the question.": 119,
+    "Instruct: Given a question, retrieve relevant passages that answer the question.": 115,
+    "Instruct: Given a web search query, retrieve the answer": 61,
+    "Instruct: Retrieve documents that answer the given query.": 57,
+    "Instruct: Retrieve documents that answer the given question": 57,
+    "Instruct: Given a web search query, retrieve relevant passages that answer the query": 53,
+    "Instruct: Given a web search query, retrieve relevant documents that can help answer the query": 53,
+    "Instruct: Given a web search query, retrieve relevant documents that answer the query": 51,
+    "Instruct: Retrieve documents that answer the given query": 51,
+    "Instruct: Retrieve passages that answer the given query": 50,
+    "Instruct: Retrieve the answer to the following web search query": 49,
+    "Instruct: Given a web search query, retrieve relevant passages that answer the query.": 48,
+    "Instruct: Retrieve passages that answer the given question": 48,
+    "Instruct: Retrieve documents that answer the given search query.": 47,
+    "Instruct: Given a web search query, retrieve relevant documents that can help answer the query.": 47,
+    "Instruct: Given a web search query, retrieve relevant passages that can help answer the query": 47,
+    "Instruct: Retrieve documents that answer the given search query": 46,
+    "Instruct: Retrieve the answer to the following query.": 46,
+    "Instruct: Retrieve documents that answer the given question.": 45,
+    "Instruct: Retrieve the answer to the following question": 45,
+    "Instruct: Retrieve the answer to the following search query": 44,
+    "Instruct: Retrieve passages that answer the given search query.": 43,
+    "Instruct: Given a web search query, retrieve relevant passages that can help answer the query.": 42,
+    "Instruct: Given a web search query, retrieve relevant documents that answer the query.": 42,
+    "Instruct: Retrieve the answer to the following search query.": 42,
+    "Instruct: Retrieve the answer to the following web search query.": 41,
+    "Instruct: Retrieve passages that answer the given query.": 40,
+    "Instruct: Retrieve passages that answer the given web search query.": 40,
+    "Instruct: Retrieve documents that answer the given web search query": 40,
+    "Instruct: Retrieve the answer to the following question.": 39,
+    "Instruct: Given a web search query, retrieve the answer.": 39,
+    "Instruct: Retrieve passages that answer the given web search query": 37,
+    "Instruct: Retrieve documents that answer the given web search query.": 37,
+    "Instruct: Retrieve passages that answer the given question.": 34,
+    "Instruct: Retrieve passages that can help answer the given question": 32,
+    "Instruct: Retrieve the answer to the following query": 32,
+    "Instruct: Retrieve documents that can help answer the given question": 28,
+    "Instruct: Retrieve passages that answer the given search query": 28,
+    "Instruct: Retrieve passages that can answer the given question": 27,
+    "Instruct: Retrieve documents that can answer the given question": 27,
+    "Instruct: Retrieve passages that can answer the given question.": 27,
+    "Instruct: Retrieve relevant documents that can help answer the given question": 26,
+    "Instruct: Retrieve relevant passages that can help answer the given question.": 25,
+    "Instruct: Retrieve documents that can answer the given question.": 23,
+    "Instruct: Retrieve relevant passages that can help answer the given question": 23,
+    "Instruct: Retrieve relevant documents that can help answer the given question.": 21,
+    "Instruct: Retrieve passages that can help answer the given question.": 20,
+    "Instruct: Retrieve documents that can help answer the given question.": 19
+  },
+  "query_style_heuristic": {
+    "natural_question": 3923,
+    "comma_keyword_list": 139,
+    "long_statement_or_search": 63,
+    "short_search_or_title": 21
+  },
+  "benchmark_train_exposure_rows": {
+    "MultiLongDocRetrieval": 2246,
+    "MrTidyRetrieval": 1200,
+    "MIRACLRetrieval": 700,
+    "MIRACLReranking": 700
+  },
+  "query_body_below_4_chars_by_source": {},
+  "character_lengths": {
+    "query_body": {
+      "min": 4,
+      "mean": 39.333574529667146,
+      "p50": 26,
+      "p95": 98,
+      "p99": 230,
+      "max": 664
+    },
+    "positive": {
+      "min": 16,
+      "mean": 4210.624216111915,
+      "p50": 1775,
+      "p95": 13233,
+      "p99": 14728,
+      "max": 18456
+    },
+    "negative": {
+      "min": 9,
+      "mean": 4728.427296533664,
+      "p50": 1975,
+      "p95": 13621,
+      "p99": 16404,
+      "max": 76452
+    }
+  },
+  "exact_duplicates": {
+    "query_beyond_first_occurrence": 648,
+    "positive_beyond_first_occurrence": 390
+  },
+  "contract_checks": {
+    "row_sha256_checked": 4146,
+    "row_sha256_mismatches": 0,
+    "provenance_row_index_mismatches": 0,
+    "homogeneous_batch_checked": false,
+    "batch_contract_field_counts": {},
+    "homogeneous_batch_violations": 0,
+    "status": "pass"
+  },
+  "style_note": "Heuristic counts guide ablations; they are not human relevance labels."
+}

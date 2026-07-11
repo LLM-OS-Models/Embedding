@@ -85,6 +85,7 @@ component() {
 SQUAD="$ROOT/outputs/data/performance-v1/sionic-squad-train-60k"
 HEALTH="$ROOT/outputs/data/performance-v1/sionic-health-multilingual-100k"
 AUTORAG="$ROOT/outputs/data/performance-v1/sionic-autorag-domain-100k"
+RETRIEVAL="$ROOT/outputs/data/performance-v1/sionic-retrieval-train-family-4146"
 LEGAL="$ROOT/outputs/data/legal-performance-v1"
 GENERAL="$ROOT/outputs/data/performance-v1/performance-1m"
 GENERAL_TRAIN="$GENERAL/train.homogeneous-b16.jsonl"
@@ -109,12 +110,16 @@ components+=("$(component autorag \
   "$AUTORAG/train.faiss-current-r095-n7.homogeneous-b16.jsonl" \
   "$AUTORAG/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl" \
   "$AUTORAG/faiss-current-r095-n7.homogeneous-b16.manifest.json" 40000)") || exit 2
+components+=("$(component retrieval_family \
+  "$RETRIEVAL/train.faiss-current-r095-n7.homogeneous-b16.jsonl" \
+  "$RETRIEVAL/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl" \
+  "$RETRIEVAL/faiss-current-r095-n7.homogeneous-b16.manifest.json" 4144)") || exit 2
 components+=("$(component legal \
   "$LEGAL/train.faiss-r095-n7.homogeneous-b16.jsonl" \
   "$LEGAL/provenance.faiss-r095-n7.homogeneous-b16.jsonl" \
   "$LEGAL/faiss-r095-n7.homogeneous-b16.manifest.json" 60000)") || exit 2
 components+=("$(component general "$GENERAL_TRAIN" "$GENERAL_PROVENANCE" \
-  "$GENERAL_MANIFEST" 220000)") || exit 2
+  "$GENERAL_MANIFEST" 215856)") || exit 2
 
 if [[ ! -s "$MANIFEST" ]]; then
   component_args=()

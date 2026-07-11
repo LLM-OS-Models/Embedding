@@ -345,6 +345,11 @@ if [[ -n "$DATA_UPLOAD_PID" ]]; then
   fi
 fi
 
+if [[ "${ENABLE_SIONIC_RETRIEVAL_ADAPTATION:-1}" == 1 ]]; then
+  run_stage "sionic-retrieval-train-family-adaptation" env WAIT_PID= \
+    LOG_DIR="$ROOT/outputs/sionic-retrieval-family-adaptation-20260712" \
+    bash "$ROOT/scripts/run_sionic_retrieval_adaptation_queue.sh" || true
+fi
 if [[ "${ENABLE_SIONIC_SQUAD_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-squad-train-family-adaptation" env WAIT_PID= \
     LOG_DIR="$ROOT/outputs/sionic-squad-adaptation-20260712" \

@@ -96,7 +96,8 @@ row는 101개였다.
 | SQuADKorV1 train-family 60K | 원본 KorQuAD train 질문→문맥 60K; 평가 query/evaluation-text match 0, Wikipedia shared eval-corpus 6,426 고유 hash 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k/tree/8fbc6d6d5c93c3493456079d930921ac90ec6801) |
 | PublicHealth health-domain 100K | F2 medical QA/instruction/flashcard 100K; critical eval-text overlap 0, PublicHealthQA exact overlap 0·공개 완료 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-health-100k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-health-100k/tree/5fc4bb817f6970a710be53376f35e0225201d2e2) |
 | AutoRAG domain 100K | F2 finance/banking/commerce/legal 100K; critical eval-text 0, AutoRAG query/corpus exact overlap 0·공개 완료 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-autorag-100k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-autorag-100k/tree/9140e9e02bb3f40ac1c22a6e595d58208770f696) |
-| Sionic combined target 400K | SQuAD 10% + health 10% + AutoRAG 10% + legal 15% + general 55%; multidomain batch/provenance/audit queue 구현 | [combined 모델 설계](docs/28_SIONIC_COMBINED_TARGET_MODEL.md) |
+| MIRACL·MrTidy·MLDR train-family 4,146 | F2 공개 train-family lossless 추출; critical eval-query 0, shared corpus 13,973; 2K HN7 specialist queue 연결 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146/tree/d131081f6d8a6a76b1b9242e9e4e8ae89241a3b3) |
+| Sionic combined target 400K | SQuAD/health/AutoRAG 각 10% + retrieval-family 1.04% + legal 15% + general 53.96%; multidomain audit queue 구현 | [combined 모델 설계](docs/28_SIONIC_COMBINED_TARGET_MODEL.md) |
 | 법률 source-native 250K | 4개 source 균형 shard + bootstrap 한계·질의 분포 전수 감사/카드 공개 | [`LLM-OS-Models/korean-legal-retrieval-source-native-250k`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-retrieval-source-native-250k/tree/ec2f09a220dc5aa326c5d63b8e49adbf3a5524bc) |
 | 성능 우선 1M 데이터 | critical row 2,839 교체, exact 999,936-row order, final critical overlap 0·raw/ordered 감사 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-performance-1m`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/5a2a3ab7f0928c6570929cc231eaefdd3fa203e1) |
 | 평가 오염 방지 blocklist | Sionic 9 + 공식 Korean 6, 원문 없는 SHA-256 547MB | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
@@ -140,6 +141,7 @@ row는 101개였다.
 27. [Sionic PublicHealthQA multilingual health-domain adaptation](docs/26_SIONIC_PUBLIC_HEALTH_ADAPTATION.md)
 28. [Sionic AutoRAG finance/commerce/legal domain adaptation](docs/27_SIONIC_AUTORAG_DOMAIN_ADAPTATION.md)
 29. [Sionic 9 combined target-domain final candidate](docs/28_SIONIC_COMBINED_TARGET_MODEL.md)
+30. [MIRACL·MrTidy·MLDR train-family specialist](docs/29_SIONIC_RETRIEVAL_FAMILY_ADAPTATION.md)
 
 ## 실험 지도
 

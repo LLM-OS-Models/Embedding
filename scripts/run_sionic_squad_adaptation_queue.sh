@@ -14,6 +14,13 @@ TARGET_DATA_REL="${TARGET_DATA_REL:-outputs/data/performance-v1/sionic-squad-tra
 TARGET_ADAPTATION="${TARGET_ADAPTATION:-target-adapted-squad}"
 TARGET_NLIST="${TARGET_NLIST:-128}"
 TARGET_TRAINING_POINTS="${TARGET_TRAINING_POINTS:-9606}"
+TARGET_MAX_LENGTH="${TARGET_MAX_LENGTH:-512}"
+TARGET_ENCODE_BATCH_SIZE="${TARGET_ENCODE_BATCH_SIZE:-128}"
+TARGET_TRAIN_BATCH_SIZE="${TARGET_TRAIN_BATCH_SIZE:-8}"
+TARGET_GRAD_ACCUM_STEPS="${TARGET_GRAD_ACCUM_STEPS:-8}"
+TARGET_FALLBACK_BATCH_SIZE="${TARGET_FALLBACK_BATCH_SIZE:-4}"
+TARGET_FALLBACK_GRAD_ACCUM_STEPS="${TARGET_FALLBACK_GRAD_ACCUM_STEPS:-16}"
+TARGET_EVAL_BATCH_SIZE="${TARGET_EVAL_BATCH_SIZE:-4}"
 TARGET_SOURCE_DATASET="${TARGET_SOURCE_DATASET:-LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k}"
 DERIVED_REPO="${DERIVED_REPO:-LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1}"
 DERIVED_TITLE="${DERIVED_TITLE:-Korean Sionic SQuAD Quantile HN7 with General Replay}"
@@ -141,7 +148,9 @@ if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
     --manifest-output "$MINING_MANIFEST" \
     --work-dir "$DATA_DIR/faiss-work-current-student" --keep-work-dir \
     --model "$MINING_MODEL" --revision "$MINING_REVISION" \
-    --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
+    --encode-batch-size "$TARGET_ENCODE_BATCH_SIZE" \
+    --max-seq-length "$TARGET_MAX_LENGTH" \
+    --candidate-pool-size 24 --search-k 256 \
     --num-negatives 7 --selection-strategy score_rank_quantiles \
     --positive-relative-ratio .95 --nlist "$TARGET_NLIST" --nprobe 32 \
     --training-points "$TARGET_TRAINING_POINTS" --faiss-threads 64 \
@@ -202,6 +211,8 @@ train_target() {
   run_stage "train-$output_name" env TRAIN_ENV="$TRAIN_ENV" ATTN_IMPL="$TRAIN_ATTN" \
     RUN_NAME="$output_name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=125 SAVE_STEPS=125 SAVE_TOTAL_LIMIT=3 \
+    MAX_LENGTH="$TARGET_MAX_LENGTH" \
+    EVAL_BATCH_SIZE="$TARGET_EVAL_BATCH_SIZE" \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
     TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=5e-6 WARMUP_RATIO=.05 \
     INFONCE_HARD_NEGATIVES=7 BASE_MODEL="$MINING_MODEL" \
@@ -213,7 +224,7 @@ checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoi
   "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
 status=0
 if [[ -z "$checkpoint" ]]; then
-  train_target "$RUN_NAME" 8 8 || status=$?
+  train_target "$RUN_NAME" "$TARGET_TRAIN_BATCH_SIZE" "$TARGET_GRAD_ACCUM_STEPS" || status=$?
   if (( status == 0 )); then
     checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoint.py" \
       "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
@@ -222,8 +233,9 @@ else
   echo "[$(timestamp)] reusing completed target-adaptation checkpoint: $checkpoint"
 fi
 if [[ -z "$checkpoint" ]]; then
-  fallback="${RUN_NAME}-b4"
-  train_target "$fallback" 4 16 || exit 7
+  fallback="${RUN_NAME}-b${TARGET_FALLBACK_BATCH_SIZE}"
+  train_target "$fallback" "$TARGET_FALLBACK_BATCH_SIZE" \
+    "$TARGET_FALLBACK_GRAD_ACCUM_STEPS" || exit 7
   RUN_NAME="$fallback"
   MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
   MODEL_DIR="$ROOT/$MODEL_REL"
