@@ -82,6 +82,9 @@ def stage_checkpoint(checkpoint: Path, output: Path, copy_weights: bool) -> None
         source = checkpoint / directory
         if source.exists():
             shutil.copytree(source, output / directory)
+    # Normalize has no parameters/config and Hub snapshots cannot preserve an
+    # empty directory, while the publication contract intentionally requires it.
+    (output / "2_Normalize").mkdir(exist_ok=True)
     if copied == 0 or not (output / "modules.json").is_file():
         raise FileNotFoundError("Checkpoint is not a complete SentenceTransformers model")
 
