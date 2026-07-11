@@ -172,16 +172,16 @@ if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
     --device cuda --dtype bfloat16 --local-files-only || exit 5
 fi
 
+adapter_sha="$(jq -r '.adapter.weights_sha256' "$MODEL_DIR/merge_report.json")"
+local_revision="adapter-${adapter_sha:0:12}"
 run_stage "sionic9-$RUN_NAME" \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
-  --model "$MODEL_REL" --batch-size 192 --max-length 8192 \
+  --model "$MODEL_REL" --revision "$local_revision" --batch-size 192 --max-length 8192 \
   --attn-implementation flash_attention_2 --output-dir "$SIONIC_OUT" \
   --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9-scale1m"
 
 safe="${MODEL_REL//\//__}"
 SIONIC_SUMMARY="$SIONIC_OUT/$safe/summary.json"
-adapter_sha="$(jq -r '.adapter.weights_sha256' "$MODEL_DIR/merge_report.json")"
-local_revision="adapter-${adapter_sha:0:12}"
 run_stage "official-korean-$RUN_NAME" \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
   --model "$MODEL_REL" --revision "$local_revision" --max-length 8192 \

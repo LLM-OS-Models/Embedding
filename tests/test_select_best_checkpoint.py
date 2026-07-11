@@ -30,6 +30,13 @@ class SelectBestCheckpointTests(unittest.TestCase):
             }
             (adapter / "trainer_state.json").write_text(json.dumps(state))
             (full / "trainer_state.json").write_text(json.dumps(state))
+            better_adapter = run / "second-version" / "checkpoint-10"
+            better_adapter.mkdir(parents=True)
+            (better_adapter / "adapter_model.safetensors").write_bytes(b"adapter-2")
+            (better_adapter / "adapter_config.json").write_text("{}")
+            (better_adapter / "trainer_state.json").write_text(
+                json.dumps({"log_history": [{"step": 10, "eval_loss": 0.1}]})
+            )
 
             def select(kind: str) -> str:
                 return subprocess.check_output(
@@ -44,9 +51,9 @@ class SelectBestCheckpointTests(unittest.TestCase):
                     text=True,
                 ).strip()
 
-            self.assertEqual(select("adapter"), str(adapter))
+            self.assertEqual(select("adapter"), str(better_adapter))
             self.assertEqual(select("full"), str(full))
-            self.assertEqual(select("auto"), str(full))
+            self.assertEqual(select("auto"), str(better_adapter))
 
 
 if __name__ == "__main__":

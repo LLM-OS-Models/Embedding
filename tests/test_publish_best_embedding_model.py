@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import tempfile
 import unittest
@@ -20,6 +21,10 @@ class PublishBestModelTests(unittest.TestCase):
             for name in ("config.json", "modules.json", "1_Pooling/config.json"):
                 (model / name).write_text("{}")
             (model / "model.safetensors").write_bytes(b"fixture")
+            model_digest = hashlib.sha256()
+            model_digest.update(b"model.safetensors\0")
+            model_digest.update(b"fixture")
+            model_sha = model_digest.hexdigest()
             (model / "merge_report.json").write_text(
                 json.dumps(
                     {
@@ -27,6 +32,7 @@ class PublishBestModelTests(unittest.TestCase):
                         "base_model": "Qwen/Qwen3-Embedding-8B",
                         "base_revision": "1" * 40,
                         "adapter": {"weights_sha256": "2" * 64},
+                        "model": {"weights_sha256": model_sha},
                         "adapter_config": {
                             "r": 64,
                             "lora_alpha": 128,
@@ -61,7 +67,9 @@ class PublishBestModelTests(unittest.TestCase):
             sionic.write_text(
                 json.dumps(
                     {
-                        "protocol_id": "fixture",
+                        "protocol_id": "sionic9-fixed-prompt-v1",
+                        "model": str(model),
+                        "requested_revision": "adapter-" + ("2" * 12),
                         "completed_tasks": 9,
                         "average": 0.8,
                         "scores": {name: 0.8 for name in names},
@@ -74,9 +82,12 @@ class PublishBestModelTests(unittest.TestCase):
                     {
                         "complete": True,
                         "completed_tasks": 6,
-                        "protocol_id": "fixture-official",
+                        "protocol_id": "mteb-korean-v1-mteb-2.18.0",
+                        "model": str(model),
+                        "requested_revision": "adapter-" + ("2" * 12),
                         "mean_task_leaderboard_points": 80.0,
                         "mean_task_type_leaderboard_points": 79.0,
+                        "means_by_type": {"Retrieval": 0.79},
                         "scores": {
                             f"task-{index}": {"score": 0.8} for index in range(6)
                         },
@@ -118,7 +129,7 @@ class PublishBestModelTests(unittest.TestCase):
                         "training_method": "partial-full-parameter-update",
                         "base_model": "Qwen/Qwen3-Embedding-8B",
                         "base_revision": "1" * 40,
-                        "model": {"weights_sha256": "3" * 64},
+                        "model": {"weights_sha256": model_sha},
                         "probe": {
                             "metrics": {
                                 "maximum_norm_error": 1e-7,
@@ -132,6 +143,12 @@ class PublishBestModelTests(unittest.TestCase):
                     }
                 )
             )
+            sionic_payload = json.loads(sionic.read_text())
+            sionic_payload["requested_revision"] = "partial-full-" + model_sha[:12]
+            sionic.write_text(json.dumps(sionic_payload))
+            official_payload = json.loads(official.read_text())
+            official_payload["requested_revision"] = "partial-full-" + model_sha[:12]
+            official.write_text(json.dumps(official_payload))
             subprocess.check_call(
                 [
                     "python",

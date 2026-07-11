@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+from statistics import fmean
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,30 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def model_weights_sha256(root: Path) -> str:
+    digest = hashlib.sha256()
+    shards = sorted(root.glob("model*.safetensors"))
+    if not shards:
+        raise FileNotFoundError(f"No model safetensors under {root}")
+    for shard in shards:
+        digest.update(shard.name.encode() + b"\0")
+        with shard.open("rb") as handle:
+            for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                digest.update(block)
+    return digest.hexdigest()
+
+
+def resolved_local_model(value: Any) -> Path:
+    if not isinstance(value, str) or not value:
+        raise ValueError("Evaluation summary has no model path")
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = ROOT / path
+    if not path.exists():
+        raise ValueError(f"Evaluation summary model is not a local artifact: {value}")
+    return path.resolve()
+
+
 def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     model_dir = args.model_dir.resolve()
     model_evidence_path = model_dir / "merge_report.json"
@@ -90,6 +115,37 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         raise ValueError("Sionic-9 summary is incomplete")
     if official.get("complete") is not True or official.get("completed_tasks") != 6:
         raise ValueError("Official Korean v1 summary is incomplete")
+    if sionic.get("protocol_id") != "sionic9-fixed-prompt-v1":
+        raise ValueError("Unexpected Sionic protocol")
+    if official.get("protocol_id") != "mteb-korean-v1-mteb-2.18.0":
+        raise ValueError("Unexpected official Korean protocol")
+    if resolved_local_model(sionic.get("model")) != model_dir:
+        raise ValueError("Sionic summary belongs to a different model artifact")
+    if resolved_local_model(official.get("model")) != model_dir:
+        raise ValueError("Official summary belongs to a different model artifact")
+    expected_revision = (
+        f"partial-full-{weights_sha(model_evidence)[:12]}"
+        if is_full_update(model_evidence)
+        else f"adapter-{weights_sha(model_evidence)[:12]}"
+    )
+    for label, summary in (("Sionic", sionic), ("official", official)):
+        if summary.get("requested_revision") != expected_revision:
+            raise ValueError(f"{label} summary revision does not match model evidence")
+    recomputed_sionic = fmean(float(value) for value in sionic["scores"].values())
+    if abs(float(sionic["average"]) - recomputed_sionic) > 1e-12:
+        raise ValueError("Sionic average is inconsistent with task scores")
+    official_task_mean = fmean(float(row["score"]) for row in official["scores"].values())
+    if abs(float(official["mean_task_leaderboard_points"]) - 100 * official_task_mean) > 1e-9:
+        raise ValueError("Official Mean(Task) is inconsistent with task scores")
+    means_by_type = official.get("means_by_type", {})
+    if not means_by_type:
+        raise ValueError("Official summary has no task-type means")
+    official_type_mean = fmean(float(value) for value in means_by_type.values())
+    if abs(float(official["mean_task_type_leaderboard_points"]) - 100 * official_type_mean) > 1e-9:
+        raise ValueError("Official Mean(Type) is inconsistent with type means")
+    actual_model_sha = model_weights_sha256(model_dir)
+    if model_evidence.get("model", {}).get("weights_sha256") != actual_model_sha:
+        raise ValueError("Published model shards do not match model evidence")
     return model_evidence, sionic, official, training
 
 

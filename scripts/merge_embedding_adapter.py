@@ -139,6 +139,19 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def model_weights_sha256(root: Path) -> str:
+    digest = hashlib.sha256()
+    shards = sorted(root.glob("model*.safetensors"))
+    if not shards:
+        raise FileNotFoundError(f"No model safetensors under {root}")
+    for shard in shards:
+        digest.update(shard.name.encode() + b"\0")
+        with shard.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
 def adapter_weight_path(adapter_dir: Path) -> Path:
     candidates = (
         adapter_dir / "adapter_model.safetensors",
@@ -516,6 +529,7 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
         "base_model": args.base_model,
         "base_revision": args.base_revision,
         "adapter": {key: value for key, value in adapter.items() if key != "config"},
+        "model": {"weights_sha256": model_weights_sha256(staging_dir)},
         "adapter_config": {
             key: adapter["config"].get(key)
             for key in (

@@ -74,23 +74,29 @@ def main() -> None:
             f"No complete {args.checkpoint_kind} checkpoint under {run_dir}"
         )
 
-    losses: dict[int, float] = {}
+    checkpoint_losses: dict[Path, float] = {}
     for checkpoint in checkpoints:
         state_path = checkpoint / "trainer_state.json"
         if state_path.is_file():
-            losses.update(
-                evaluation_losses(json.loads(state_path.read_text(encoding="utf-8")))
-            )
-    by_step = {checkpoint_step(path): path for path in checkpoints}
-    eligible = [(loss, step) for step, loss in losses.items() if step in by_step]
+            losses = evaluation_losses(json.loads(state_path.read_text(encoding="utf-8")))
+            step = checkpoint_step(checkpoint)
+            if step in losses:
+                checkpoint_losses[checkpoint] = losses[step]
+    eligible = [
+        (loss, checkpoint_step(path), str(path), path)
+        for path, loss in checkpoint_losses.items()
+    ]
     if eligible:
-        best_loss, best_step = min(eligible)
+        best_loss, best_step, _, best = min(eligible)
         reason = "minimum_eval_loss"
     else:
-        best_step = max(by_step)
+        best = max(
+            checkpoints,
+            key=lambda path: (checkpoint_step(path), path.stat().st_mtime_ns, str(path)),
+        )
+        best_step = checkpoint_step(best)
         best_loss = None
         reason = "latest_complete_checkpoint_no_eval_loss"
-    best = by_step[best_step]
     report = {
         "run_dir": str(run_dir),
         "selected_checkpoint": str(best),
@@ -99,7 +105,10 @@ def main() -> None:
         "reason": reason,
         "checkpoint_kind": args.checkpoint_kind,
         "complete_checkpoints": [str(path) for path in checkpoints],
-        "eval_losses": {str(step): loss for step, loss in sorted(losses.items())},
+        "eval_losses": {
+            str(path): loss
+            for path, loss in sorted(checkpoint_losses.items(), key=lambda item: str(item[0]))
+        },
     }
     if args.print_path:
         print(best)
