@@ -107,6 +107,7 @@
 | [`050_model_merge`](experiments/050_model_merge/) | checkpoint/domain adapter 평균·SLERP |
 | [`060_backbone_ablation`](experiments/060_backbone_ablation/) | Qwen 0.6B/4B/8B, Nemotron, Gemma 계열 비교 |
 | [`070_tuning_strategy`](experiments/070_tuning_strategy/) | LoRA/DoRA/부분학습/full FT의 품질·VRAM·속도 비교 |
+| [`080_f2_recipe`](experiments/080_f2_recipe/) | F2형 dual loss와 exact MRL을 기본 InfoNCE와 비교 |
 
 ## 원칙
 
