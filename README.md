@@ -88,6 +88,7 @@
 11. [Clean Korean 종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md)
 12. [공식 MTEB Korean v1 로컬 재현 protocol](docs/11_MTEB_KOREAN_V1_PROTOCOL.md)
 13. [논문·모델별 데이터와 학습 방법 매트릭스](docs/12_PAPER_DATA_METHOD_MATRIX.md)
+14. [진행 현황, 병목과 다음 의사결정](docs/14_PROGRESS_AND_BOTTLENECKS.md)
 
 ## 실험 지도
 

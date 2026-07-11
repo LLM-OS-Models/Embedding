@@ -1,0 +1,155 @@
+# 진행 현황, 병목과 다음 의사결정
+
+기준일: 2026-07-11 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
+
+## 현재 한 줄 상태
+
+평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**. 현재 최우선은 비상업 `performance` 트랙이다. Comsat 공식 Korean 6-task 측정 완료, tuning memory probe, 10K hard-negative pilot 뒤 744K–2M으로 즉시 확대한다. 권리가 정리된 `clean/release` 트랙은 별도로 유지하되 performance 학습을 막지 않는다.
+
+## 두 개의 모델 트랙
+
+| 트랙 | 우선 목표 | 허용 데이터 | 주장 방식 |
+|---|---|---|---|
+| `performance/non-commercial` | Sionic 9 및 Korean/MTEB 최고 성능 | 공개 다운로드 가능한 unknown/NC/custom-license composite, benchmark train split 허용 | 사용 source와 in-domain task를 공개하고 zero-shot SOTA라고 부르지 않음 |
+| `clean/release` | 배포 가능한 일반화 모델 | provenance/license/attribution 및 decontamination gate 통과 row만 | clean zero-shot, 권리·회귀까지 통과한 경우만 public release |
+
+두 트랙 모두 evaluation test query/qrel의 직접 학습, test score를 본 checkpoint 반복 선택, 모델 카드에서의 데이터 노출 은폐는 허용하지 않는다. 권리 조건을 완화하는 것과 test leakage를 허용하는 것은 다른 결정이다.
+
+## 완료된 것
+
+| 영역 | 결과 | 근거/판정 |
+|---|---|---|
+| GitHub | `LLM-OS-Models/Embedding` main에 중간 commit 지속 push | secrets 제외, submodule/revision 고정 |
+| Qwen 학습 환경 | `.venv-train`, Torch 2.13/CUDA 13, ms-swift 4.5 dev | H100 BF16/SDPA 정상 |
+| MTEB 환경 | `.venv-mteb`, MTEB 2.18.0/commit `193e3f66` | task/split/dataset SHA 고정 |
+| Sionic 9 evaluator parity | AutoRAG Qwen `0.82765`, Comsat `0.85222` | 카드와 각각 `0.00005`, `0.00042` 차이 |
+| 비교 모델 AutoRAG | F2 `0.76611`, PwC `0.78329` | 같은 full-corpus NDCG@10 |
+| 8B LoRA smoke | 20 steps/43.81s/peak 17.07GiB, reload pass | 4096-d, adapter SHA와 positive margin 검증 |
+| smoke HF artifact | private repo 업로드 | raw data/optimizer/log 제외, public 전환 금지 |
+| 공식 Korean protocol | 정확한 6 task와 prompt fallback 구현 | local result를 official submission과 구분 |
+| 논문/데이터 감사 | Qwen/F2/Nemotron/KaLM/Harrier 및 2026 후속 matrix | 공개 사실, 누락, 채택/기각 분리 |
+| hard-negative miner | exact blockwise dense mining, `.95*s_pos`, pool24 | dry-run/fake encoder/strict validator 통과 |
+| 10K private pilot 입력 | train 10,000 / validation 512, hash 검증 | source license 미명시로 public release 불가 |
+| vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | GPU parity는 아직 실행 전 |
+
+## 현재 실행 중
+
+Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
+
+| Task | Local official-protocol score |
+|---|---:|
+| KLUE-TC | 0.5213867 |
+| Ko-StrategyQA | 0.8401600 |
+| KLUE-STS | 0.8631865 |
+| KorSTS | 0.7943686 |
+| MIRACLReranking | 0.6846700 |
+| MIRACLRetrieval | 실행 중: 1,486,752 documents |
+
+마지막 retrieval은 H100 1장, FlashAttention 2, batch 192에서 실행 중이다. 실측 GPU 메모리는 corpus batch에 따라 약 50–58GiB이고 워밍업 후 약 300–350 documents/s 수준이다. 완료 전 5-task 평균을 공식 6-task 평균이나 Borda rank로 쓰지 않는다.
+
+## 아직 성능 결과가 아닌 것
+
+- 288-row LoRA의 loss는 첫 step부터 거의 0이었다. negative가 너무 쉬워 pipeline 검사 외 의미가 없다.
+- adapter probe의 positive margin `0.44580`은 세 문장 무결성 검사이지 retrieval benchmark 점수가 아니다.
+- 10K 데이터는 준비됐지만 hard-negative 실제 mining과 학습은 GPU 대형 평가 뒤에 실행한다.
+- vLLM은 설치만 완료했고 SentenceTransformers/AutoRAG parity gate 전에는 공식 수치 생성에 쓰지 않는다.
+- clean comprehensive suite는 설계만 고정됐고 rights-safe holdout 수치는 아직 없다.
+
+## 주요 병목
+
+### 1. 대규모 performance mix 변환과 균형
+
+학습 데이터가 없는 것이 아니다. 즉시 쓸 수 있는 `ko-triplet-v1.0` 744,862 rows, F2LLM-v2 composite 60.1M/한국어 약 1.083M, KaLM fine-tuning 6.34M, Nemotron 약 16.1–16.4M과 target 계열 train split이 있다. 현재 병목은 이를 같은 schema로 변환하고 source가 큰 gradient를 독점하지 않게 균형화하며, 실제로 어려운 negative를 보존하는 일이다.
+
+해소 조건:
+
+- 10K → 50K → 200K → 744K scale curve 자동화
+- F2 Korean과 KaLM/Nemotron multilingual replay의 공통 query/positive/HN schema
+- source cap과 homogeneous batch sampler
+- target train 사용 여부를 row/task manifest에 기록
+- 1M–2M performance mix에서 domain/length/query-style 분포 고정
+
+권리/provenance는 clean/release 트랙의 병목으로 남지만 performance/non-commercial 트랙의 진입을 차단하지 않는다. 원 source와 license 상태는 나중에 제거할 수 있도록 계속 기록한다.
+
+### 2. negative 품질과 false negative
+
+기존 triplet의 negative는 base Qwen에 너무 쉽다. 반대로 dense top-1을 무조건 negative로 쓰면 실제 정답을 오답으로 학습할 수 있다.
+
+해소 조건:
+
+- base/current/BM25 candidate 합집합
+- `s_neg < {.90,.95,.98}*s_pos` 비교
+- Qwen reranker 연속 점수와 positive/partial-positive 검수
+- top-hard뿐 아니라 score quantile 전 구간 표집
+- real/generated source shortcut audit
+
+### 3. 8B full-corpus 평가 시간
+
+MIRACL Korean corpus만 약 149만 문서다. 일반 SentenceTransformers batch 2는 비현실적으로 느리고, 현재 FA2/batch192로 최적화해도 한 모델당 상당한 시간이 든다. MTEB search wrapper는 50K chunk 중간 embedding을 task result cache에 저장하지 않아 프로세스 중단 시 현재 chunk 또는 전체 encoding을 다시 할 수 있다.
+
+해소 조건:
+
+- 현재 Comsat run은 중단하지 않고 완료
+- vLLM 0.24에서 32문장 cosine/top-k 및 AutoRAG parity 통과
+- 이후 base/우리 후보의 반복 평가에 vLLM continuous batching 사용
+- official board에 이미 신뢰할 값이 있는 모델은 불필요하게 재실행하지 않음
+
+### 4. LoRA 대 full FT 결정
+
+F2는 45M example full FT 선례지만 우리 budget과 base는 다르다. standard full은 update capacity가 크지만 메모리와 회귀 위험이 크고, 작은 microbatch 때문에 retrieval의 true in-batch negatives가 줄 수 있다.
+
+현재 근거:
+
+| 방식 | Trainable | Peak/예상 VRAM | 상태 |
+|---|---:|---:|---|
+| LoRA r32 | 87.294M | **17.07GiB 실측** | pipeline pass |
+| LoRA r64 | 174.588M | 18–20GiB 예상 | 1-step/품질 run 대기 |
+| DoRA r32 | 약 88.695M | 17–19GiB 예상 | 대기 |
+| 마지막 4층 + norm | 771.790M | 20–25GiB 예상 | 대기 |
+| GaLore full | encoder full update | 35–45GiB 예상 | 대기 |
+| standard full AdamW | 약 7.567B encoder | 60–75GiB 예상 | OOM 가능 1-step만 먼저 |
+
+결정 gate는 동일 hard-negative data와 token budget에서 clean 품질/회귀/VRAM/GPU-hour Pareto다. 현재 기본 선택은 LoRA r64이며, 성능이 막힐 때 partial/GaLore/full 순으로 승격한다.
+
+### 5. clean selection 보드 부재
+
+Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfitting이 된다. 아직 rights-safe temporal/domain holdout이 없어 public score와 독립적인 선택 근거가 부족하다.
+
+해소 조건:
+
+- 정부·법률·보건·금융·일반의 source/time 분리 holdout
+- long evidence 위치 및 OCR/띄어쓰기 paired slice
+- Qwen/Comsat baseline 고정
+- bootstrap CI와 worst-domain gate
+
+## 실행 queue
+
+| 순서 | 작업 | 진입 조건 | 완료 조건 |
+|---:|---|---|---|
+| 1 | Comsat official Korean MIRACLRetrieval | 실행 중 | 6-task summary + raw cache |
+| 2 | live Borda 가상 삽입 | 6-task complete | backend rank 137/137 재현 + local 위치 |
+| 3 | README 공식 Korean row 갱신/push | 1–2 완료 | local reproduction 표기와 task별 숫자 |
+| 4 | LoRA/DoRA/last4/GaLore/full 1-step memory probes | GPU free | 실제 peak VRAM/속도/OOM 기록 |
+| 5 | 10K train/validation dense HN mining | probe 후 | pool/score/filter manifest + strict JSONL |
+| 6 | LoRA r64 160-step private pilot | mined data | non-zero learning signal, reload, VRAM |
+| 7 | pilot 성능 평가 | checkpoint 검증 | private mined dev + AutoRAG, base/Comsat 비교 |
+| 8 | partial/DoRA 품질 비교 | LoRA result 확보 | 동일 token budget Pareto |
+| 9 | 50K→200K→744K performance scale | 10K 학습 신호 확인 | data-size curve와 best update strategy |
+| 10 | F2/KaLM/Nemotron 1M–2M mix | converter/source cap 완료 | Sionic 9와 Korean broad 최고 후보 |
+| 11 | leaderboard-adapted specialist | train/test 분리 확인 | in-domain task와 zero-shot 비율 공개 |
+| 12 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
+
+## 주장 gate
+
+`performance/non-commercial` 모델에서 “Sionic 9 평균을 이겼다”는 표현은 다음을 만족할 때 사용한다.
+
+1. Sionic 9개 전부 동일 protocol로 직접 실행
+2. macro NDCG@10이 `0.7930`보다 높음
+3. task별 score와 model/data revision 공개
+4. evaluation test query/qrel 직접 학습 없음
+5. benchmark train/source 노출과 zero-shot 비율 공개
+6. broad/multilingual 회귀와 효율 동시 보고
+
+“clean/general Korean SOTA” 또는 public release는 여기에 benchmark overlap audit, clean holdout, data license/provenance gate를 추가로 통과해야 한다.
+
+이 문서는 각 장시간 평가·학습과 중요한 실패 뒤 갱신하고, 해당 commit을 GitHub에 push한다.
