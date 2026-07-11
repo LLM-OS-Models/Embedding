@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+WAIT_PID="${WAIT_PID:-}"
+LOG_DIR="${LOG_DIR:-$ROOT/outputs/legal-adaptation-20260711}"
+DATA_DIR="$ROOT/outputs/data/legal-performance-v1"
+BOOTSTRAP="$DATA_DIR/train.bootstrap.jsonl"
+MINED="$DATA_DIR/train.faiss-r095-n7.jsonl"
+AUDIT="$DATA_DIR/train.faiss-r095-n7.audit.jsonl"
+MINING_MANIFEST="$DATA_DIR/train.faiss-r095-n7.manifest.json"
+MINED_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.jsonl"
+ORDERED="$DATA_DIR/train.faiss-r095-n7.homogeneous-b16.jsonl"
+ORDERED_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.homogeneous-b16.jsonl"
+ORDERED_MANIFEST="$DATA_DIR/faiss-r095-n7.homogeneous-b16.manifest.json"
+VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
+RUN_NAME="qwen3-embedding-8b-ko-legal250k-lora-r64"
+MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
+MODEL_DIR="$ROOT/$MODEL_REL"
+SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-legal250k"
+OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-legal250k"
+mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
+exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
+
+if [[ -f "$ROOT/.env" ]]; then
+  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
+  export HF_TOKEN
+fi
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
+export ATTN_IMPL=flash_attention_2
+
+timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
+run_stage() {
+  local name="$1"; shift
+  echo "[$(timestamp)] START $name"
+  "$@"
+  local status=$?
+  echo "[$(timestamp)] END $name status=$status"
+  return "$status"
+}
+
+if [[ -n "$WAIT_PID" ]]; then
+  while kill -0 "$WAIT_PID" 2>/dev/null; do sleep 20; done
+fi
+[[ -s "$BOOTSTRAP" && -s "$DATA_DIR/provenance.jsonl" && -s "$VAL_FILE" ]] || exit 2
+
+if [[ ! -s "$MINING_MANIFEST" ]]; then
+  run_stage legal-faiss-hard-negative-mining \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/mine_faiss_hard_negatives.py" \
+    --input "$BOOTSTRAP" --output "$MINED" \
+    --audit-output "$AUDIT" --manifest-output "$MINING_MANIFEST" \
+    --work-dir "$DATA_DIR/faiss-work-qwen3-base" \
+    --model Qwen/Qwen3-Embedding-8B \
+    --revision 1d8ad4ca9b3dd8059ad90a75d4983776a23d44af \
+    --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
+    --num-negatives 7 --positive-relative-ratio .95 \
+    --nlist 512 --nprobe 32 --training-points 50000 \
+    --keep-work-dir --allow-target-adapted || exit 3
+fi
+
+if [[ ! -s "$MINED_PROVENANCE" ]]; then
+  run_stage project-legal-provenance \
+    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/project_mined_provenance.py" \
+    --input-provenance "$DATA_DIR/provenance.jsonl" --mining-audit "$AUDIT" \
+    --output "$MINED_PROVENANCE" \
+    --manifest-output "$DATA_DIR/provenance.faiss-r095-n7.manifest.json" || exit 4
+fi
+
+if [[ ! -s "$ORDERED_MANIFEST" ]]; then
+  run_stage order-legal-homogeneous-batches \
+    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
+    --train "$MINED" --provenance "$MINED_PROVENANCE" \
+    --output "$ORDERED" --provenance-output "$ORDERED_PROVENANCE" \
+    --manifest-output "$ORDERED_MANIFEST" --batch-size 16 --seed 42 || exit 5
+fi
+
+MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$ORDERED_MANIFEST")"
+if (( MAX_STEPS < 1 )); then
+  echo "[$(timestamp)] no complete legal training steps" >&2
+  exit 6
+fi
+run_stage validate-legal-mined-data \
+  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
+  "$ORDERED" "$VAL_FILE" || exit 6
+train_legal() {
+  local output_name="$1" batch="$2" accum="$3"
+  run_stage "train-$output_name" env \
+    RUN_NAME="$output_name" TRAIN_FILE="$ORDERED" VAL_FILE="$VAL_FILE" \
+    MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
+    TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
+    TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=2e-5 \
+    "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
+}
+
+if ! find "$ROOT/outputs/$RUN_NAME" -maxdepth 3 -type d -name "checkpoint-$MAX_STEPS" -print -quit 2>/dev/null | grep -q .; then
+  train_legal "$RUN_NAME" 8 8
+fi
+checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
+if [[ -z "$checkpoint" ]]; then
+  fallback="${RUN_NAME}-b4"
+  train_legal "$fallback" 4 16
+  RUN_NAME="$fallback"
+  MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
+  MODEL_DIR="$ROOT/$MODEL_REL"
+  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 6
+fi
+
+run_stage verify-legal-adapter \
+  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+  --adapter "$checkpoint" --data "$VAL_FILE" --output "$LOG_DIR/verification.json" || exit 7
+if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
+  run_stage merge-legal-adapter \
+    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+    --adapter "$checkpoint" --output-dir "$MODEL_DIR" \
+    --device cuda --dtype bfloat16 --local-files-only || exit 8
+fi
+
+run_stage sionic9-legal-target-adapted \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
+  --model "$MODEL_REL" --batch-size 192 --max-length 8192 \
+  --attn-implementation flash_attention_2 --output-dir "$SIONIC_OUT" \
+  --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9-legal250k"
+
+safe="${MODEL_REL//\//__}"
+SIONIC_SUMMARY="$SIONIC_OUT/$safe/summary.json"
+adapter_sha="$(jq -r '.adapter.weights_sha256' "$MODEL_DIR/merge_report.json")"
+revision="adapter-${adapter_sha:0:12}"
+run_stage official-korean-legal-target-adapted \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
+  --model "$MODEL_REL" --revision "$revision" --max-length 8192 \
+  --batch-size 192 --attn-implementation flash_attention_2 \
+  --output-dir "$OFFICIAL_OUT" \
+  --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-legal250k"
+
+OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
+if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
+  run_stage publish-legal-target-adapted \
+    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
+    --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
+    --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$MINING_MANIFEST" \
+    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
+    --upload --public
+fi
+
+echo "[$(timestamp)] legal target-adaptation queue complete"

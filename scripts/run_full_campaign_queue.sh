@@ -30,6 +30,10 @@ stage scale-1m env WAIT_PID= \
   LOG_DIR="$ROOT/outputs/scale-1m-20260711" \
   bash "$ROOT/scripts/run_scale_1m_queue.sh"
 
+stage legal-target-adaptation env WAIT_PID= \
+  LOG_DIR="$ROOT/outputs/legal-adaptation-20260711" \
+  bash "$ROOT/scripts/run_legal_adaptation_queue.sh"
+
 stage top-model-sionic env WAIT_PID= \
   LOG_DIR="$ROOT/outputs/top-model-eval-20260711" \
   bash "$ROOT/scripts/run_top_model_sionic_queue.sh"

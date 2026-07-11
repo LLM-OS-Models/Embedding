@@ -96,6 +96,8 @@ def training_rows(manifest: dict[str, Any]) -> str:
 
 
 def training_dataset_repo(manifest: dict[str, Any]) -> str | None:
+    if str(manifest.get("benchmark_adaptation", "")).startswith("target-adapted"):
+        return "LLM-OS-Models/korean-legal-retrieval-source-native-250k"
     return {
         "pilot_50k": "LLM-OS-Models/korean-embedding-performance-v1-pilot-50k",
         "ablation_200k": "LLM-OS-Models/korean-embedding-performance-v1-ablation-200k",
@@ -120,6 +122,15 @@ def build_card(
         if dataset_repo
         else "Training manifest is preserved with the model evaluation artifacts."
     )
+    target_adapted = str(training.get("benchmark_adaptation", "")).startswith(
+        "target-adapted"
+    )
+    adaptation_notice = (
+        "**이 모델은 법률/공공 target-adapted 모델이다. LawIRKo와 AutoRAG legal/public "
+        "점수를 clean zero-shot으로 해석하면 안 된다.**"
+        if target_adapted
+        else "이 모델의 task-family 학습 노출은 아래와 같이 공개한다."
+    )
     return f"""---
 language:
 - ko
@@ -142,6 +153,8 @@ tags:
 Qwen3-Embedding-8B를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업
 성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와
 SentenceTransformers last-token/L2/prompt 계약을 검증했다.
+
+{adaptation_notice}
 
 ## 결과
 
