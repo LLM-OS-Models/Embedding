@@ -113,13 +113,13 @@ components+=("$(component autorag \
 components+=("$(component retrieval_family \
   "$RETRIEVAL/train.faiss-current-r095-n7.homogeneous-b16.jsonl" \
   "$RETRIEVAL/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl" \
-  "$RETRIEVAL/faiss-current-r095-n7.homogeneous-b16.manifest.json" 4144)") || exit 2
+  "$RETRIEVAL/faiss-current-r095-n7.homogeneous-b16.manifest.json" 4128)") || exit 2
 components+=("$(component legal \
   "$LEGAL/train.faiss-r095-n7.homogeneous-b16.jsonl" \
   "$LEGAL/provenance.faiss-r095-n7.homogeneous-b16.jsonl" \
   "$LEGAL/faiss-r095-n7.homogeneous-b16.manifest.json" 60000)") || exit 2
 components+=("$(component general "$GENERAL_TRAIN" "$GENERAL_PROVENANCE" \
-  "$GENERAL_MANIFEST" 215856)") || exit 2
+  "$GENERAL_MANIFEST" 215872)") || exit 2
 
 if [[ ! -s "$MANIFEST" ]]; then
   component_args=()

@@ -37,9 +37,9 @@ train-family와 55% general replay로 유지한다. legal 15%는 LawIR 점수만
 | SQuADKor train-family | 40,000 | 10% | current-student quantile HN7 |
 | health/medical | 40,000 | 10% | current-student quantile HN7 |
 | AutoRAG finance/commerce/legal | 40,000 | 10% | current-student quantile HN7 |
-| MIRACL/MrTidy/MLDR train-family | 4,144 | 1.04% | 2K current-student quantile HN7 |
+| MIRACL/MrTidy/MLDR train-family | 4,128 | 1.032% | 2K current-student quantile HN7 |
 | Korean legal/public | 60,000 | 15% | current-student quantile HN7 |
-| general 1M replay | 215,856 | 53.96% | mined 1M 우선, 아니면 audited homogeneous 1M |
+| general 1M replay | 215,872 | 53.968% | mined 1M 우선, 아니면 audited homogeneous 1M |
 | 합계 | **400,000** | **100%** |  |
 
 실제 mining drop으로 한 component가 부족하면 available complete 16-row batches까지만

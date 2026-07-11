@@ -50,7 +50,8 @@ selection에 사용하지 않는다.
 `s_neg < .95*s_pos`인 후보 7개를 score-rank quantile로 뽑는다.
 
 source-homogeneous length bucket을 만든 뒤 같은 수의 decontaminated 1M general batch와
-50:50으로 섞는다. mining drop이 없으면 final curriculum은 약 8,288행이다. 파생
+50:50으로 섞는다. mining drop이 없으면 source별 16-row remainder를 제외한 target
+4,128 + replay 4,128 = final 8,256행이다. 파생
 train/provenance/quality/overlap/mining audit은
 `LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1`에
 자동 공개한다.
