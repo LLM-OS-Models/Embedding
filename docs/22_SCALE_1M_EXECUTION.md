@@ -24,6 +24,15 @@ homogeneous compiler는 999,936 rows/62,496 batches를 내고 source remainder 6
 제외했다. ordered train SHA-256은
 `ac39ea777f112ce9c2211c0e2410ddd399c7feb5e487629730d4d086f5b90169`다.
 
+기본 performance run은 이 원본 order를 즉시 학습하지 않는다. post-training winner로
+1M query와 unique positive corpus를 encode하고 FAISS IVFFlat(`nlist=4096`,
+`nprobe=32`, `search_k=256`)에서 24개 후보를 찾은 뒤 `.95*s_pos`보다 낮은 7개를
+current-student negative로 다시 고른다. 선택된 score는 float32 exact dot으로
+재계산하고 own positive/query exact match를 제외한다. mining/provenance projection/
+homogeneous compiler 중 하나라도 실패할 때만 위 원본 999,936-row curriculum으로
+fallback하며 log와 model training manifest가 실제 선택을 구분한다. 이 경로는 target
+train-family 노출이 있으므로 clean zero-shot이 아니라 `performance target-adapted`다.
+
 ## 학습
 
 | 항목 | 값 |

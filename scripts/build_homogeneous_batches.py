@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--benchmark-adaptation")
     return parser.parse_args()
 
 
@@ -146,6 +147,7 @@ def main() -> None:
         "schema_version": 1,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "seed": args.seed,
+        "benchmark_adaptation": args.benchmark_adaptation,
         "batch_size": args.batch_size,
         "input_rows": sum(input_counts.values()),
         "output_rows": output_rows,

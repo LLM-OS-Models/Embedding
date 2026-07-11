@@ -11,6 +11,13 @@ DATA_MANIFEST="$DATA_DIR/manifest.json"
 HOMOGENEOUS_TRAIN="$DATA_DIR/train.homogeneous-b16.jsonl"
 HOMOGENEOUS_PROVENANCE="$DATA_DIR/provenance.homogeneous-b16.jsonl"
 HOMOGENEOUS_MANIFEST="$DATA_DIR/homogeneous-b16.manifest.json"
+MINED_TRAIN="$DATA_DIR/train.faiss-current-r095-n7.jsonl"
+MINING_AUDIT="$DATA_DIR/train.faiss-current-r095-n7.audit.jsonl"
+MINING_MANIFEST="$DATA_DIR/train.faiss-current-r095-n7.manifest.json"
+MINED_PROVENANCE="$DATA_DIR/provenance.faiss-current-r095-n7.jsonl"
+MINED_HOMOGENEOUS_TRAIN="$DATA_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl"
+MINED_HOMOGENEOUS_PROVENANCE="$DATA_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl"
+MINED_HOMOGENEOUS_MANIFEST="$DATA_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json"
 VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
 RUN_NAME="qwen3-embedding-8b-ko-performance1m-lora-r64"
 MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
@@ -60,7 +67,8 @@ CONTINUAL_REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
 if [[ -s "$POSTTRAIN_SELECTION" ]]; then
   selected_rel="$(jq -r '.best.model // empty' "$POSTTRAIN_SELECTION")"
   selected_abs="$ROOT/$selected_rel"
-  if [[ -n "$selected_rel" && -s "$selected_abs/merge_report.json" ]]; then
+  if [[ -n "$selected_rel" && ( -s "$selected_abs/merge_report.json" \
+      || -s "$selected_abs/full_tuning_report.json" ) ]]; then
     CONTINUAL_BASE="$selected_abs"
     CONTINUAL_REVISION=""
     echo "[$(timestamp)] continuing 1M curriculum from post-training winner: $selected_abs"
@@ -70,6 +78,7 @@ if [[ "$CONTINUAL_BASE" == Qwen/Qwen3-Embedding-8B ]]; then
   echo "[$(timestamp)] post-training winner unavailable; using pinned Qwen base"
 fi
 
+TRAINING_MANIFEST="$DATA_MANIFEST"
 if [[ ! -s "$HOMOGENEOUS_MANIFEST" ]]; then
   run_stage "build-homogeneous-1m-batches" \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
@@ -80,7 +89,48 @@ if [[ ! -s "$HOMOGENEOUS_MANIFEST" ]]; then
     --batch-size 16 --seed 42 || exit 2
 fi
 TRAIN_FILE="$HOMOGENEOUS_TRAIN"
-MAX_STEPS_1M="$(jq -r '.output_rows / 128 | floor' "$HOMOGENEOUS_MANIFEST")"
+TRAINING_MANIFEST="$HOMOGENEOUS_MANIFEST"
+
+if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
+  if [[ ! -s "$MINING_MANIFEST" ]]; then
+    run_stage "mine-performance-1m-current-student" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/mine_faiss_hard_negatives.py" \
+      --input "$DATA_DIR/train.jsonl" --output "$MINED_TRAIN" \
+      --audit-output "$MINING_AUDIT" --manifest-output "$MINING_MANIFEST" \
+      --work-dir "$DATA_DIR/faiss-work-current-student" --keep-work-dir \
+      --model "$CONTINUAL_BASE" --revision "$CONTINUAL_REVISION" \
+      --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
+      --num-negatives 7 --positive-relative-ratio .95 \
+      --nlist 4096 --nprobe 32 --training-points 200000 \
+      --allow-target-adapted || true
+  fi
+  if [[ -s "$MINING_MANIFEST" && ! -s "$MINED_PROVENANCE" ]]; then
+    run_stage "project-performance-1m-mined-provenance" \
+      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/project_mined_provenance.py" \
+      --input-provenance "$DATA_DIR/provenance.jsonl" \
+      --mining-audit "$MINING_AUDIT" --output "$MINED_PROVENANCE" \
+      --manifest-output "$DATA_DIR/provenance.faiss-current-r095-n7.manifest.json" || true
+  fi
+  if [[ -s "$MINED_TRAIN" && -s "$MINED_PROVENANCE" \
+      && ! -s "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
+    run_stage "order-performance-1m-mined-batches" \
+      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
+      --train "$MINED_TRAIN" --provenance "$MINED_PROVENANCE" \
+      --output "$MINED_HOMOGENEOUS_TRAIN" \
+      --provenance-output "$MINED_HOMOGENEOUS_PROVENANCE" \
+      --manifest-output "$MINED_HOMOGENEOUS_MANIFEST" --batch-size 16 --seed 42 \
+      --benchmark-adaptation target-adapted-performance1m-current-student || true
+  fi
+  if [[ -s "$MINED_HOMOGENEOUS_MANIFEST" && -s "$MINED_HOMOGENEOUS_TRAIN" ]]; then
+    TRAIN_FILE="$MINED_HOMOGENEOUS_TRAIN"
+    TRAINING_MANIFEST="$MINED_HOMOGENEOUS_MANIFEST"
+    echo "[$(timestamp)] using current-student mined 1M curriculum"
+  else
+    echo "[$(timestamp)] current-student mining incomplete; using original homogeneous 1M"
+  fi
+fi
+
+MAX_STEPS_1M="$(jq -r '.output_rows / 128 | floor' "$TRAINING_MANIFEST")"
 
 train_scale() {
   local output_name="$1" batch="$2" accum="$3"
@@ -145,7 +195,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --model-dir "$MODEL_DIR" \
     --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" \
-    --training-manifest "$DATA_MANIFEST" \
+    --training-manifest "$TRAINING_MANIFEST" \
     --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-1m-v1 \
     --upload --public
   run_stage "record-scale-1m-result" \

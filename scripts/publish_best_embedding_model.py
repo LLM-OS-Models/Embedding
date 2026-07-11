@@ -119,11 +119,14 @@ def training_rows(manifest: dict[str, Any]) -> str:
 
 
 def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
-    if str(manifest.get("benchmark_adaptation", "")).startswith("target-adapted"):
+    adaptation = str(manifest.get("benchmark_adaptation", ""))
+    if adaptation.startswith("target-adapted") and "legal" in adaptation:
         return [
             "LLM-OS-Models/korean-legal-retrieval-source-native-250k",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
+    if adaptation.startswith("target-adapted"):
+        return ["LLM-OS-Models/korean-embedding-performance-v1-performance-1m"]
     repo = {
         "pilot_50k": "LLM-OS-Models/korean-embedding-performance-v1-pilot-50k",
         "ablation_200k": "LLM-OS-Models/korean-embedding-performance-v1-ablation-200k",
@@ -154,15 +157,21 @@ def build_card(
         if dataset_repos
         else "Training manifest is preserved with the model evaluation artifacts."
     )
-    target_adapted = str(training.get("benchmark_adaptation", "")).startswith(
-        "target-adapted"
-    )
-    adaptation_notice = (
-        "**이 모델은 법률/공공 target-adapted 모델이다. LawIRKo와 AutoRAG legal/public "
-        "점수를 clean zero-shot으로 해석하면 안 된다.**"
-        if target_adapted
-        else "이 모델의 task-family 학습 노출은 아래와 같이 공개한다."
-    )
+    adaptation = str(training.get("benchmark_adaptation", ""))
+    target_adapted = adaptation.startswith("target-adapted")
+    if target_adapted and "legal" in adaptation:
+        adaptation_notice = (
+            "**이 모델은 법률/공공 target-adapted 모델이다. LawIRKo와 AutoRAG "
+            "legal/public 점수를 clean zero-shot으로 해석하면 안 된다.**"
+        )
+    elif target_adapted:
+        adaptation_notice = (
+            "**이 모델은 공개 train/task-family와 current-student hard-negative를 사용한 "
+            "performance target-adapted 모델이다. 관련 MTEB/Sionic 점수를 완전한 clean "
+            "zero-shot으로 해석하면 안 된다.**"
+        )
+    else:
+        adaptation_notice = "이 모델의 task-family 학습 노출은 아래와 같이 공개한다."
     method_intro = (
         "Qwen3-Embedding-8B의 상위 transformer block을 부분 full-parameter update한 "
         "한국어 retrieval 성능 후보다. optimizer state를 제외한 SentenceTransformers "

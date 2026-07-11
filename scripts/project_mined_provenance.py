@@ -31,34 +31,40 @@ def sha256(path: Path) -> str:
 
 def main() -> None:
     args = parse_args()
-    provenance_rows = [
-        json.loads(line) for line in args.input_provenance.read_text(encoding="utf-8").splitlines()
-    ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(
         dir=args.output.parent, prefix=f".{args.output.name}.", suffix=".tmp"
     )
     output_rows = 0
-    seen_inputs: set[int] = set()
-    with os.fdopen(fd, "w", encoding="utf-8") as output_handle, args.mining_audit.open(
-        encoding="utf-8"
-    ) as audit_handle:
-        for audit_line_number, line in enumerate(audit_handle, 1):
+    input_rows = 0
+    with (
+        os.fdopen(fd, "w", encoding="utf-8") as output_handle,
+        args.mining_audit.open(encoding="utf-8") as audit_handle,
+        args.input_provenance.open(encoding="utf-8") as provenance_handle,
+    ):
+        while True:
+            line = audit_handle.readline()
+            provenance_line = provenance_handle.readline()
+            if not line and not provenance_line:
+                break
+            input_rows += 1
+            if not line or not provenance_line:
+                raise ValueError(f"Mining audit/provenance length mismatch at row {input_rows}")
             audit = json.loads(line)
             input_index = audit.get("input_row_index")
             output_index = audit.get("output_row_index")
-            if not isinstance(input_index, int) or not 0 <= input_index < len(provenance_rows):
-                raise ValueError(f"Invalid input index at audit line {audit_line_number}")
-            if input_index in seen_inputs:
-                raise ValueError(f"Duplicate input index in mining audit: {input_index}")
-            seen_inputs.add(input_index)
+            if input_index != input_rows - 1:
+                raise ValueError(
+                    f"Mining audit must cover input rows in order: expected {input_rows - 1}, "
+                    f"got {input_index}"
+                )
             if output_index is None:
                 continue
             if output_index != output_rows:
                 raise ValueError(
                     f"Non-contiguous output index: expected {output_rows}, got {output_index}"
                 )
-            row = dict(provenance_rows[input_index])
+            row = dict(json.loads(provenance_line))
             row["mining_projection"] = {
                 "input_row_index": input_index,
                 "output_row_index": output_index,
@@ -74,16 +80,11 @@ def main() -> None:
             output_rows += 1
         output_handle.flush()
         os.fsync(output_handle.fileno())
-    if len(seen_inputs) != len(provenance_rows):
-        Path(temporary).unlink(missing_ok=True)
-        raise ValueError(
-            f"Mining audit covered {len(seen_inputs)}/{len(provenance_rows)} input rows"
-        )
     os.replace(temporary, args.output)
     manifest = {
         "schema_version": 1,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "input_rows": len(provenance_rows),
+        "input_rows": input_rows,
         "output_rows": output_rows,
         "inputs": {
             "provenance": {
