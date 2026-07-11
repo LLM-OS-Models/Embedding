@@ -69,7 +69,7 @@ class PublishBestModelTests(unittest.TestCase):
                     {
                         "protocol_id": "sionic9-fixed-prompt-v1",
                         "model": str(model),
-                        "requested_revision": "adapter-" + ("2" * 12),
+                        "requested_revision": "model-" + model_sha[:12],
                         "completed_tasks": 9,
                         "average": 0.8,
                         "scores": {name: 0.8 for name in names},
@@ -84,7 +84,7 @@ class PublishBestModelTests(unittest.TestCase):
                         "completed_tasks": 6,
                         "protocol_id": "mteb-korean-v1-mteb-2.18.0",
                         "model": str(model),
-                        "requested_revision": "adapter-" + ("2" * 12),
+                        "requested_revision": "model-" + model_sha[:12],
                         "mean_task_leaderboard_points": 80.0,
                         "mean_task_type_leaderboard_points": 79.0,
                         "means_by_type": {"Retrieval": 0.79},
@@ -144,10 +144,10 @@ class PublishBestModelTests(unittest.TestCase):
                 )
             )
             sionic_payload = json.loads(sionic.read_text())
-            sionic_payload["requested_revision"] = "partial-full-" + model_sha[:12]
+            sionic_payload["requested_revision"] = "model-" + model_sha[:12]
             sionic.write_text(json.dumps(sionic_payload))
             official_payload = json.loads(official.read_text())
-            official_payload["requested_revision"] = "partial-full-" + model_sha[:12]
+            official_payload["requested_revision"] = "model-" + model_sha[:12]
             official.write_text(json.dumps(official_payload))
             subprocess.check_call(
                 [

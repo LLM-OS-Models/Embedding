@@ -141,11 +141,7 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         raise ValueError("Sionic summary belongs to a different model artifact")
     if resolved_local_model(official.get("model")) != model_dir:
         raise ValueError("Official summary belongs to a different model artifact")
-    expected_revision = (
-        f"partial-full-{weights_sha(model_evidence)[:12]}"
-        if is_full_update(model_evidence)
-        else f"adapter-{weights_sha(model_evidence)[:12]}"
-    )
+    expected_revision = f"model-{model_evidence['model']['weights_sha256'][:12]}"
     for label, summary in (("Sionic", sionic), ("official", official)):
         if summary.get("requested_revision") != expected_revision:
             raise ValueError(f"{label} summary revision does not match model evidence")
@@ -315,7 +311,7 @@ tags:
 - 9-task average: **{float(sionic['average']):.5f}**
 - Comsat 카드의 0.7930 대비: **{delta:+.5f}**
 - protocol: `{sionic['protocol_id']}`
-- model revision evidence SHA: `{weights_sha(evidence)}`
+- model revision evidence SHA: `{evidence['model']['weights_sha256']}`
 
 ### 공식 MTEB Korean v1 로컬 재현
 
@@ -461,7 +457,7 @@ def main() -> None:
             name: {"sha256": sha256(evidence_dir / name)} for name in evidence_files
         },
         "raw_evaluation_json": raw_evidence,
-        "model_weights_evidence_sha256": weights_sha(evidence),
+        "model_weights_evidence_sha256": evidence["model"]["weights_sha256"],
     }
     (model_dir / "publication_manifest.json").write_text(
         json.dumps(publication_manifest, ensure_ascii=False, indent=2) + "\n",

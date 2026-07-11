@@ -190,8 +190,8 @@ if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
     --device cuda --dtype bfloat16 --local-files-only || exit 5
 fi
 
-adapter_sha="$(jq -r '.adapter.weights_sha256' "$MODEL_DIR/merge_report.json")"
-local_revision="adapter-${adapter_sha:0:12}"
+model_sha="$(jq -r '.model.weights_sha256' "$MODEL_DIR/merge_report.json")"
+local_revision="model-${model_sha:0:12}"
 run_stage "sionic9-$RUN_NAME" \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
   --model "$MODEL_REL" --revision "$local_revision" --batch-size 192 --max-length 8192 \

@@ -71,8 +71,8 @@ for run_name in "${RUNS[@]}"; do
       --adapter "$checkpoint" --output-dir "$merged" \
       --device cuda --dtype bfloat16 --local-files-only || continue
   fi
-  weights_sha="$(jq -r '.adapter.weights_sha256' "$merged/merge_report.json")"
-  revision="adapter-${weights_sha:0:12}"
+  weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
+  revision="model-${weights_sha:0:12}"
   run_stage "sionic9-$run_name" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
     --model "$merged_rel" --revision "$revision" --batch-size 192 --max-length 8192 \
@@ -96,7 +96,7 @@ for run_name in "${FULL_RUNS[@]}"; do
       --device cuda --dtype bfloat16 --attn-implementation flash_attention_2 || continue
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$packaged/full_tuning_report.json")"
-  revision="partial-full-${weights_sha:0:12}"
+  revision="model-${weights_sha:0:12}"
   run_stage "sionic9-$run_name" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
     --model "$packaged_rel" --revision "$revision" --batch-size 192 --max-length 8192 \
@@ -114,11 +114,11 @@ if [[ -s "$SELECTION" ]]; then
   best_model="$(jq -r '.best.model' "$SELECTION")"
   best_abs="$ROOT/$best_model"
   if [[ -s "$best_abs/merge_report.json" ]]; then
-    weights_sha="$(jq -r '.adapter.weights_sha256' "$best_abs/merge_report.json")"
-    local_revision="adapter-${weights_sha:0:12}"
+    weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/merge_report.json")"
+    local_revision="model-${weights_sha:0:12}"
   else
     weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/full_tuning_report.json")"
-    local_revision="partial-full-${weights_sha:0:12}"
+    local_revision="model-${weights_sha:0:12}"
   fi
   run_stage "official-korean-v1-best" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \

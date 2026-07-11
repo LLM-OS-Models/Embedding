@@ -70,8 +70,8 @@ screen_lora_run() {
       --device cuda --dtype bfloat16 --local-files-only || return 0
   fi
   local weights_sha revision
-  weights_sha="$(jq -r '.adapter.weights_sha256' "$merged/merge_report.json")"
-  revision="adapter-${weights_sha:0:12}"
+  weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
+  revision="model-${weights_sha:0:12}"
   run_stage "$run_name-sionic7-early" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
     --model "$merged_rel" --revision "$revision" --batch-size 192 --max-length 8192 \
