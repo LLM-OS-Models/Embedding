@@ -43,4 +43,13 @@
 - BGE-M3: multilingual/multi-granularity/self-knowledge distillation
 - Gecko/Gemini Embedding: LLM-generated data와 teacher distillation
 
-Qwen3 논문을 실제로 인용한 2025 하반기~2026 논문의 선별 표는 조사 완료 후 이 파일에 추가합니다.
+Qwen3 논문을 실제로 인용한 2025 하반기~2026 논문 13편의 날짜, 출판 상태, 데이터, loss, Qwen 대비 의미와 원문 링크는 [상세 후속 연구 보고서](../qwen3_embedding_followup_papers_2026.md)에 정리했습니다.
+
+그 조사에서 이번 프로젝트에 바로 반영할 결론은 다음과 같습니다.
+
+1. broad CPT보다 reranker의 연속 relevance 분포를 증류하는 것이 첫 예산의 우선순위입니다.
+2. top hard negative만 모으지 않고 teacher-score quantile 전 구간을 표집해야 OOD 일반화가 좋아집니다.
+3. false negative와 생성기 문체·출처 shortcut을 별도 검증해야 합니다.
+4. generic reasoning/RLVR checkpoint 자체는 자동 이득이 아니며 retrieval reward나 latent-CoT 증류처럼 목적에 직접 연결해야 합니다.
+5. domain·task별 adapter/checkpoint를 clean validation으로 고른 뒤 merge하는 방법은 재현 가치가 큽니다.
+6. 2,500억 토큰 multilingual CPT 사례는 존재하지만 Sionic의 1.05 NDCG point 차이를 넘기 위한 첫 실험으로는 과합니다.

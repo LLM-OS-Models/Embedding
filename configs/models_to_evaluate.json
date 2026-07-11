@@ -1,0 +1,30 @@
+{
+  "reference_card_scores": [
+    {
+      "model": "sionic-ai/comsat-embed-ko-8b-preview",
+      "current_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+      "card_avg": 0.7930,
+      "status": "must-rerun"
+    },
+    {
+      "model": "Qwen/Qwen3-Embedding-8B",
+      "current_revision": "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af",
+      "card_avg": 0.7825,
+      "status": "must-rerun"
+    }
+  ],
+  "korean_leaderboard_candidates": [
+    {
+      "model": "codefuse-ai/F2LLM-v2-8B",
+      "current_revision": "e5725783762d69b4f8ba7e09a8872ce19a7a5ec3",
+      "mteb_result_revision": "5ac7d57351026337281e8e6a23e05cce16e79415",
+      "status": "audit-and-rerun"
+    },
+    {
+      "model": "SamilPwC-AXNode-GenAI/PwC-Embedding_expr",
+      "current_revision": "6c5196980c685db45b58f67bd3be2f79d794351e",
+      "mteb_result_revision": "33358978be40f36491045f9c2a359d38c3f50047",
+      "status": "audit-and-rerun"
+    }
+  ]
+}

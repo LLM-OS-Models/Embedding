@@ -24,6 +24,8 @@ python -m venv --system-site-packages .venv
 .venv/bin/pip install -e third_party/ms-swift
 ```
 
+2026-07-11 실제 실행에서는 시스템 PyTorch 2.5가 최신 ms-swift의 FSDP2 import와 호환되지 않았습니다. 학습은 별도 격리 환경 `.venv-train`에 최신 PyTorch를 고정하고, 첫 smoke에서는 외부 FlashAttention ABI 대신 PyTorch SDPA를 사용합니다. 정확한 버전은 성공한 run manifest에 기록합니다.
+
 설치가 끝나면 package/version snapshot을 `artifacts/environment/`에 저장합니다.
 
 ## Important explicit settings

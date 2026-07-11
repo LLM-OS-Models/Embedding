@@ -4,3 +4,6 @@
 [submodule "third_party/ms-swift"]
 	path = third_party/ms-swift
 	url = https://github.com/modelscope/ms-swift.git
+[submodule "third_party/mteb"]
+	path = third_party/mteb
+	url = https://github.com/embeddings-benchmark/mteb.git

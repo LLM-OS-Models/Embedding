@@ -1,0 +1,30 @@
+{
+  "protocol_id": "sionic9-fixed-prompt-v1",
+  "created_at": "2026-07-11",
+  "mteb_git_revision": "193e3f66d2deac678065a43354c9c4efc57f507d",
+  "metric": "ndcg_at_10",
+  "aggregate": "unweighted_macro_mean_over_9_tasks",
+  "corpus": "full",
+  "query_prompt": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+  "document_prompt": "",
+  "similarity": "cosine_equivalent_normalized_inner_product",
+  "max_query_tokens": 8192,
+  "max_document_tokens": 8192,
+  "tasks": [
+    {"label": "MIRACL", "name": "MIRACLRetrieval", "split": "dev", "hf_subsets": ["ko"]},
+    {"label": "MrTidy", "name": "MrTidyRetrieval", "split": "test", "hf_subsets": ["korean"]},
+    {"label": "MLDR", "name": "MultiLongDocRetrieval", "split": "test", "hf_subsets": ["ko"]},
+    {"label": "AutoRAG", "name": "AutoRAGRetrieval", "split": "test"},
+    {"label": "Ko-StrategyQA", "name": "Ko-StrategyQA", "split": "dev"},
+    {"label": "PublicHealthQA", "name": "PublicHealthQA", "split": "test", "hf_subsets": ["korean"], "dataset_revision": "3b67b6b63ee464870fc21cdc888289c843204051"},
+    {"label": "Belebele", "name": "BelebeleRetrieval", "split": "test", "hf_subsets": ["kor_Hang-kor_Hang"]},
+    {"label": "SQuADKorV1", "name": "SQuADKorV1Retrieval", "split": "test"},
+    {"label": "LawIRKo", "name": "LawIRKo", "split": "test"}
+  ],
+  "notes": [
+    "All compared models, including Qwen and Comsat, must be rerun with this exact pinned protocol.",
+    "Sionic did not publish its MTEB package commit, dataset revisions, or raw result JSON, so its card scores are reference-only until reproduced.",
+    "Current MTEB names the Korean Belebele subset kor_Hang-kor_Hang; the Sionic card calls it kor-kor, indicating a version/schema difference.",
+    "This suite is separate from official MTEB(kor, v1), which currently contains six tasks across classification, reranking, retrieval, and STS."
+  ]
+}

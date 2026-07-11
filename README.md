@@ -66,3 +66,5 @@
 - 계산: last-token pooling, L2 normalization, cosine/dot-product retrieval
 
 실제 명령과 pinned revision은 [runbook](docs/07_RUNBOOK.md)에 기록합니다.
+
+Sionic 9-task 비교는 [고정 protocol](configs/sionic9_protocol.json)과 [평가 스크립트](scripts/evaluate_sionic9.py)를 사용합니다. 공식 `MTEB(kor, v1)` 리더보드 결과와 이 9-task retrieval 평균은 서로 다른 표로 유지합니다.

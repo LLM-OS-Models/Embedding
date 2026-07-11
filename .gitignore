@@ -7,6 +7,7 @@
 
 # Python environments and caches
 .venv/
+.venv-*/
 venv/
 __pycache__/
 *.py[cod]

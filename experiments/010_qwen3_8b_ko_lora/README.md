@@ -20,4 +20,12 @@
 - query 256 / document 512
 - public target-9 blocklist 적용
 
-상태: 환경 및 데이터 준비 중.
+현재 구현:
+
+- `prepare_smoke.sh`: revision이 고정된 288-row 연구용 smoke split 생성 및 검증
+- `train_smoke.sh`: H100 1장, Qwen3-Embedding-8B r32 LoRA, 20-step smoke run
+- `MODEL_CARD_SMOKE.md`: 성능 주장이 없는 private HF artifact 카드
+
+주의: smoke source인 `nlpai-lab/ko-triplet-v1.0`은 카드에 명시적 라이선스가 없습니다. 따라서 이 런은 optimizer/save/load 검증에만 쓰며, 공개 후보 모델 학습에는 사용하지 않습니다.
+
+상태: 실행 가능.
