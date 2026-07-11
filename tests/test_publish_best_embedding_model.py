@@ -7,11 +7,26 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.publish_best_embedding_model import training_dataset_repos
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublishBestModelTests(unittest.TestCase):
+    def test_target_adapted_cards_link_exact_derived_datasets(self) -> None:
+        scale = training_dataset_repos(
+            {"benchmark_adaptation": "target-adapted-performance1m-current-student"}
+        )
+        self.assertEqual(
+            scale[0],
+            "LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1",
+        )
+        legal = training_dataset_repos(
+            {"benchmark_adaptation": "target-adapted-legal25-general75"}
+        )
+        self.assertEqual(legal[0], "LLM-OS-Models/korean-legal-quantile-hn7-replay-v1")
+
     def test_card_requires_complete_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
