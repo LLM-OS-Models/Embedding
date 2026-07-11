@@ -1,6 +1,6 @@
 # 진행 현황, 병목과 다음 의사결정
 
-기준일: 2026-07-11 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
+기준일: 2026-07-12 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
 
 ## 현재 한 줄 상태
 
@@ -35,12 +35,14 @@
 | performance 50K mix | 계획 수량 전체 build·strict validation 완료 | train SHA `b46a7be…258a`, provenance SHA `e8ccca…6031` |
 | performance 200K mix | 200,000 rows build·strict validation·공개 업로드 | train SHA `379694…e480`, provenance SHA `7243e6…17b8` |
 | 법률 source-native mix | 4개 pinned repository에서 균형 250,000 rows build·공개 업로드 | train SHA `1d8136…4c90`, provenance SHA `a1b3cd…de3e`; bootstrap negative 표시 |
-| 데이터 공개 | 50K, 200K, 법률 250K dataset card/provenance/manifest | `LLM-OS-Models` HF organization의 public dataset 3개 |
+| 데이터 공개 | 50K, 200K, 법률 250K, 성능 우선 1M dataset card/provenance/manifest | `LLM-OS-Models` HF organization의 public dataset 4개, 원격 API에서 `private=false`와 파일 확인 |
 | vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | Ko-Strategy parity/처리량 측정 완료; 이 workload에서는 FA2가 더 빠름 |
 | adapter 병합/공개 | safe merge, 6-probe parity, ST contract, 카드/대용량 upload 코드 | tiny Qwen 실제 LoRA merge에서 max pair delta `4.68e-8` |
 | homogeneous batching | provenance source별 16-row microbatch compiler | 50K `49,904`, 200K `199,904` rows; 모든 emitted batch 단일 source |
 | performance 1M mix | 1,000,000 rows build·strict validation·public HF upload | train SHA `094d44…3c0a`, provenance SHA `94334a…18c1` |
 | performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous batches | ordered train SHA `ac39ea…0169`; source remainder 총 64 rows |
+| scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute | 250K legal dry-run, index persist/resume, false-negative filter test 통과 |
+| public model artifact contract | model card, 사용법, data/evaluation manifest와 Sionic/official raw summary 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
 
 ## 현재 실행 중
 
@@ -55,14 +57,19 @@ Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
 | MIRACLReranking | 0.6846700 |
 | MIRACLRetrieval | 실행 중: 1,486,752 documents |
 
-마지막 retrieval은 H100 1장, FlashAttention 2, batch 224에서 실행 중이다. exact
+마지막 retrieval은 H100 1장, FlashAttention 2, batch 224에서 실행 중이다. 2026-07-12
+00:14 KST 기준 50K corpus chunk 18개, 즉 약 900K document embedding을 atomic cache에
+저장했고 GPU utilization 100%, 약 59.3GiB VRAM을 사용했다. exact
 float32 embedding cache를 켜고 MTEB의 50K corpus chunk가 끝날 때마다 약 819MB씩
 atomic 저장한다. 실측 GPU 메모리는 corpus batch에 따라 약 47–60GiB이며 GPU compute
 구간은 100%다. 완료 전 5-task 평균을 공식 6-task 평균이나 Borda rank로 쓰지 않는다.
 
-`performance_1m` 1,000,000-row base mix와 16-row homogeneous 파생 파일은 build를
-마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에 공개됐고, GPU
-campaign은 완료된 manifest를 자동 감지해 scale run에 사용한다.
+`performance_1m` 1,000,000-row base mix와 999,936-row/62,496-batch homogeneous 파생
+파일은 build를 마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에
+공개됐고, GPU campaign은 완료된 manifest를 자동 감지해 scale run에 사용한다.
+benchmark decontamination blocklist는 CPU에서 Sionic 9와 공식 Korean task를 순차
+fingerprint하고 있다. 이것은 평가 전용이며 어떤 query/text/qrel도 학습 데이터 생성이나
+checkpoint 선택에 사용하지 않는다.
 
 ## 아직 성능 결과가 아닌 것
 
@@ -147,15 +154,16 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 | 1 | Comsat official Korean MIRACLRetrieval | 실행 중 | 6-task summary + raw cache |
 | 2 | live Borda 가상 삽입 | 6-task complete | backend rank 137/137 재현 + local 위치 |
 | 3 | README 공식 Korean row 갱신/push | 1–2 완료 | local reproduction 표기와 task별 숫자 |
-| 4 | LoRA/DoRA/last4/GaLore/full 1-step memory probes | GPU free | 실제 peak VRAM/속도/OOM 기록 |
-| 5 | 10K train/validation dense HN mining | probe 후 | pool/score/filter manifest + strict JSONL |
-| 6 | LoRA r64 160-step private pilot | mined data | non-zero learning signal, reload, VRAM |
-| 7 | pilot 성능 평가 | checkpoint 검증 | private mined dev + AutoRAG, base/Comsat 비교 |
-| 8 | partial/DoRA 품질 비교 | LoRA result 확보 | 동일 token budget Pareto |
-| 9 | 50K→200K→744K performance scale | 50K/200K build 완료 | data-size curve와 best update strategy |
-| 10 | F2/KaLM/Nemotron 1M–2M mix | 1M build·공개 완료 | Sionic 9와 Korean broad 최고 후보 |
-| 11 | leaderboard-adapted specialist | train/test 분리 확인 | in-domain task와 zero-shot 비율 공개 |
-| 12 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
+| 4 | 10K train/validation dense HN mining | GPU free | pool/score/filter manifest + strict JSONL |
+| 5 | 10K/50K/200K LoRA 및 F2 loss ablation | mined data | non-zero learning signal, reload, VRAM |
+| 6 | LoRA/DoRA/last4/GaLore/full 1-step memory probes | ablation 뒤 GPU free | 실제 peak VRAM/속도/OOM 기록 |
+| 7 | 후보별 Sionic 9 전체 평가와 최선 모델 공개 | checkpoint 검증 | 9-task summary + model/data revision + model card |
+| 8 | 최고 후보 공식 Korean v1 | Sionic 선택 완료 | 6-task raw/summary 및 README 반영 |
+| 9 | 1M homogeneous LoRA scale | 1M manifest 완료 | 7,812 steps, Sionic 9/official, public model |
+| 10 | 법률 250K target-adaptation | 1M stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
+| 11 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
+| 12 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
+| 13 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
 
 ## 주장 gate
 
