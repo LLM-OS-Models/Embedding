@@ -194,6 +194,20 @@ python scripts/build_performance_mix.py --phase pilot_50k --dry-run
 | Ko-StrategyQA qrels/query/corpus join | 2/2 생성, train qrel ID만 출력하고 dev qrels를 로드하지 않은 채 통과 |
 | KaLM list adapter | 2/2 생성, 7-negative schema 변환 통과 |
 
+### 실제 50K build
+
+2026-07-11 KST에 `pilot_50k` 전체를 생성하고 strict validator로 다시 읽었다.
+
+| Artifact | Rows | SHA-256 |
+|---|---:|---|
+| `train.jsonl` | 50,000 | `b46a7be9842ab27e9dfd85e9831080d94410e5b38d956682072068ee7f18258a` |
+| `provenance.jsonl` | 50,000 | `e8ccca33bb9ec73700895ab2ac17ae57e20875170be1ed0f7a3dbc20b11e6031` |
+
+두 파일과 manifest의 로컬 크기는 약 349MiB다. output 자체는 Git에 넣지 않고
+source별 accepted/examined/rejected 수와 hash를 manifest에 보존한다. `train.jsonl`은
+strict ms-swift schema 검증을 통과했다. 이 build 완료는 데이터 품질이나 모델 성능
+결과가 아니며, 후속 10K/50K 학습과 retrieval 평가로 판단한다.
+
 ## 현재 병목과 학습 결정
 
 현재 병목은 “데이터를 못 찾음”이 아니다.
