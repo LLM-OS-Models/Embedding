@@ -143,6 +143,11 @@ if [[ -s "$SELECTION" ]]; then
       --training-manifest "$training_manifest" \
       --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
       --upload --public
+    run_stage "record-pilot-best-result" \
+      "$ROOT/scripts/commit_campaign_result.sh" \
+      --stage pilot-best --model "$best_model" \
+      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
+      --sionic-summary "$sionic_summary" --official-summary "$official_summary"
   fi
 fi
 

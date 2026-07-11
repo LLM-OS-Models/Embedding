@@ -61,6 +61,14 @@
 
 종합 보드는 clean retrieval, STS/분류, 긴 문맥의 evidence 위치, OCR·띄어쓰기·질의체 변화, 처리량·VRAM·차원/저장비용을 각각 보고합니다. 설계와 승격 기준은 [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md)에 고정합니다.
 
+### 자동 캠페인 실측 결과
+
+아래 block은 각 장기 stage가 Sionic 9와 공식 Korean 6을 모두 끝낸 뒤 자동 갱신·push한다.
+
+<!-- CAMPAIGN_RESULTS_START -->
+아직 완료된 성능 후보가 없습니다.
+<!-- CAMPAIGN_RESULTS_END -->
+
 ## 현재 상태
 
 | 항목 | 상태 | 위치 |

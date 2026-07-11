@@ -148,6 +148,11 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --training-manifest "$DATA_MANIFEST" \
     --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-1m-v1 \
     --upload --public
+  run_stage "record-scale-1m-result" \
+    "$ROOT/scripts/commit_campaign_result.sh" \
+    --stage scale-1m --model "$MODEL_REL" \
+    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-1m-v1 \
+    --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
 fi
 
 echo "[$(timestamp)] 1M scale queue complete"

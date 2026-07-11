@@ -178,6 +178,11 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
     --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
     --upload --public
+  run_stage record-legal-replay-result \
+    "$ROOT/scripts/commit_campaign_result.sh" \
+    --stage legal-replay --model "$MODEL_REL" \
+    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
+    --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
 fi
 
 echo "[$(timestamp)] legal target-adaptation queue complete"
