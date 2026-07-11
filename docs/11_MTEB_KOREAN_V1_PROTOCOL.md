@@ -96,3 +96,13 @@ PYTHONPATH=third_party/mteb .venv-mteb/bin/python \
 Comsat 결과가 공식 MTEB results repository에 merge되기 전에는 README에서
 `official leaderboard submitted score`가 아니라 `locally reproduced on the
 official protocol`로 표기해야 합니다.
+
+전체 6-task summary가 생기면 live backend에 local row를 가상으로 삽입해 Borda 위치를 계산합니다. 이 명령은 official row 137개의 기존 rank를 먼저 137/137 재현하지 못하면 중단하며 leaderboard를 수정하거나 결과를 제출하지 않습니다.
+
+```bash
+.venv-mteb/bin/python scripts/compare_local_mteb_korean.py \
+  --summary outputs/evaluation/mteb_korean_v1/sionic-ai__comsat-embed-ko-8b-preview/a5cc22b651c1b2e51cdd8bf671774ae93584f0ab/summary.json \
+  --output outputs/evaluation/mteb_korean_v1/comsat-live-comparison.json
+```
+
+README에는 `Borda if inserted (live snapshot)`과 날짜를 쓰고, 공식 제출 rank처럼 표현하지 않습니다.
