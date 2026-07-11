@@ -151,11 +151,13 @@ fi
 
 run_stage verify-legal-adapter \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
-  --adapter "$checkpoint" --data "$VAL_FILE" --output "$LOG_DIR/verification.json" || exit 7
+  --adapter "$checkpoint" --data "$VAL_FILE" --model "$MINING_MODEL" \
+  --output "$LOG_DIR/verification.json" || exit 7
 if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
   run_stage merge-legal-adapter \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" \
+    --base-model "$MINING_MODEL" --base-revision "$MINING_REVISION" \
     --device cuda --dtype bfloat16 --local-files-only || exit 8
 fi
 

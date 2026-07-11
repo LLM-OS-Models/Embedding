@@ -83,7 +83,7 @@ for run_name in "${FULL_RUNS[@]}"; do
   run_dir="$ROOT/outputs/$run_name"
   [[ -d "$run_dir" ]] || continue
   checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
-    "$run_dir" --print-path 2>/dev/null)" || continue
+    "$run_dir" --checkpoint-kind full --print-path 2>/dev/null)" || continue
   [[ -n "$checkpoint" ]] || continue
   packaged_rel="artifacts/models/${run_name}-best-full"
   packaged="$ROOT/$packaged_rel"

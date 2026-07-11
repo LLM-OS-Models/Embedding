@@ -412,7 +412,7 @@ def encode_probe(model: Any, tokenizer: Any, max_length: int) -> Any:
 
 def _load_kwargs(args: argparse.Namespace, dtype: Any) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
-        "revision": args.base_revision,
+        "revision": args.base_revision or None,
         "dtype": dtype,
         "low_cpu_mem_usage": True,
         "trust_remote_code": args.trust_remote_code,
@@ -458,7 +458,7 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.base_model,
-        revision=args.base_revision,
+        revision=args.base_revision or None,
         padding_side="left",
         trust_remote_code=args.trust_remote_code,
         local_files_only=args.local_files_only,

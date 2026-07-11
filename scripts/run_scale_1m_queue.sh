@@ -161,13 +161,14 @@ fi
 
 run_stage "verify-$RUN_NAME" \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
-  --adapter "$checkpoint" --data "$VAL_FILE" \
+  --adapter "$checkpoint" --data "$VAL_FILE" --model "$CONTINUAL_BASE" \
   --output "$LOG_DIR/adapter-verification.json" || exit 4
 
 if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
   run_stage "merge-$RUN_NAME" \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" \
+    --base-model "$CONTINUAL_BASE" --base-revision "$CONTINUAL_REVISION" \
     --device cuda --dtype bfloat16 --local-files-only || exit 5
 fi
 
