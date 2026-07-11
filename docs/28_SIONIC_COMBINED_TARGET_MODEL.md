@@ -9,6 +9,27 @@ Sionic 9 평균을 한 모델에서 동시에 올린다는 보장은 없다. 최
 winner에서 다시 시작해 네 target domain과 general replay를 한 curriculum에서 학습한다.
 개별 specialist를 순차로 덮어쓰지 않아 마지막 domain의 catastrophic forgetting을 줄인다.
 
+공개 카드 기준 Qwen3-Embedding-8B가 Comsat에 뒤지는 폭은 다음과 같다. 이 숫자는
+evaluation row를 데이터 생성에 사용한 것이 아니라 두 모델 카드의 고정 aggregate를
+비교한 사전 설계 근거다.
+
+| Task | Comsat - Qwen | combined에서의 대응 |
+|---|---:|---|
+| AutoRAG | +0.0242 | finance/commerce/legal target 10% + legal 일부 |
+| MIRACL | +0.0181 | 1M general의 공식 train-family + general replay |
+| PublicHealthQA | +0.0150 | medical/health target 10% |
+| MLDR | +0.0147 | 1M general의 long retrieval train-family |
+| SQuADKorV1 | +0.0105 | KorQuAD train-family target 10% |
+| MrTidy | +0.0066 | 1M general의 task-train family |
+| Ko-StrategyQA | +0.0031 | 1M general의 공식 train qrels |
+| Belebele | +0.0025 | multilingual/cross-lingual general replay |
+| LawIRKo | **-0.0007** | Qwen이 이미 우세; legal replay로 회귀 방지·clean 보강 |
+
+따라서 별도 target component는 general 1M만으로 직접 메우기 어려운 AutoRAG,
+PublicHealthQA, SQuADKorV1에 두고, MIRACL/MLDR/MrTidy/StrategyQA는 이미 포함된 공식
+train-family와 55% general replay로 유지한다. legal 15%는 LawIR 점수만을 위한 비중이
+아니라 AutoRAG의 legal slice와 별도 clean 법률 holdout 강건성을 함께 노린다.
+
 ## 사전 등록 mixture
 
 | Role | Rows | 비중 | 입력 |
