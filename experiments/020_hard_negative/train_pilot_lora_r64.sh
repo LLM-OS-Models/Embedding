@@ -43,6 +43,12 @@ PY
     echo "validated continual base promoted: $BASE_MODEL" >&2
   fi
 fi
+if [[ "$RUN_NAME" == *performance200k* ]]; then
+  # The 174.6M-parameter r64 adapter is no longer a tiny perturbation. Use the
+  # lower stable LR for the longer 200K run even when continual promotion did
+  # not pass; explicit caller overrides still win.
+  LEARNING_RATE="${LEARNING_RATE:-1e-5}"
+fi
 
 if [[ -f "$ROOT/.env" ]]; then
   HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
