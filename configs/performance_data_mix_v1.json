@@ -131,6 +131,17 @@
         "f2_medqa_en": 3000,
         "f2_webmedqa": 2000
       }
+    },
+    "sionic_autorag_domain_100k": {
+      "target_rows": 100000,
+      "intent": "Isolated finance, banking, commerce, and legal domain adaptation for AutoRAG-like retrieval; no AutoRAG evaluation input and exact 15-task hash audit required.",
+      "source_caps": {
+        "f2_fiqa": 7000,
+        "f2_amazon_qa": 31000,
+        "f2_banking77": 9000,
+        "f2_multicpr_ecom": 42000,
+        "f2_lawzhidao": 11000
+      }
     }
   },
   "sources": {
@@ -578,6 +589,76 @@
       "require_hangul": false,
       "trained_on_tasks": [],
       "benchmark_exposure": "multilingual medical domain adaptation; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_fiqa": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "fiqa.parquet",
+      "observed_rows": 7452,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "finance domain adaptation; no AutoRAG evaluation input declared; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_amazon_qa": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "amazon_qa.parquet",
+      "observed_rows": 59340,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "commerce domain adaptation; no AutoRAG evaluation input declared; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_banking77": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "banking77.parquet",
+      "observed_rows": 9993,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "banking intent/domain adaptation; no AutoRAG evaluation input declared; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_multicpr_ecom": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "multicpr_ecom.parquet",
+      "observed_rows": 90850,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "zh",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "multilingual e-commerce domain adaptation; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_lawzhidao": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "lawzhidao.parquet",
+      "observed_rows": 11899,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "zh",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "multilingual legal domain adaptation; exact blocklist audit required",
       "release_eligible": false
     }
   },

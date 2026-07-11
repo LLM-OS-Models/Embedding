@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-11T19:33:30.480345+00:00",
+  "inputs": {
+    "train": {
+      "path": "/home/ubuntu/Embedding/outputs/data/performance-v1/sionic-autorag-domain-100k/train.jsonl",
+      "sha256": "9b636831e1f4c5eb5d453c0b5f18eb642115035ba13d75a4d70ffd9fb905b835"
+    },
+    "provenance": {
+      "path": "/home/ubuntu/Embedding/outputs/data/performance-v1/sionic-autorag-domain-100k/provenance.jsonl",
+      "sha256": "05006632636b7c619152dca259db1dd71b32fb9d3263bb30e024c702e34d0f01"
+    },
+    "blocklist_root": "/home/ubuntu/Embedding/outputs/decontamination/benchmark_blocklist",
+    "blocklist_manifest_sha256": "24f1eba04ec16436cab674c3709788c5dff2571106cd6159d75f5d711314ac1d"
+  },
+  "rows": 100000,
+  "blocklist": {
+    "files": 27,
+    "unique_text_hashes": 3564395,
+    "hash_occurrences_by_kind": {
+      "corpus_text": 10226605,
+      "evaluation_text": 87282,
+      "query_text": 12860
+    }
+  },
+  "checked_training_text_occurrences": {
+    "negative": 700000,
+    "positive": 100000,
+    "query_body": 100000,
+    "query_full": 100000
+  },
+  "matched_training_text_occurrences": {
+    "query_body": 1
+  },
+  "unique_matches": 1,
+  "unique_critical_query_or_evaluation_matches": 0,
+  "unique_retrieval_corpus_matches": 1,
+  "matches": [
+    {
+      "sha256": "abd149214539d9f222d25de6358735b9fa0efd3956f66102b2c119ae2d9f6348",
+      "training_role_occurrences": {
+        "query_body": 1
+      },
+      "source_occurrences": {
+        "f2_amazon_qa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    }
+  ],
+  "status": "pass_with_retrieval_corpus_exposure",
+  "interpretation": "query_text/evaluation_text overlap is critical; corpus-only overlap can arise from an explicitly disclosed shared task-train corpus and prevents a clean zero-shot claim"
+}

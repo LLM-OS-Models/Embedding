@@ -15,4 +15,5 @@
 [`070_tuning_strategy`](070_tuning_strategy/), F2 dual-loss/MRL은
 [`080_f2_recipe`](080_f2_recipe/), SQuADKorV1 train-family adaptation은
 [`090_sionic_squad_adaptation`](090_sionic_squad_adaptation/), health-domain adaptation은
-[`100_sionic_health_adaptation`](100_sionic_health_adaptation/)에 기록한다.
+[`100_sionic_health_adaptation`](100_sionic_health_adaptation/), AutoRAG domain adaptation은
+[`110_sionic_autorag_adaptation`](110_sionic_autorag_adaptation/)에 기록한다.

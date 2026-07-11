@@ -43,6 +43,7 @@
 | performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous length buckets | ordered train SHA `436dc7…2c00`; source remainder 총 64 rows |
 | SQuADKorV1 train-family 60K | 원본 KorQuAD train 질문→문맥 변환·전수 감사·공개 | 60,000 rows; query/evaluation-text overlap 0, shared Wikipedia eval-corpus hash 6,426; clean 아님; public `8fbc6d6d`; HN/replay queue 연결 |
 | PublicHealth health-domain 100K | F2 medical QA/instruction/flashcard 7-source mix 전수 감사·공개 | 100,000 rows; query/evaluation-text overlap 0, PublicHealthQA exact overlap 0; corpus-only 114; public `5fc4bb81`; HN/replay queue 연결 |
+| AutoRAG domain 100K | F2 finance/banking/commerce/legal 5-source mix 전수 감사·공개 | 100,000 rows; query/evaluation-text overlap 0, AutoRAG exact overlap 0; corpus-only 1; public `9140e9e0`; HN/replay queue 연결 |
 | scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute + pool24 score-rank quantile7 | index persist/resume, positive-relative filter, selection/cache-contract test 통과 |
 | public model artifact contract | model card, 사용법, data/evaluation manifest, Sionic/official/clean/noise summary와 per-query rank 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
 | derived dataset publication | actual train/provenance/mining audit/manifest SHA·row·quantile contract 검증 후 공개 | 1M/법률 학습 종료 뒤 GPU 평가와 background upload하도록 연결 |
@@ -116,6 +117,12 @@ step 360은 loss `0.00356961`, margin `0.04129956`, mean negative/positive
 step 400은 loss `0.00353732`, margin `0.04171188`, mean negative/positive
 `0.18488936/0.72611099`로 step 360보다는 회복했지만 step 200보다 높다. best와
 promotion 판단은 그대로다.
+
+step 440은 loss `0.00353363`, margin `0.04320235`, mean negative/positive
+`0.17128815/0.72484773`이었다. step 480에서 loss **`0.00350491`**, margin
+`0.04329265`, mean negative/positive `0.17398748/0.72946346`로 step 200을 넘어 새
+50K best가 됐다. watcher가 checkpoint 480을 별도 보존했다. 다만 10K best
+`0.00338515`보다 `0.00011976` 높아 continual-promotion gate는 아직 닫혀 있다.
 
 현재 200-step best는 trainer의 rolling `save_total_limit=3` 삭제 범위 밖에 필수
 adapter/config/state/log만 hard-link snapshot으로 보존했다. active-run watcher가 매
@@ -221,10 +228,11 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 | 9 | 1M homogeneous LoRA scale | 1M manifest 완료 | 7,812 steps, Sionic 9/official, public model |
 | 10 | SQuADKorV1 train-family 60K adaptation | 1M stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
 | 11 | PublicHealth health-domain 100K adaptation | 1M/SQuAD stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
-| 12 | 법률 250K target-adaptation | 1M/SQuAD/health stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
-| 13 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
-| 14 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
-| 15 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
+| 12 | AutoRAG domain 100K adaptation | 1M/SQuAD/health stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
+| 13 | 법률 250K target-adaptation | 1M/SQuAD/health/AutoRAG stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
+| 14 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
+| 15 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
+| 16 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
 
 ## 주장 gate
 
