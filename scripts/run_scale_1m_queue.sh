@@ -61,7 +61,7 @@ train_scale() {
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }
 
-if ! find "$ROOT/outputs/$RUN_NAME" -maxdepth 3 -type f -name adapter_model.safetensors -print -quit 2>/dev/null | grep -q .; then
+if ! find "$ROOT/outputs/$RUN_NAME" -maxdepth 3 -type d -name checkpoint-7813 -print -quit 2>/dev/null | grep -q .; then
   train_scale "$RUN_NAME" 16 8
 fi
 checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \

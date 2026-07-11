@@ -95,6 +95,14 @@ def training_rows(manifest: dict[str, Any]) -> str:
     return str(max((value for value in values if isinstance(value, int)), default="unknown"))
 
 
+def training_dataset_repo(manifest: dict[str, Any]) -> str | None:
+    return {
+        "pilot_50k": "LLM-OS-Models/korean-embedding-performance-v1-pilot-50k",
+        "ablation_200k": "LLM-OS-Models/korean-embedding-performance-v1-ablation-200k",
+        "performance_1m": "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
+    }.get(manifest.get("phase"))
+
+
 def build_card(
     repo_id: str,
     merge: dict[str, Any],
@@ -105,6 +113,13 @@ def build_card(
     delta = float(sionic["average"]) - 0.793
     adapter = merge["adapter_config"]
     official_order = list(official["scores"])
+    dataset_repo = training_dataset_repo(training)
+    dataset_yaml = f"datasets:\n- {dataset_repo}\n" if dataset_repo else ""
+    dataset_link = (
+        f"https://huggingface.co/datasets/{dataset_repo}"
+        if dataset_repo
+        else "Training manifest is preserved with the model evaluation artifacts."
+    )
     return f"""---
 language:
 - ko
@@ -113,8 +128,7 @@ license: other
 library_name: sentence-transformers
 pipeline_tag: feature-extraction
 base_model: Qwen/Qwen3-Embedding-8B
-datasets:
-- LLM-OS-Models/korean-embedding-performance-v1-pilot-50k
+{dataset_yaml.rstrip()}
 tags:
 - sentence-transformers
 - text-embeddings-inference
@@ -224,7 +238,7 @@ benchmark한다.
 ## 재현
 
 - code: https://github.com/LLM-OS-Models/Embedding
-- data: https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k
+- data: {dataset_link}
 - base: https://huggingface.co/Qwen/Qwen3-Embedding-8B
 - comparison: https://huggingface.co/sionic-ai/comsat-embed-ko-8b-preview
 
