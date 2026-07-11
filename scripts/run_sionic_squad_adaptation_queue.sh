@@ -110,9 +110,20 @@ if [[ -n "$WAIT_PID" ]]; then
 fi
 
 if [[ ! -s "$BOOTSTRAP" || ! -s "$PROVENANCE" ]]; then
-  run_stage "build-sionic-${TARGET_KIND}-data" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_performance_mix.py" \
-    --phase "$TARGET_PHASE" --output-dir "$DATA_DIR" || exit 2
+  if [[ "$TARGET_KIND" == retrieval_family ]]; then
+    run_stage "build-sionic-${TARGET_KIND}-data" \
+      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/extract_training_source_subset.py" \
+      --train "$GENERAL_DIR/train.jsonl" \
+      --provenance "$GENERAL_DIR/provenance.jsonl" \
+      --output-dir "$DATA_DIR" \
+      --source f2_miracl_ko_train --source f2_mrtidy_korean_train \
+      --source f2_mldr_ko_train --phase "$TARGET_PHASE" \
+      --expected-rows 4146 || exit 2
+  else
+    run_stage "build-sionic-${TARGET_KIND}-data" \
+      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_performance_mix.py" \
+      --phase "$TARGET_PHASE" --output-dir "$DATA_DIR" || exit 2
+  fi
 fi
 [[ -s "$VAL_FILE" && -s "$GENERAL_TRAIN" && -s "$GENERAL_PROVENANCE" ]] || exit 2
 if [[ -s "$GENERAL_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json" \
