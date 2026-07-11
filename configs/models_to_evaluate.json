@@ -1,30 +1,588 @@
 {
-  "reference_card_scores": [
-    {
-      "model": "sionic-ai/comsat-embed-ko-8b-preview",
-      "current_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
-      "card_avg": 0.7930,
-      "status": "must-rerun"
+  "schema_version": 2,
+  "audited_at": "2026-07-11",
+  "mteb_source_revision": "193e3f66d2deac678065a43354c9c4efc57f507d",
+  "separation_rules": {
+    "card_scores": "Reference-only values copied from a named remote source. They are never written into a local-run summary.",
+    "official_live_scores": "Reference-only values returned by the MTEB leaderboard backend. They retain the MTEB registry revision and registered prompt contract.",
+    "local_scores": "Only values produced under outputs/evaluation/local_baselines by the pinned queue qualify as local measurements.",
+    "comparison_rule": "A score may share a table only when suite, task set, prompts, truncation, model revision and backend are all shown. Missing fields are not inferred."
+  },
+  "protocols": {
+    "sionic9": {
+      "config": "configs/sionic9_protocol.json",
+      "task_count": 9,
+      "metric": "ndcg_at_10",
+      "aggregate": "unweighted_macro_mean_over_9_tasks",
+      "query_prompt": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+      "document_prompt": "",
+      "protocol_max_tokens": 8192,
+      "runner": "scripts/evaluate_sionic9.py",
+      "claim_scope": "local fixed-prompt reproduction; not an official MTEB leaderboard submission"
     },
-    {
-      "model": "Qwen/Qwen3-Embedding-8B",
-      "current_revision": "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af",
-      "card_avg": 0.7825,
-      "status": "must-rerun"
+    "mteb_korean_v1": {
+      "config": "configs/mteb_korean_v1_protocol.json",
+      "task_count": 6,
+      "benchmark": "MTEB(kor, v1)",
+      "primary_runner": "MTEB registered model loader at the pinned MTEB source revision",
+      "unregistered_runner": "scripts/evaluate_mteb_korean_v1.py",
+      "vllm_runner": "scripts/evaluate_mteb_korean_v1_vllm.py",
+      "claim_scope": "local run of the exact six-task benchmark; it is not a submitted leaderboard row"
     }
-  ],
-  "korean_leaderboard_candidates": [
+  },
+  "vllm_admission_gate": {
+    "gate_task": "Ko-StrategyQA",
+    "required_same_model_revision": true,
+    "required_same_prompt_contract": true,
+    "max_absolute_main_score_delta": 0.0001,
+    "required_minimum_speedup": 1.1,
+    "decision": "Use vLLM only if both score parity and speedup pass; otherwise use the registered/SentenceTransformers FlashAttention-2 path.",
+    "known_result": {
+      "model": "sionic-ai/comsat-embed-ko-8b-preview",
+      "revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+      "sentence_transformers_fa2_score": 0.84016,
+      "vllm_0_24_score": 0.8383,
+      "absolute_delta": 0.00186,
+      "throughput_result": "vLLM was slower at the tested 65K-token scheduling configuration",
+      "admitted": false
+    }
+  },
+  "models": [
     {
-      "model": "codefuse-ai/F2LLM-v2-8B",
-      "current_revision": "e5725783762d69b4f8ba7e09a8872ce19a7a5ec3",
-      "mteb_result_revision": "5ac7d57351026337281e8e6a23e05cce16e79415",
-      "status": "audit-and-rerun"
+      "id": "sionic-ai/comsat-embed-ko-8b-preview",
+      "queue_order": 1,
+      "snapshots": {
+        "hub_current_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+        "mteb_registry_revision": null,
+        "sionic9_local_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+        "mteb_korean_local_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab"
+      },
+      "encoder_contract": {
+        "architecture": "Qwen3Model",
+        "attention": "causal",
+        "pooling": "last_token",
+        "normalization": "l2",
+        "embedding_dimension": 4096,
+        "padding_side": "left",
+        "trust_remote_code": false
+      },
+      "lengths": {
+        "config_max_position_embeddings": 40960,
+        "tokenizer_model_max_length": 8192,
+        "model_card_max_tokens": 8192,
+        "sionic9_effective_max_tokens": 8192,
+        "mteb_registry_meta_max_tokens": null,
+        "mteb_registered_loader_max_seq_length": null,
+        "mteb_korean_local_max_tokens": 8192
+      },
+      "native_prompts": {
+        "query": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+        "document": "",
+        "symmetric": ""
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 192
+        },
+        "mteb_korean_v1": {
+          "supported": true,
+          "loader": "unregistered_sentence_transformer",
+          "prompt_contract": "native query/document prompt on asymmetric tasks; no prompt on symmetric tasks",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 192
+        }
+      },
+      "vllm": {
+        "model_card_support": false,
+        "current_project_runner_support": true,
+        "required_version": "0.24.0 local audited environment",
+        "alternate_revision": null,
+        "status": "rejected_by_existing_parity_and_throughput_gate",
+        "trust_remote_code": false
+      },
+      "reference_only": {
+        "sionic_card_9": {
+          "source_model": "sionic-ai/comsat-embed-ko-8b-preview",
+          "source_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+          "evaluated_model_revision_disclosed": false,
+          "average": 0.793,
+          "scores": {
+            "MIRACL": 0.6964,
+            "MrTidy": 0.6253,
+            "MLDR": 0.5183,
+            "AutoRAG": 0.8518,
+            "Ko-StrategyQA": 0.8394,
+            "PublicHealthQA": 0.8871,
+            "Belebele": 0.9853,
+            "SQuADKorV1": 0.9168,
+            "LawIRKo": 0.8164
+          }
+        },
+        "mteb_korean_live": null
+      }
     },
     {
-      "model": "SamilPwC-AXNode-GenAI/PwC-Embedding_expr",
-      "current_revision": "6c5196980c685db45b58f67bd3be2f79d794351e",
-      "mteb_result_revision": "33358978be40f36491045f9c2a359d38c3f50047",
-      "status": "audit-and-rerun"
+      "id": "Qwen/Qwen3-Embedding-8B",
+      "queue_order": 2,
+      "snapshots": {
+        "hub_current_revision": "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af",
+        "mteb_registry_revision": "4e423935c619ae4df87b646a3ce949610c66241c",
+        "sionic9_local_revision": "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af",
+        "mteb_korean_local_revision": "4e423935c619ae4df87b646a3ce949610c66241c",
+        "revision_audit": "Current and registry snapshots have identical config, SentenceTransformers config, pooling config, modules and weight-index SHA256 values."
+      },
+      "encoder_contract": {
+        "architecture": "Qwen3ForCausalLM",
+        "attention": "causal",
+        "pooling": "last_token",
+        "normalization": "l2",
+        "embedding_dimension": 4096,
+        "padding_side": "left_for_flash_attention_2",
+        "trust_remote_code": false
+      },
+      "lengths": {
+        "config_max_position_embeddings": 40960,
+        "tokenizer_model_max_length": 131072,
+        "model_card_max_tokens": 32768,
+        "sionic9_effective_max_tokens": 8192,
+        "mteb_registry_meta_max_tokens": 32768,
+        "mteb_registered_loader_max_seq_length": null,
+        "mteb_korean_local_max_tokens": "registered_loader_default"
+      },
+      "native_prompts": {
+        "query": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+        "document": "",
+        "mteb_registered_template": "Instruct: {instruction}\nQuery:"
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 192
+        },
+        "mteb_korean_v1": {
+          "supported": true,
+          "loader": "mteb_registered_instruct_sentence_transformer",
+          "prompt_contract": "task metadata instruction on queries; no document instruction",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 192
+        }
+      },
+      "vllm": {
+        "model_card_support": true,
+        "model_card_min_version": "0.8.5",
+        "current_project_runner_support": true,
+        "required_version": "0.24.0 local audited environment",
+        "alternate_revision": null,
+        "status": "not_admitted_for_registered_mteb_contract; current vLLM runner uses a static prompt and a different pinned revision",
+        "trust_remote_code": false
+      },
+      "reference_only": {
+        "sionic_card_9": {
+          "source_model": "sionic-ai/comsat-embed-ko-8b-preview",
+          "source_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+          "evaluated_model_revision_disclosed": false,
+          "average": 0.7825,
+          "scores": {
+            "MIRACL": 0.6783,
+            "MrTidy": 0.6187,
+            "MLDR": 0.5036,
+            "AutoRAG": 0.8276,
+            "Ko-StrategyQA": 0.8363,
+            "PublicHealthQA": 0.8721,
+            "Belebele": 0.9828,
+            "SQuADKorV1": 0.9063,
+            "LawIRKo": 0.8171
+          }
+        },
+        "mteb_korean_live": null
+      }
+    },
+    {
+      "id": "codefuse-ai/F2LLM-v2-8B",
+      "queue_order": 3,
+      "snapshots": {
+        "hub_current_revision": "e5725783762d69b4f8ba7e09a8872ce19a7a5ec3",
+        "mteb_registry_revision": "5ac7d57351026337281e8e6a23e05cce16e79415",
+        "sionic9_local_revision": "e5725783762d69b4f8ba7e09a8872ce19a7a5ec3",
+        "mteb_korean_local_revision": "5ac7d57351026337281e8e6a23e05cce16e79415",
+        "revision_audit": "Current and registry snapshots have identical config, SentenceTransformers config, pooling config, modules and weight-index SHA256 values."
+      },
+      "encoder_contract": {
+        "architecture": "Qwen3Model",
+        "attention": "causal",
+        "pooling": "last_token",
+        "normalization": "l2",
+        "embedding_dimension": 4096,
+        "padding_side": "model_loader_managed",
+        "trust_remote_code": false
+      },
+      "lengths": {
+        "config_max_position_embeddings": 40960,
+        "tokenizer_model_max_length": 131072,
+        "model_card_max_tokens": null,
+        "sionic9_effective_max_tokens": 8192,
+        "mteb_registry_meta_max_tokens": 40960,
+        "mteb_registered_loader_max_seq_length": 8192,
+        "mteb_korean_local_max_tokens": 8192
+      },
+      "native_prompts": {
+        "query": "Instruct: Given a question, retrieve passages that can help answer the question.\nQuery: ",
+        "document": "",
+        "mteb_registered_template": "Instruct: {instruction}\nQuery: ",
+        "mteb_registered_overrides": {
+          "Classification": "Classify the topic of the given text.",
+          "STS": "Retrieve semantically similar text.",
+          "query": "Given a question, retrieve passages that can help answer the question.",
+          "document": ""
+        }
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt, intentionally overriding the native F2 query prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 192
+        },
+        "mteb_korean_v1": {
+          "supported": true,
+          "loader": "mteb_registered_instruct_sentence_transformer",
+          "prompt_contract": "registered type/query prompts; no document instruction; EOS added by loader",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 192
+        }
+      },
+      "vllm": {
+        "model_card_support": false,
+        "current_project_runner_support": false,
+        "required_version": null,
+        "alternate_revision": null,
+        "status": "not_admitted; Qwen3Model pooling and prompt parity need a dedicated implementation",
+        "trust_remote_code": false
+      },
+      "reference_only": {
+        "sionic_card_9": {
+          "source_model": "sionic-ai/comsat-embed-ko-8b-preview",
+          "source_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+          "evaluated_model_revision_disclosed": false,
+          "average": 0.7621,
+          "scores": {
+            "MIRACL": 0.6311,
+            "MrTidy": 0.6162,
+            "MLDR": 0.395,
+            "AutoRAG": 0.7678,
+            "Ko-StrategyQA": 0.8371,
+            "PublicHealthQA": 0.9332,
+            "Belebele": 0.9509,
+            "SQuADKorV1": 0.8874,
+            "LawIRKo": 0.8405
+          }
+        },
+        "mteb_korean_live": {
+          "source": "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MTEB%28kor%2C%20v1%29/scores",
+          "observed_at": "2026-07-11",
+          "registry_revision": "5ac7d57351026337281e8e6a23e05cce16e79415",
+          "borda_rank": 1,
+          "mean_task": 0.7510995,
+          "mean_task_type": 0.726829,
+          "scores": {
+            "KorSTS": 0.836075,
+            "KLUE-STS": 0.894107,
+            "MIRACLRetrieval": 0.63128,
+            "KLUE-TC": 0.675635,
+            "Ko-StrategyQA": 0.8371,
+            "MIRACLReranking": 0.6324
+          }
+        }
+      }
+    },
+    {
+      "id": "SamilPwC-AXNode-GenAI/PwC-Embedding_expr",
+      "queue_order": 4,
+      "snapshots": {
+        "hub_current_revision": "6c5196980c685db45b58f67bd3be2f79d794351e",
+        "mteb_registry_revision": "33358978be40f36491045f9c2a359d38c3f50047",
+        "sionic9_local_revision": "6c5196980c685db45b58f67bd3be2f79d794351e",
+        "mteb_korean_local_revision": "33358978be40f36491045f9c2a359d38c3f50047",
+        "revision_audit": "Current and registry snapshots have identical config, SentenceTransformers config, pooling config and modules SHA256 values."
+      },
+      "encoder_contract": {
+        "architecture": "XLMRobertaModel",
+        "attention": "bidirectional_encoder",
+        "pooling": "mean",
+        "normalization": "l2",
+        "embedding_dimension": 1024,
+        "padding_side": "right_or_left_masked_mean_equivalent",
+        "trust_remote_code": false
+      },
+      "lengths": {
+        "config_max_position_embeddings": 514,
+        "tokenizer_model_max_length": 512,
+        "model_card_max_tokens": 514,
+        "sionic9_effective_max_tokens": 512,
+        "mteb_registry_meta_max_tokens": 514,
+        "mteb_registered_loader_max_seq_length": 512,
+        "mteb_korean_local_max_tokens": 512
+      },
+      "native_prompts": {
+        "query": "",
+        "document": "",
+        "mteb_registered_template": "Instruct: {instruction}\nQuery: ",
+        "mteb_registered_behavior": "task metadata instructions on non-document inputs; no document instruction"
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt, intentionally overriding the native empty prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 512
+        },
+        "mteb_korean_v1": {
+          "supported": true,
+          "loader": "mteb_registered_instruct_sentence_transformer",
+          "prompt_contract": "task metadata instruction on non-document inputs",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 512
+        }
+      },
+      "vllm": {
+        "model_card_support": false,
+        "current_project_runner_support": false,
+        "required_version": null,
+        "alternate_revision": null,
+        "status": "not_admitted",
+        "trust_remote_code": false
+      },
+      "reference_only": {
+        "sionic_card_9": null,
+        "mteb_korean_live": {
+          "source": "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MTEB%28kor%2C%20v1%29/scores",
+          "observed_at": "2026-07-11",
+          "registry_revision": "33358978be40f36491045f9c2a359d38c3f50047",
+          "borda_rank": 3,
+          "mean_task": 0.7700758333333333,
+          "mean_task_type": 0.759194375,
+          "scores": {
+            "KorSTS": 0.84015,
+            "KLUE-STS": 0.884155,
+            "MIRACLRetrieval": 0.64619,
+            "KLUE-TC": 0.72998,
+            "Ko-StrategyQA": 0.79686,
+            "MIRACLReranking": 0.72312
+          }
+        }
+      }
+    },
+    {
+      "id": "microsoft/harrier-oss-v1-27b",
+      "queue_order": 5,
+      "snapshots": {
+        "hub_current_revision": "0c0fc62f6d8af9e8604cb818c412301b103a0093",
+        "mteb_registry_revision": "0c0fc62f6d8af9e8604cb818c412301b103a0093",
+        "sionic9_local_revision": "0c0fc62f6d8af9e8604cb818c412301b103a0093",
+        "mteb_korean_local_revision": "0c0fc62f6d8af9e8604cb818c412301b103a0093"
+      },
+      "encoder_contract": {
+        "architecture": "Gemma3TextModel",
+        "attention": "causal_hybrid_sliding_window",
+        "pooling": "last_token",
+        "normalization": "l2",
+        "embedding_dimension": 5376,
+        "padding_side": "model_loader_managed",
+        "trust_remote_code": false
+      },
+      "lengths": {
+        "config_max_position_embeddings": 131072,
+        "tokenizer_model_max_length": "unbounded_sentinel",
+        "model_card_max_tokens": 32768,
+        "sionic9_effective_max_tokens": 8192,
+        "mteb_registry_meta_max_tokens": 131072,
+        "mteb_registered_loader_max_seq_length": null,
+        "mteb_korean_local_max_tokens": "registered_loader_default"
+      },
+      "native_prompts": {
+        "web_search_query": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
+        "sts_query": "Instruct: Retrieve semantically similar text\nQuery: ",
+        "bitext_query": "Instruct: Retrieve parallel sentences\nQuery: ",
+        "mteb_registered_template": "Instruct: {instruction}\nQuery: ",
+        "mteb_registered_behavior": "task-specific harrier prompt table with task metadata fallback; no document instruction"
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 16
+        },
+        "mteb_korean_v1": {
+          "supported": true,
+          "loader": "mteb_registered_instruct_sentence_transformer",
+          "prompt_contract": "registered task-specific instructions; no document instruction",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 16
+        }
+      },
+      "vllm": {
+        "model_card_support": false,
+        "current_project_runner_support": false,
+        "required_version": null,
+        "alternate_revision": null,
+        "status": "not_admitted; main has Gemma3TextModel and no CausalLM branch",
+        "trust_remote_code": false
+      },
+      "reference_only": {
+        "sionic_card_9": {
+          "source_model": "sionic-ai/comsat-embed-ko-8b-preview",
+          "source_revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+          "evaluated_model_revision_disclosed": false,
+          "average": 0.7669,
+          "scores": {
+            "MIRACL": 0.6653,
+            "MrTidy": 0.5306,
+            "MLDR": 0.4073,
+            "AutoRAG": 0.8176,
+            "Ko-StrategyQA": 0.8361,
+            "PublicHealthQA": 0.8971,
+            "Belebele": 0.9538,
+            "SQuADKorV1": 0.9204,
+            "LawIRKo": 0.8737
+          }
+        },
+        "mteb_korean_live": null
+      }
+    },
+    {
+      "id": "tencent/KaLM-Embedding-Gemma3-12B-2511",
+      "queue_order": 6,
+      "snapshots": {
+        "hub_current_revision": "98c19ba34197906fbc93f6f1ef79402ca3a33956",
+        "mteb_registry_revision": "edf22f4753f58b05e3f5495818d31f12db63056d",
+        "sionic9_local_revision": "98c19ba34197906fbc93f6f1ef79402ca3a33956",
+        "mteb_korean_local_revision": "edf22f4753f58b05e3f5495818d31f12db63056d",
+        "vllm_causallm_revision": "218bd72453d6310e2d96eabfc45be58d85c85407",
+        "revision_audit": "Current and registry snapshots have identical config, SentenceTransformers config, pooling config, modules and weight-index SHA256 values."
+      },
+      "encoder_contract": {
+        "architecture": "Gemma3TextModel",
+        "attention": "causal_hybrid_sliding_window",
+        "pooling": "last_token",
+        "normalization": "l2",
+        "embedding_dimension": 3840,
+        "padding_side": "model_loader_managed",
+        "trust_remote_code": true
+      },
+      "lengths": {
+        "config_max_position_embeddings": 131072,
+        "tokenizer_model_max_length": "unbounded_sentinel",
+        "model_card_max_tokens": 32768,
+        "sionic9_effective_max_tokens": 8192,
+        "mteb_registry_meta_max_tokens": 32768,
+        "mteb_registered_loader_max_seq_length": 512,
+        "mteb_korean_local_max_tokens": 512
+      },
+      "native_prompts": {
+        "sentence_transformers_prompts": {},
+        "card_default_query": "Instruct: Given a query, retrieve documents that answer the query \nQuery: ",
+        "card_document": "",
+        "mteb_registered_template": "Instruct: {instruction} \n Query: ",
+        "mteb_registered_behavior": "task-specific KaLM prompt table with metadata fallback; instructions are also applied to passages"
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 48
+        },
+        "mteb_korean_v1": {
+          "supported": true,
+          "loader": "mteb_registered_instruct_sentence_transformer",
+          "prompt_contract": "registered task prompts on both query and passage",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 48
+        }
+      },
+      "vllm": {
+        "model_card_support": true,
+        "model_card_min_version": null,
+        "current_project_runner_support": false,
+        "required_version": "CausalLM branch required by model card",
+        "alternate_revision": "218bd72453d6310e2d96eabfc45be58d85c85407",
+        "status": "not_admitted; alternate branch plus prompt/pooling parity gate is required",
+        "trust_remote_code": true
+      },
+      "reference_only": {
+        "sionic_card_9": null,
+        "mteb_korean_live": null
+      }
+    },
+    {
+      "id": "nvidia/llama-embed-nemotron-8b",
+      "queue_order": 7,
+      "snapshots": {
+        "hub_current_revision": "aa3b43a495a9b280d1bdb716da37c54bb495d630",
+        "mteb_registry_revision": "84a375593d27d3528beb4e104822515659e093b4",
+        "sionic9_local_revision": "aa3b43a495a9b280d1bdb716da37c54bb495d630",
+        "mteb_korean_local_revision": "84a375593d27d3528beb4e104822515659e093b4",
+        "revision_audit": "The weight-index SHA256 is identical. The current snapshot adds SentenceTransformers files and explicitly sets use_bidirectional_attention=true; the registry snapshot lacks those files and that explicit config key."
+      },
+      "encoder_contract": {
+        "architecture": "LlamaBidirectionalModel",
+        "attention": "bidirectional_custom_remote_code",
+        "pooling": "masked_mean",
+        "normalization": "l2",
+        "embedding_dimension": 4096,
+        "padding_side": "left",
+        "trust_remote_code": true
+      },
+      "lengths": {
+        "config_max_position_embeddings": 131072,
+        "tokenizer_model_max_length": 131072,
+        "model_card_max_tokens": 32768,
+        "sionic9_effective_max_tokens": 8192,
+        "mteb_registry_meta_max_tokens": 32768,
+        "mteb_registered_loader_max_seq_length": 4096,
+        "mteb_korean_local_max_tokens": 4096
+      },
+      "native_prompts": {
+        "query": "Instruct: Given a question, retrieve passages that answer the question\nQuery: ",
+        "document": "",
+        "mteb_registered_template": "Instruct: {instruction}\nQuery: ",
+        "mteb_registered_behavior": "task prompt/metadata instruction; no document instruction for retrieval/reranking; STS instruction on both sides"
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 64
+        },
+        "mteb_korean_v1": {
+          "supported": false,
+          "loader": "mteb_registered_custom_wrapper",
+          "prompt_contract": "registered task-specific wrapper",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 64,
+          "blocked_reason": "Pinned MTEB wrapper requires transformers==4.51.0; project evaluation env is transformers 5.13.1. A dedicated environment is required before an official-contract run."
+        }
+      },
+      "vllm": {
+        "model_card_support": true,
+        "model_card_min_version": "0.14.0",
+        "current_project_runner_support": false,
+        "required_version": "0.14.0 or newer",
+        "alternate_revision": null,
+        "status": "card-supported but not admitted to this project; custom mean pooling, remote code and task prompts need parity/throughput gates",
+        "trust_remote_code": true
+      },
+      "reference_only": {
+        "sionic_card_9": null,
+        "mteb_korean_live": null
+      }
     }
   ]
 }
