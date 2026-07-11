@@ -39,6 +39,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional exact training-data audit uploaded with the dataset",
     )
+    parser.add_argument(
+        "--benchmark-overlap-audit",
+        type=Path,
+        help="Optional text-only benchmark overlap audit uploaded with the dataset",
+    )
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--upload", action="store_true")
     return parser.parse_args()
@@ -68,6 +73,7 @@ def validate(
     train_name: str,
     provenance_name: str,
     quality_audit: Path | None = None,
+    benchmark_overlap_audit: Path | None = None,
 ) -> tuple[dict[str, Any], list[Path]]:
     manifest_path = data_dir / "manifest.json"
     train_path = data_dir / train_name
@@ -117,6 +123,24 @@ def validate(
         ):
             raise ValueError("Quality audit does not match the publication artifacts")
         paths.append(quality_audit)
+    if benchmark_overlap_audit is not None:
+        if not benchmark_overlap_audit.is_file():
+            raise FileNotFoundError(
+                f"Missing benchmark overlap audit: {benchmark_overlap_audit}"
+            )
+        overlap = json.loads(benchmark_overlap_audit.read_text(encoding="utf-8"))
+        if (
+            overlap.get("rows") != expected_rows
+            or overlap.get("inputs", {}).get("train", {}).get("sha256")
+            != manifest["files"][train_name]["sha256"]
+            or overlap.get("inputs", {}).get("provenance", {}).get("sha256")
+            != manifest["files"][provenance_name]["sha256"]
+            or overlap.get("unique_critical_query_or_evaluation_matches") != 0
+        ):
+            raise ValueError(
+                "Benchmark overlap audit does not match artifacts or has critical overlap"
+            )
+        paths.append(benchmark_overlap_audit)
     return manifest, paths
 
 
@@ -130,6 +154,11 @@ def main() -> None:
         args.train_name,
         args.provenance_name,
         args.quality_audit.resolve() if args.quality_audit else None,
+        (
+            args.benchmark_overlap_audit.resolve()
+            if args.benchmark_overlap_audit
+            else None
+        ),
     )
     report = {
         "repo_id": args.repo_id,
@@ -155,7 +184,7 @@ def main() -> None:
         private=not args.public,
         exist_ok=True,
     )
-    train_path, provenance_path, manifest_path, card_path, *optional_paths = paths
+    train_path, provenance_path, manifest_path, card_path, *_optional_paths = paths
     operations = [
         CommitOperationAdd(path_in_repo="README.md", path_or_fileobj=card_path),
         CommitOperationAdd(path_in_repo="data/train.jsonl", path_or_fileobj=train_path),
@@ -166,11 +195,18 @@ def main() -> None:
             path_in_repo="metadata/manifest.json", path_or_fileobj=manifest_path
         ),
     ]
-    if optional_paths:
+    if args.quality_audit:
         operations.append(
             CommitOperationAdd(
                 path_in_repo="metadata/training_data_quality_audit.json",
-                path_or_fileobj=optional_paths[0],
+                path_or_fileobj=args.quality_audit.resolve(),
+            )
+        )
+    if args.benchmark_overlap_audit:
+        operations.append(
+            CommitOperationAdd(
+                path_in_repo="metadata/benchmark_overlap_audit.json",
+                path_or_fileobj=args.benchmark_overlap_audit.resolve(),
             )
         )
     commit = api.create_commit(

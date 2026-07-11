@@ -26,6 +26,7 @@ CURRICULUM="$DATA_DIR/train.faiss-current-r095-n7.squad50-replay50.jsonl"
 CURRICULUM_PROVENANCE="$DATA_DIR/provenance.faiss-current-r095-n7.squad50-replay50.jsonl"
 CURRICULUM_MANIFEST="$DATA_DIR/faiss-current-r095-n7.squad50-replay50.manifest.json"
 CURRICULUM_QUALITY="$DATA_DIR/faiss-current-r095-n7.squad50-replay50.quality-audit.json"
+CURRICULUM_OVERLAP="$DATA_DIR/faiss-current-r095-n7.squad50-replay50.benchmark-overlap-audit.json"
 VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
 RUN_NAME="qwen3-embedding-8b-ko-sionic-squad50-replay50-lora-r64"
 MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
@@ -167,6 +168,11 @@ run_stage audit-squad50-general50-curriculum \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/audit_embedding_training_data.py" \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --output "$CURRICULUM_QUALITY" --expected-batch-size 16 || exit 6
+run_stage audit-squad50-general50-benchmark-overlap \
+  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
+  --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
+  --blocklist-root "$ROOT/outputs/decontamination/benchmark_blocklist" \
+  --output "$CURRICULUM_OVERLAP" --fail-on-critical || exit 6
 
 MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$CURRICULUM_MANIFEST")"
 (( MAX_STEPS > 0 )) || exit 6
@@ -219,6 +225,7 @@ retry_stage upload-derived-squad-replay 3 \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --manifest "$CURRICULUM_MANIFEST" --mining-manifest "$MINING_MANIFEST" \
   --mining-audit "$MINING_AUDIT" --quality-audit "$CURRICULUM_QUALITY" \
+  --benchmark-overlap-audit "$CURRICULUM_OVERLAP" \
   --repo-id LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1 \
   --title "Korean Sionic SQuAD Quantile HN7 with General Replay" \
   --source-dataset LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k \

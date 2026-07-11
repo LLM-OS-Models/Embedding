@@ -41,7 +41,7 @@
 | homogeneous batching | provenance source별 16-row microbatch compiler | 50K `49,904`, 200K `199,904` rows; 모든 emitted batch 단일 source |
 | performance 1M mix | 1,000,000 rows build·strict validation·public HF upload | train SHA `094d44…3c0a`, provenance SHA `94334a…18c1` |
 | performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous length buckets | ordered train SHA `436dc7…2c00`; source remainder 총 64 rows |
-| SQuADKorV1 train-family 60K | 원본 KorQuAD train만 질문→문맥 변환·전수 감사·공개 | 60,000 rows, 7 bootstrap negatives, SHA mismatch 0; public `9d8ae811`; current-student HN/replay queue 연결 |
+| SQuADKorV1 train-family 60K | 원본 KorQuAD train 질문→문맥 변환·전수 감사·공개 | 60,000 rows; query/evaluation-text overlap 0, shared Wikipedia eval-corpus hash 6,426; clean 아님; public `8fbc6d6d`; HN/replay queue 연결 |
 | scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute + pool24 score-rank quantile7 | index persist/resume, positive-relative filter, selection/cache-contract test 통과 |
 | public model artifact contract | model card, 사용법, data/evaluation manifest, Sionic/official/clean/noise summary와 per-query rank 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
 | derived dataset publication | actual train/provenance/mining audit/manifest SHA·row·quantile contract 검증 후 공개 | 1M/법률 학습 종료 뒤 GPU 평가와 background upload하도록 연결 |

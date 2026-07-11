@@ -75,6 +75,58 @@ class PublishPerformanceDatasetTest(unittest.TestCase):
                     audit,
                 )
 
+    def test_accepts_zero_critical_benchmark_overlap_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data, card, quality = self._fixture(Path(directory))
+            manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
+            overlap = Path(directory) / "overlap.json"
+            overlap.write_text(
+                json.dumps(
+                    {
+                        "rows": 1,
+                        "inputs": {
+                            "train": {
+                                "sha256": manifest["files"]["train.jsonl"]["sha256"]
+                            },
+                            "provenance": {
+                                "sha256": manifest["files"]["provenance.jsonl"][
+                                    "sha256"
+                                ]
+                            },
+                        },
+                        "unique_critical_query_or_evaluation_matches": 0,
+                        "unique_retrieval_corpus_matches": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _manifest, paths = validate(
+                data,
+                card,
+                "fixture",
+                1,
+                "train.jsonl",
+                "provenance.jsonl",
+                quality,
+                overlap,
+            )
+            self.assertEqual(paths[-1], overlap)
+
+            payload = json.loads(overlap.read_text(encoding="utf-8"))
+            payload["unique_critical_query_or_evaluation_matches"] = 1
+            overlap.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "critical overlap"):
+                validate(
+                    data,
+                    card,
+                    "fixture",
+                    1,
+                    "train.jsonl",
+                    "provenance.jsonl",
+                    quality,
+                    overlap,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

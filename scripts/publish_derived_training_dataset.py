@@ -20,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mining-manifest", type=Path)
     parser.add_argument("--mining-audit", type=Path)
     parser.add_argument("--quality-audit", type=Path)
+    parser.add_argument("--benchmark-overlap-audit", type=Path)
     parser.add_argument("--repo-id", required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--source-dataset", action="append", default=[])
@@ -66,6 +67,8 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
         paths.append(args.mining_audit)
     if args.quality_audit:
         paths.append(args.quality_audit)
+    if args.benchmark_overlap_audit:
+        paths.append(args.benchmark_overlap_audit)
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         raise FileNotFoundError(
@@ -128,7 +131,31 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
                 "Quality audit belongs to different train/provenance files"
             )
         evidence["quality_audit"] = {"sha256": sha256(args.quality_audit)}
-    return {"rows": rows, "manifest": manifest, "mining": mining, "evidence": evidence}
+    overlap = None
+    if args.benchmark_overlap_audit:
+        overlap = read_json(args.benchmark_overlap_audit)
+        overlap_inputs = overlap.get("inputs", {})
+        if (
+            overlap.get("rows") != rows
+            or overlap_inputs.get("train", {}).get("sha256")
+            != evidence["train"]["sha256"]
+            or overlap_inputs.get("provenance", {}).get("sha256")
+            != evidence["provenance"]["sha256"]
+            or overlap.get("unique_critical_query_or_evaluation_matches") != 0
+        ):
+            raise ValueError(
+                "Benchmark overlap audit differs from final curriculum or has critical overlap"
+            )
+        evidence["benchmark_overlap_audit"] = {
+            "sha256": sha256(args.benchmark_overlap_audit)
+        }
+    return {
+        "rows": rows,
+        "manifest": manifest,
+        "mining": mining,
+        "overlap": overlap,
+        "evidence": evidence,
+    }
 
 
 def dataset_card(args: argparse.Namespace, validated: dict[str, Any]) -> str:
@@ -137,6 +164,15 @@ def dataset_card(args: argparse.Namespace, validated: dict[str, Any]) -> str:
     )
     manifest = validated["manifest"]
     adaptation = manifest.get("benchmark_adaptation", manifest.get("adaptation_label"))
+    overlap = validated.get("overlap")
+    overlap_text = (
+        f"- exact benchmark query/evaluation-text matches: "
+        f"**{overlap['unique_critical_query_or_evaluation_matches']}**\n"
+        f"- exact retrieval-corpus matches: "
+        f"**{overlap['unique_retrieval_corpus_matches']:,} unique hashes**"
+        if overlap is not None
+        else "- benchmark text-overlap audit: not attached"
+    )
     return f"""---
 language:
 - ko
@@ -161,6 +197,7 @@ filter 뒤 top-24 score-rank에서 7개 quantile negative를 선택했다.
 - benchmark adaptation: `{adaptation}`
 - release eligible: **false**
 - use: performance/non-commercial research
+{overlap_text}
 
 Sionic 9 및 MTEB task-family train source가 포함될 수 있다. 이 dataset으로 학습한 모델의
 관련 점수는 clean zero-shot으로 해석하면 안 된다. 원 source의 license와 attribution은
@@ -176,6 +213,8 @@ Sionic 9 및 MTEB task-family train source가 포함될 수 있다. 이 dataset�
 - `metadata/mining_audit.jsonl`: per-input positive threshold와 selected document hashes
 - `metadata/training_data_quality_audit.json`: 실제 final train/provenance의 source, query
   style, negative 수, 길이, 중복과 homogeneous-batch contract
+- `metadata/benchmark_overlap_audit.json`: 원문 없는 15-task exact text-hash overlap,
+  role/source count와 task 위치
 
 ## 원 dataset
 
@@ -247,6 +286,13 @@ def main() -> None:
                 CommitOperationAdd(
                     path_in_repo="metadata/training_data_quality_audit.json",
                     path_or_fileobj=args.quality_audit,
+                )
+            )
+        if args.benchmark_overlap_audit:
+            operations.append(
+                CommitOperationAdd(
+                    path_in_repo="metadata/benchmark_overlap_audit.json",
+                    path_or_fileobj=args.benchmark_overlap_audit,
                 )
             )
         commit = api.create_commit(

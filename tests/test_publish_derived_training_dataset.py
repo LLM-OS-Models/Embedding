@@ -38,6 +38,21 @@ class PublishDerivedTrainingDatasetTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            overlap = root / "overlap.json"
+            overlap.write_text(
+                json.dumps(
+                    {
+                        "rows": 2,
+                        "inputs": {
+                            "train": {"sha256": digest(train)},
+                            "provenance": {"sha256": digest(provenance)},
+                        },
+                        "unique_critical_query_or_evaluation_matches": 0,
+                        "unique_retrieval_corpus_matches": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
             manifest = root / "final.json"
             manifest.write_text(
                 json.dumps(
@@ -72,6 +87,7 @@ class PublishDerivedTrainingDatasetTest(unittest.TestCase):
                 mining_manifest=mining,
                 mining_audit=audit,
                 quality_audit=quality,
+                benchmark_overlap_audit=overlap,
                 repo_id="org/fixture",
                 title="Fixture",
                 source_dataset=["org/source"],
@@ -79,9 +95,11 @@ class PublishDerivedTrainingDatasetTest(unittest.TestCase):
             result = validate(args)
             self.assertEqual(result["rows"], 2)
             self.assertIn("quality_audit", result["evidence"])
+            self.assertIn("benchmark_overlap_audit", result["evidence"])
             card = dataset_card(args, result)
             self.assertIn("score-rank", card)
             self.assertIn("release eligible: **false**", card)
+            self.assertIn("retrieval-corpus matches", card)
 
             mining_payload = json.loads(mining.read_text())
             mining_payload["selection_strategy"] = "top_k"
