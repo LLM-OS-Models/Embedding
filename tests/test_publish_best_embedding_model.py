@@ -33,6 +33,13 @@ class PublishBestModelTests(unittest.TestCase):
             squad[0],
             "LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
         )
+        health = training_dataset_repos(
+            {"benchmark_adaptation": "target-adapted-health-domain50-general50"}
+        )
+        self.assertEqual(
+            health[0],
+            "LLM-OS-Models/korean-embedding-sionic-health-quantile-hn7-replay-v1",
+        )
 
     def test_card_requires_complete_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

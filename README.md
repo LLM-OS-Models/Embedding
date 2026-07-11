@@ -93,6 +93,7 @@ row는 101개였다.
 | 성능 우선 50K 데이터 | 50,000 rows + 현재 run의 exact 49,904-row order/provenance·품질 감사/카드 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-pilot-50k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k/tree/da0b0ff09ea0b14d2281a88671d2d346a45ebfbe) |
 | 성능 우선 200K 데이터 | 200,000 rows + exact 199,904-row length-bucketed train/provenance·품질 감사/카드 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-ablation-200k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/0a3a0e38fa766ba99fdd8f82ee49862e25f0aaf4) |
 | SQuADKorV1 train-family 60K | 원본 KorQuAD train 질문→문맥 60K; 평가 query/evaluation-text match 0, Wikipedia shared eval-corpus 6,426 고유 hash 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k/tree/8fbc6d6d5c93c3493456079d930921ac90ec6801) |
+| PublicHealth health-domain 100K | F2 medical QA/instruction/flashcard 100K; critical eval-text overlap 0, PublicHealthQA exact overlap 0·공개 완료 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-health-100k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-health-100k/tree/5fc4bb817f6970a710be53376f35e0225201d2e2) |
 | 법률 source-native 250K | 4개 source 균형 shard + bootstrap 한계·질의 분포 전수 감사/카드 공개 | [`LLM-OS-Models/korean-legal-retrieval-source-native-250k`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-retrieval-source-native-250k/tree/ec2f09a220dc5aa326c5d63b8e49adbf3a5524bc) |
 | 성능 우선 1M 데이터 | 1,000,000 rows + exact 999,936-row train/provenance + 품질 감사·카드 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-performance-1m`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/ac3e806f2c01f2aa9f45686207b822e992889da2) |
 | 평가 오염 방지 blocklist | Sionic 9 + 공식 Korean 6, 원문 없는 SHA-256 547MB | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
@@ -103,7 +104,7 @@ row는 101개였다.
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
 | 10K exhaustive HN + LoRA r64 | 160 steps 완료, best step 80; FP32 strict-parity 재병합 대기 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
-| 50K LoRA r64 | 360/800 검증 완료, H100 100%, trainer 59.30GiB/device 약 61.9GiB; best step 200 loss 0.00351495 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
+| 50K LoRA r64 | 400/800 검증 완료, H100 100%, trainer 59.30GiB/device 약 61.9GiB; best step 200 loss 0.00351495 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
 
 ## 문서 지도
 
@@ -133,6 +134,7 @@ row는 101개였다.
 24. [250K–1M FAISS hard-negative mining](docs/23_SCALABLE_HARD_NEGATIVE_MINING.md)
 25. [법률·공공 source-document-held-out 종합 평가](docs/24_LEGAL_SOURCE_HELDOUT_RETRIEVAL.md)
 26. [Sionic SQuADKorV1 train-family 60K target adaptation](docs/25_SIONIC_SQUAD_TARGET_ADAPTATION.md)
+27. [Sionic PublicHealthQA multilingual health-domain adaptation](docs/26_SIONIC_PUBLIC_HEALTH_ADAPTATION.md)
 
 ## 실험 지도
 
@@ -150,6 +152,7 @@ row는 101개였다.
 | [`070_tuning_strategy`](experiments/070_tuning_strategy/) | LoRA/DoRA/부분학습/full FT의 품질·VRAM·속도 비교 |
 | [`080_f2_recipe`](experiments/080_f2_recipe/) | F2형 dual loss와 exact MRL을 기본 InfoNCE와 비교 |
 | [`090_sionic_squad_adaptation`](experiments/090_sionic_squad_adaptation/) | KorQuAD train 60K current-student HN + general replay와 broad 회귀 |
+| [`100_sionic_health_adaptation`](experiments/100_sionic_health_adaptation/) | F2 medical 100K current-student HN + general replay와 PublicHealth/broad 회귀 |
 
 ## 원칙
 

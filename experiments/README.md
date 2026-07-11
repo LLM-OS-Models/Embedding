@@ -14,4 +14,5 @@
 현재 비교 축은 `000`–`090`이다. LoRA와 full-parameter tuning의 비용·품질 비교는
 [`070_tuning_strategy`](070_tuning_strategy/), F2 dual-loss/MRL은
 [`080_f2_recipe`](080_f2_recipe/), SQuADKorV1 train-family adaptation은
-[`090_sionic_squad_adaptation`](090_sionic_squad_adaptation/)에 기록한다.
+[`090_sionic_squad_adaptation`](090_sionic_squad_adaptation/), health-domain adaptation은
+[`100_sionic_health_adaptation`](100_sionic_health_adaptation/)에 기록한다.

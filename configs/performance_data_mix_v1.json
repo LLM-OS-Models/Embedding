@@ -118,6 +118,19 @@
       "source_caps": {
         "korquad_v1_train": 60000
       }
+    },
+    "sionic_health_multilingual_100k": {
+      "target_rows": 100000,
+      "intent": "Isolated multilingual medical and public-health domain adaptation from the F2LLM-v2 collection; exact 15-task benchmark hash audit required before training.",
+      "source_caps": {
+        "f2_pubmedqa": 25000,
+        "f2_healthcaremagic": 25000,
+        "f2_medical_instruction": 20000,
+        "f2_medical_flashcards": 15000,
+        "f2_medmcqa": 10000,
+        "f2_medqa_en": 3000,
+        "f2_webmedqa": 2000
+      }
     }
   },
   "sources": {
@@ -467,6 +480,104 @@
         "SQuADKorV1"
       ],
       "benchmark_exposure": "original KorQuAD train split exposed; original validation and the MTEB converted test repository remain forbidden",
+      "release_eligible": false
+    },
+    "f2_pubmedqa": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "pubmedqa.parquet",
+      "observed_rows": 60227,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "medical domain adaptation; no PublicHealthQA test input declared; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_healthcaremagic": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "healthcaremagic.parquet",
+      "observed_rows": 78626,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "medical domain adaptation; no PublicHealthQA test input declared; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_medical_instruction": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "medical_instruction.parquet",
+      "observed_rows": 75268,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "medical domain adaptation; no PublicHealthQA test input declared; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_medical_flashcards": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "medical_flashcards.parquet",
+      "observed_rows": 33183,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "medical domain adaptation; no PublicHealthQA test input declared; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_medmcqa": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "medmcqa.parquet",
+      "observed_rows": 16526,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "medical domain adaptation; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_medqa_en": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "medqa_en.parquet",
+      "observed_rows": 3560,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "en",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "medical domain adaptation; exact blocklist audit required",
+      "release_eligible": false
+    },
+    "f2_webmedqa": {
+      "loader": "hf_parquet",
+      "adapter": "f2_fields",
+      "repo_id": "codefuse-ai/F2LLM-v2",
+      "revision": "d520b8ad02c86d5e5611441c6196ff65d8888927",
+      "file": "webmedqa.parquet",
+      "observed_rows": 27122,
+      "declared_collection_license": "apache-2.0; upstream source terms still govern",
+      "language": "zh",
+      "require_hangul": false,
+      "trained_on_tasks": [],
+      "benchmark_exposure": "multilingual medical domain adaptation; exact blocklist audit required",
       "release_eligible": false
     }
   },

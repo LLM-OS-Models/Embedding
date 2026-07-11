@@ -342,5 +342,10 @@ if [[ "${ENABLE_SIONIC_SQUAD_ADAPTATION:-1}" == 1 ]]; then
     LOG_DIR="$ROOT/outputs/sionic-squad-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_squad_adaptation_queue.sh" || true
 fi
+if [[ "${ENABLE_SIONIC_HEALTH_ADAPTATION:-1}" == 1 ]]; then
+  run_stage "sionic-health-domain-adaptation" env WAIT_PID= \
+    LOG_DIR="$ROOT/outputs/sionic-health-adaptation-20260712" \
+    bash "$ROOT/scripts/run_sionic_health_adaptation_queue.sh" || true
+fi
 
 echo "[$(timestamp)] 1M scale queue complete"

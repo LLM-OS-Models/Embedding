@@ -1,0 +1,2290 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-11T19:24:13.119458+00:00",
+  "inputs": {
+    "train": {
+      "path": "/home/ubuntu/Embedding/outputs/data/performance-v1/sionic-health-multilingual-100k/train.jsonl",
+      "sha256": "6f9715bb130e1d58bac74f13d4b6d1996840bf45b1569ab281a92f632ac15302"
+    },
+    "provenance": {
+      "path": "/home/ubuntu/Embedding/outputs/data/performance-v1/sionic-health-multilingual-100k/provenance.jsonl",
+      "sha256": "cc9e41b7d4c7442ea7f78a4071ed9d94bb439e9374297ab54216b062d67054db"
+    },
+    "blocklist_root": "/home/ubuntu/Embedding/outputs/decontamination/benchmark_blocklist",
+    "blocklist_manifest_sha256": "24f1eba04ec16436cab674c3709788c5dff2571106cd6159d75f5d711314ac1d"
+  },
+  "rows": 100000,
+  "blocklist": {
+    "files": 27,
+    "unique_text_hashes": 3564395,
+    "hash_occurrences_by_kind": {
+      "corpus_text": 10226605,
+      "evaluation_text": 87282,
+      "query_text": 12860
+    }
+  },
+  "checked_training_text_occurrences": {
+    "negative": 700000,
+    "positive": 100000,
+    "query_body": 100000,
+    "query_full": 100000
+  },
+  "matched_training_text_occurrences": {
+    "negative": 266,
+    "positive": 91
+  },
+  "unique_matches": 114,
+  "unique_critical_query_or_evaluation_matches": 0,
+  "unique_retrieval_corpus_matches": 114,
+  "matches": [
+    {
+      "sha256": "041357fe241e9fb8300c0740a5cdb76f03777bf0cd8b48d622c8638818e9c23b",
+      "training_role_occurrences": {
+        "negative": 10,
+        "positive": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 6,
+        "f2_medqa_en": 7
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "07699675b70ba593d0cbad85ea76162eb61d60e176538f5b2f638616d61e46fd",
+      "training_role_occurrences": {
+        "negative": 5,
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 6,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "0995840a2c52a14804ee4108493811c4aa9b3adf0231993bb9b2c558735e171a",
+      "training_role_occurrences": {
+        "negative": 7
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4,
+        "f2_medqa_en": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "0bee64362499e3397b4db8884de788d500a7f4265b99f161e653078af40c45db",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "142dd8216edaf74984de05adf3c685e9482c6a7e27d263b6d4b780cd830cfa2b",
+      "training_role_occurrences": {
+        "negative": 2,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "15b81770bd1fad2526a12f62a99dfcda89c02f092c2d389cb8a24a23d643e8e5",
+      "training_role_occurrences": {
+        "negative": 4
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "182fb6e681f87223028bdbf5c927ad6db6059f0656e7e2b446095602227f1dbd",
+      "training_role_occurrences": {
+        "negative": 3,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "1896c717585949be91395420d61890c101e0a6a77815e5fea1ce76bf198a39fb",
+      "training_role_occurrences": {
+        "negative": 5
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 5
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "193bae79ba6e4cc0382a66bc523ebfdddd99d1011b2cf1bc6e62b648266c5a0d",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "196ad9759b074e567cce391e4063e35b07bceb8112f29ce0f75884529cbae11b",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "1b522a965f738eff0bcd51e12832f5e8d31539397b0a43b8920730bb25770dad",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "216f439b9096986aeb73431e1830a12b4d774a8c54b43babfe1f8fc75b02a2a2",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "221e4a346334822a1a1edb927a9d14737bb07b0e6dba173f77eceb55c1a8e73e",
+      "training_role_occurrences": {
+        "negative": 5,
+        "positive": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 8
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "2608729251008c9658e7d21d8041325c145bd07af6bb87c6a441153a37f79551",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "26165c4fa4c744edc6821ecb6f89afd659f32b9e1e6b5cfc16ce74477c2ff0e2",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "28d0ed8f607a57aa58fed191221d4874c9ce0cf3a4d6bd047cebde66b5331f64",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "2984b58063cd4a7d389dd2af4f69b899d82eb11b6b63ed8e66579f5d84e5504f",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "2a398c2e981e15b5f730fc0c97952a92e2815d09fe722fb6d03afbf831c390fe",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "2a8452dd6878e8a40b1f21d877841b813f3016c1a9624ca07e29b490eb04035b",
+      "training_role_occurrences": {
+        "negative": 7
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3,
+        "f2_medqa_en": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "2b70c11e4b1270d7df68a3cd62c09ddbe338782a6726029bc9a201ae9971f023",
+      "training_role_occurrences": {
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "3127c715b9efbd568c30b002812e815453f647976599db0d75458a5a61e32813",
+      "training_role_occurrences": {
+        "negative": 3,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2,
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "31b88c93770c3095bc02073f408d1a38fc1fd8408ce1f0831b8d8ed3a7b2863d",
+      "training_role_occurrences": {
+        "negative": 3,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "344824f3ab11e8b463ef3d8aa2feb399ca0c1c20993ae27ab1e426df7e106b20",
+      "training_role_occurrences": {
+        "negative": 8
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3,
+        "f2_medqa_en": 5
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "3598008d2c4e1a70d46ac793896abd241d3503831f2dc53cb5de8583ae4e0882",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "36bbf2c65cb1f394b2df4b50ceb801204f76e0d5414a887d27900bb34db38f09",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "396bdaf3b3bc24a8bd1a011696ac9720f81c724580122df87dd59c7b2b6f49ab",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "3f5fc4abfe22795ae7650cb1f18ee8d0c458de2381bdd069d0f5f2ebc0394cd5",
+      "training_role_occurrences": {
+        "negative": 17,
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 18
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "44eacd49e3ef3d56435b777b65b6eee48f280e8790d43d8fa197e48d359877e9",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 7
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 7,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "4926fc76a292a7f50dcab2f9763615591b110be5169c9e12d95d1388e1bf3dae",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "535a84008f300a7415455b69c04618857667efceb236bd31a673f30d2247a603",
+      "training_role_occurrences": {
+        "negative": 2,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "55236c3279e332929912f3b9d42587160e486009380d90eb6be52ecd680fd46e",
+      "training_role_occurrences": {
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "62ab0f022e5c3a76b95780d87b10e31271c17b4f5db54c03b3361fc13c67a82d",
+      "training_role_occurrences": {
+        "negative": 5
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 5
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "64786d1e943cbb7a315556e0488a06c770d538e32ec929da8257da5188651f9b",
+      "training_role_occurrences": {
+        "negative": 4,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2,
+        "f2_medqa_en": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "64e7d4ecaf0f4ae0005ec4aac5fcbbac5e2e3b27ba7fe814782010b636ca454a",
+      "training_role_occurrences": {
+        "negative": 6
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4,
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "6db0f2662a542d5dcf5625964fa52acca88452c46773430cf6734343cf056ef6",
+      "training_role_occurrences": {
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "6e0335a7015a412b0d4c338f78d010a48005abd87ad6194f7d234c72c696d2ec",
+      "training_role_occurrences": {
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "735cd2b7bd8b2a7bb7f97c5484c70d030ae7ad218293746ee605ef4e78273549",
+      "training_role_occurrences": {
+        "negative": 6,
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4,
+        "f2_medqa_en": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "737b15fb68cd34fba13c7798dbba680e49f63d36cb745437ddad7afd04e18540",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "759960224b10d73fb06e81268f4e07b404ac1fde87682f23047b4bfedc027ac2",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "7650ff8a60e6603c0fc441c4b54f31972d227b29ce849ec3755285b80d083bf1",
+      "training_role_occurrences": {
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "7725e8c13f66c1d2f27595aefffc377d74fbe99c2dcacd50b9f0009f23936fc0",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "79525e2e5967c8f58eaf752b66a87b66c0ea2c7ea9b971bbe92dc85e472a955d",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "7b684e73e6b4ad0525b3856b616f54f15a29e7064ea6039b6a681140fa2bac40",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "7d1a247ca55baa0cbcd766833a210838f852dddce740d1cb87aa2acdc246cf88",
+      "training_role_occurrences": {
+        "negative": 2,
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "7edb6b5b2f0e4e7ebf26756f5941644cf4bbe89db26b3082352dea13a90f7f16",
+      "training_role_occurrences": {
+        "negative": 4,
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3,
+        "f2_medqa_en": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/MIRACLRetrieval/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MIRACL/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MrTidy/korean/test"
+        }
+      ]
+    },
+    {
+      "sha256": "813ab97be8b34683175ee75154759ccc6db55a20e110d2a2e8af6c4ccfc313c2",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "85db988aa6d4adf5ba23bc861a18aa5f6fdbe6fc30a802d7ba880a0ce4a59c89",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "863f331c505dc57316b6e8879f78967864a3ea5db158de9d9913ae056c29f8a3",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "864e8d565eac5de10aced470ce96018502bebf4262bbb9eb7e3eca8c0e045d10",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/MIRACLRetrieval/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MIRACL/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MrTidy/korean/test"
+        }
+      ]
+    },
+    {
+      "sha256": "88d7fde4c53a1b32c9641e6e25025a758cb6d9b6b8f14777c554f5e04ba3866b",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "8a17b825c6e72e31694403ad91123ee90367ecf34500c4fd1b254b9aec7b1487",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "8a9d951f4ed636138856c2f53a723c7ded59d0166b1710a56c4396740663f4ce",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "8bee9652ee8ccccdbbd9284d13b21ae99d2ea7eec689559aea5a72e2ced2a5bf",
+      "training_role_occurrences": {
+        "negative": 8,
+        "positive": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 7,
+        "f2_medqa_en": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/MIRACLRetrieval/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MIRACL/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MrTidy/korean/test"
+        }
+      ]
+    },
+    {
+      "sha256": "8cde24e868c7a64d07d4eda87e475700e38ec1836e435589547f855c0c6c028f",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "8e9f5e31bc17d1805378847106362c0e145989405e91f633882089a9d3dfcbb4",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "8f24c743b32a3792f625bda5e72f35510b6b919c20e71126043850c2a0a3aa9b",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "9370d27b389dd3ab169ac62fe5a3ba23ab32fdb2203d5f9eddd0ad6e6072e969",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "951d1fa26f174abd5df7a4d576cdfbbe33b21e62746a8ea40fefdebee72a4587",
+      "training_role_occurrences": {
+        "negative": 9,
+        "positive": 22
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 27,
+        "f2_medqa_en": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "953c5fb18b2b36441697a4b1d9dd1c7f75dd8e89ad4a7b68cbc9d428b2743d4d",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "958fb624086a41442ded825d34a1814aba4b0d4fcd6599fd71b3c0225129f680",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "977fd21b52a4ea6dad8eb8bdf4c03561846a0b3d302b806e20bb526fe0609a45",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "9ee0b1db0d5b08191449fa875420cec2d0ce3b28548cc8cc79e281ed27c4e343",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "a4fe65264ef7dbb38d104b1e81eb3350f3142f3d16f32bdec39b1d9b42c1b8d1",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "a7453814236ea103c9d41c2b2e547add3eefc615c584cfc36490c47f3990836e",
+      "training_role_occurrences": {
+        "negative": 4
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "a7e26234cbddc5210e0878b52bb43b6ac8b15c6ab2d991697f66dbff16a9ecb5",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "a90dfe4fb4d5e4a3c287581bcdfabe9ec20e1339414df11ea62fbec0322be1a6",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "a9a15db4d1c333745a620febd6e4f87f64f8f9d25ada65be6cb7f5da1acc35ab",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "abe52c271fb2ad8f9cb29cdbcaf03a80115b3d4e8a3a114af05f0b774764d111",
+      "training_role_occurrences": {
+        "negative": 4,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2,
+        "f2_medqa_en": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "b015d3ddeff42d858d06bfc28ab994f070479ba167c7f26d00f16decc9331a16",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/MIRACLRetrieval/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MIRACL/ko/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/MrTidy/korean/test"
+        }
+      ]
+    },
+    {
+      "sha256": "b4371e515a4f7a68969dc25963f8976398dae72314e3ceb671966cdc088a7724",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "b4a5b40c3ab117d5563e44e584eeb08df8937cd2ebdf2d8414535f838cc4e509",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "b5357b076d42ca16cf8b0a1aa7f6cc74516158a9a7cbf5ff0f782f22fd9223a9",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "b92e3ba9619858edb4f00dc372471409bec4a9ea6ee069bbd724cf4226f8b271",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "bdc96b2d732d0054decbf7339d8e5d4dfa8552d9a18aef110850fd29214a8d4e",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "be47f64cb0ee260d77aa2e8bba4e3acaa7da1519875a1e6022b964d16126a6e8",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "bfe8f2a667f02b3a23a1f181e5aa4412b577e54e62ba247c99d332477b235f10",
+      "training_role_occurrences": {
+        "negative": 6
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 5,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "c1cbf93ec29bcb3af2c492e6e81d5b695c47cd1efdc857f390dcfabd93807400",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "c3311c4ca6df58c509e76fba2049d3d2e8c7256cd84fa19d2c3ccda6b372fb6d",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "c3c27cfe44265f72ca91e7cc5584745b68cc5ae14fe56db686ca0e41c2bb21b5",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "ca03d7b05f648fa6c745402b6dfa54662a9947a508201fec487e12f55362c79e",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "cc5cc8d5ca1325a4a526118580a3a27b1f3821c734dcc9289b3a67e5d7ef027c",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "cd366cebc655227f759132072e56a170208bcf558e0e85d683da0d2979c9e910",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "cdfaf543e29e4e0cacbbf5967b9930e4053d443d4ec2c41568a32c385767a4f4",
+      "training_role_occurrences": {
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "ce827d78f1e4042dfbe1349ed5e307154f9c6403dff0924fbb32d4edf4edd5d0",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "d4297acb91555ebc77e3ea648266b96ffda5a6d7d7d3f8bd05f9a5778eb0ed64",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "d436d07edb4f275f5482abafdfbd455aeadbefa2d10e3c56135e1b97256936f9",
+      "training_role_occurrences": {
+        "negative": 1,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "d64b9b2a750d220ce38a024320dbda03a84dece00de6599ad19785120f96dc8e",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "d83a344f131020e20c9323393f54f184ef913563fa0ca036d419204d261f8b21",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "d95c63307fb89853b7710838c24e1475ffe77f246aef0e102f2fe18ad47336cf",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "d9b0406098e8620f3829567670efe6be95ec2f8ee083c4d843caa1189f0c4a56",
+      "training_role_occurrences": {
+        "negative": 3,
+        "positive": 7
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 7,
+        "f2_medqa_en": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "d9caea730c50507387a88f3b7d8943f606e211f5adc8000ba9bdd6b8553cc184",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "db870d5b156ecf84fc9768b0366b56670b8eddc59b5abe0a04f82544496e3436",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "dc0dca52f0ae97d90c25b197bec7f6290d75c5756b97c1060d4c52c83fbbe90e",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "dd1bca357da3ea5703e4499cd4cd18b444b794468f6ccf907b905739e50a5998",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "e1167cd4fd10d4004c213e858e6a43d01fedae1a844d57ce15998718bebf421d",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "e2a491b09f01b7eea4054942db7aba92dbd0387598bacf3569b257b86de9c2de",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "e44cd68f8896f085079979a42e549bf9eb4507b0af49745dcbfe36fb61a122ca",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "e5fae82fdecd604768dfcb303f46c8b030eddbe251c78a5ccb84aae0e4ec4171",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "e61d5c54b995634f8ecc7d53d47fbb83908f4be88fa6d363deda9d98d6a0de84",
+      "training_role_occurrences": {
+        "negative": 3,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "e65ebdf29b917083cfe46105e4f63e7b86e8498547d77b620340a4466411da4a",
+      "training_role_occurrences": {
+        "negative": 5,
+        "positive": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 4,
+        "f2_medqa_en": 4
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "e86f148cbfcaee3525de7fcc35a79509697f5341d39f1385a2f562e6a48ea854",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "eb403cad8269bf3f6dd3eeec600b900b8f1034c4ed8485ecf5e636982f277525",
+      "training_role_occurrences": {
+        "negative": 5
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3,
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "eb67cfd659e80dfc7d226f7a19442b1fa96ad467f0c469b2dd9037cc3fe4b142",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1,
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "ed657064daf740734d4a4ae31406cb294a17dc2dbd422ce90a86ed9816f0ded4",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "ed9485dca097b7107f171beb207b125931b58e86fe121d335e7778bf31d95482",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "ed9e16ccec40a317c1f8970587a12a93d4674a29b36d999b01c7d575eb1f0b83",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "ee9fc1d3708dc9a9d2995ef0598bf4858aa424f2ef67cbe687f9e31f4fe80b1d",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "f00102c6c097da51302fd6f8c5631a5b0b0e7133ab5b0d2b25bff02f2395fbfa",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "f545d0ae88ab4229d63418e51a732ed64bcb5772b3cab87f11a218f45431ed67",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "f5b569cfc19517802ee5b8fb4eadea608f37f7984d2054f35e2e2f01594d5443",
+      "training_role_occurrences": {
+        "negative": 3
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "f604dc977109985170a4490aa6216a068b83d7b06718d3ad9c54bc943b2f98b9",
+      "training_role_occurrences": {
+        "negative": 2
+      },
+      "source_occurrences": {
+        "f2_medqa_en": 2
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "f6f4d922a72dbf0aa6c378d7eabee8a0c766698509d8d2cd4e0c8fd7eeb72fd9",
+      "training_role_occurrences": {
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "fbf24fc3e95c060d902c62c239e100d8c6fa974165517cf433ed46757424c3d9",
+      "training_role_occurrences": {
+        "negative": 2,
+        "positive": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 3
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    },
+    {
+      "sha256": "ffc05f76cbd4a4771334dd62f71cf2811fc73f76d1e7ed111222d9d9df665dc2",
+      "training_role_occurrences": {
+        "negative": 1
+      },
+      "source_occurrences": {
+        "f2_medmcqa": 1
+      },
+      "benchmark_locations": [
+        {
+          "kind": "corpus_text",
+          "task_path": "mteb-korean-v1-mteb-2.18.0/Ko-StrategyQA/default/dev"
+        },
+        {
+          "kind": "corpus_text",
+          "task_path": "sionic9-fixed-prompt-v1/Ko-StrategyQA/default/dev"
+        }
+      ]
+    }
+  ],
+  "status": "pass_with_retrieval_corpus_exposure",
+  "interpretation": "query_text/evaluation_text overlap is critical; corpus-only overlap can arise from an explicitly disclosed shared task-train corpus and prevents a clean zero-shot claim"
+}
