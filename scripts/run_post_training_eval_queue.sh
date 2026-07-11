@@ -11,6 +11,7 @@ WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain"
+CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 MODEL_ROOT="$ROOT/artifacts/models"
 
 RUNS=(
@@ -28,7 +29,7 @@ FULL_RUNS=(
   qwen3-embedding-8b-ko-performance200k-last4
 )
 
-mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$MODEL_ROOT"
+mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$CLEAN_OUT" "$MODEL_ROOT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
 if [[ -f "$ROOT/.env" ]]; then
@@ -132,6 +133,20 @@ if [[ -s "$SELECTION" ]]; then
   safe_model_name="${best_model//\//__}"
   official_summary="$OFFICIAL_OUT/$safe_model_name/$local_revision/summary.json"
   sionic_summary="$(jq -r '.best.summary' "$SELECTION")"
+  clean_summary="$CLEAN_OUT/$safe_model_name/$local_revision/summary.json"
+  clean_success=0
+  for batch in 192 96 48; do
+    if run_stage "clean-legal-selected-before-publish-b$batch" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
+      --model "$best_model" --revision "$local_revision" --batch-size "$batch" \
+      --max-length 8192 --attn-implementation flash_attention_2 \
+      --output-dir "$CLEAN_OUT" \
+      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
+      clean_success=1
+      break
+    fi
+  done
+  (( clean_success == 1 )) || echo "[$(timestamp)] selected-model clean legal evaluation failed"
   if [[ "$best_model" == *performance200k* ]]; then
     training_manifest="$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json"
   elif [[ "$best_model" == *performance50k* ]]; then
@@ -141,12 +156,15 @@ if [[ -s "$SELECTION" ]]; then
     [[ -s "$training_manifest" ]] || training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/manifest.json"
   fi
   if [[ -s "$official_summary" && -s "$sionic_summary" && -s "$training_manifest" ]]; then
+    clean_args=()
+    [[ -s "$clean_summary" ]] && clean_args+=(--clean-summary "$clean_summary")
     if run_stage "publish-best-public-model" env HF_TOKEN="${HF_TOKEN:-}" \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
       --model-dir "$best_abs" \
       --sionic-summary "$sionic_summary" \
       --official-summary "$official_summary" \
       --training-manifest "$training_manifest" \
+      "${clean_args[@]}" \
       --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
       --upload --public; then
       run_stage "record-pilot-best-result" \
@@ -161,7 +179,6 @@ fi
 # Third board: fixed 10K same-repository source-document-held-out legal set.
 # Run trusted baselines and the selected local candidate after the two primary
 # public boards, without feeding these scores back into checkpoint selection.
-CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 clean_models=(
   "Qwen/Qwen3-Embedding-8B|1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
   "sionic-ai/comsat-embed-ko-8b-preview|a5cc22b651c1b2e51cdd8bf671774ae93584f0ab"
