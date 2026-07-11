@@ -18,6 +18,7 @@ MINED_PROVENANCE="$DATA_DIR/provenance.faiss-current-r095-n7.jsonl"
 MINED_HOMOGENEOUS_TRAIN="$DATA_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl"
 MINED_HOMOGENEOUS_PROVENANCE="$DATA_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl"
 MINED_HOMOGENEOUS_MANIFEST="$DATA_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json"
+MINED_QUALITY_AUDIT="$DATA_DIR/faiss-current-r095-n7.homogeneous-b16.quality-audit.json"
 VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
 RUN_NAME="qwen3-embedding-8b-ko-performance1m-lora-r64"
 MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
@@ -185,6 +186,14 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
   fi
 fi
 
+if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
+  run_stage "audit-performance-1m-mined-curriculum" \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/audit_embedding_training_data.py" \
+    --train "$MINED_HOMOGENEOUS_TRAIN" \
+    --provenance "$MINED_HOMOGENEOUS_PROVENANCE" \
+    --output "$MINED_QUALITY_AUDIT" --expected-batch-size 16 || exit 3
+fi
+
 MAX_STEPS_1M="$(jq -r '.output_rows / 128 | floor' "$TRAINING_MANIFEST")"
 
 SCALE_TRAIN_ENV="$ROOT/.venv-train"
@@ -243,6 +252,7 @@ if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
     --provenance "$MINED_HOMOGENEOUS_PROVENANCE" \
     --manifest "$MINED_HOMOGENEOUS_MANIFEST" \
     --mining-manifest "$MINING_MANIFEST" --mining-audit "$MINING_AUDIT" \
+    --quality-audit "$MINED_QUALITY_AUDIT" \
     --repo-id LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1 \
     --title "Korean Embedding Performance 1M Quantile HN7" \
     --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \

@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--mining-manifest", type=Path)
     parser.add_argument("--mining-audit", type=Path)
+    parser.add_argument("--quality-audit", type=Path)
     parser.add_argument("--repo-id", required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--source-dataset", action="append", default=[])
@@ -63,6 +64,8 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
         paths.append(args.mining_manifest)
     if args.mining_audit:
         paths.append(args.mining_audit)
+    if args.quality_audit:
+        paths.append(args.quality_audit)
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         raise FileNotFoundError(
@@ -108,6 +111,23 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
     evidence["manifest"] = {"sha256": sha256(args.manifest)}
     if args.mining_manifest:
         evidence["mining_manifest"] = {"sha256": sha256(args.mining_manifest)}
+    if args.quality_audit:
+        quality = read_json(args.quality_audit)
+        if quality.get("rows") != rows:
+            raise ValueError("Quality audit row count does not match final curriculum")
+        checks = quality.get("contract_checks", {})
+        if checks.get("status") != "pass":
+            raise ValueError("Quality audit contract did not pass")
+        quality_inputs = quality.get("inputs", {})
+        if (
+            quality_inputs.get("train", {}).get("sha256") != evidence["train"]["sha256"]
+            or quality_inputs.get("provenance", {}).get("sha256")
+            != evidence["provenance"]["sha256"]
+        ):
+            raise ValueError(
+                "Quality audit belongs to different train/provenance files"
+            )
+        evidence["quality_audit"] = {"sha256": sha256(args.quality_audit)}
     return {"rows": rows, "manifest": manifest, "mining": mining, "evidence": evidence}
 
 
@@ -154,6 +174,8 @@ Sionic 9 및 MTEB task-family train source가 포함될 수 있다. 이 dataset�
 - `metadata/final_manifest.json`: exact order, row count, SHA, source counts
 - `metadata/mining_manifest.json`: model weight SHA, FAISS, filter와 selection 계약
 - `metadata/mining_audit.jsonl`: per-input positive threshold와 selected document hashes
+- `metadata/training_data_quality_audit.json`: 실제 final train/provenance의 source, query
+  style, negative 수, 길이, 중복과 homogeneous-batch contract
 
 ## 원 dataset
 
@@ -218,6 +240,13 @@ def main() -> None:
                 CommitOperationAdd(
                     path_in_repo="metadata/mining_audit.jsonl",
                     path_or_fileobj=args.mining_audit,
+                )
+            )
+        if args.quality_audit:
+            operations.append(
+                CommitOperationAdd(
+                    path_in_repo="metadata/training_data_quality_audit.json",
+                    path_or_fileobj=args.quality_audit,
                 )
             )
         commit = api.create_commit(

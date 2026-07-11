@@ -41,7 +41,7 @@ train-family 노출이 있으므로 clean zero-shot이 아니라 `performance ta
 | base | post-training Sionic winner의 safe merge; 없으면 `Qwen/Qwen3-Embedding-8B@1d8ad4c...` |
 | tuner | LoRA r64, alpha128 |
 | loss | ms-swift InfoNCE, tau .02, current-student mined explicit HN 7(원본 fallback 4), fake-negative mask |
-| attention | FlashAttention 2 |
+| attention | 격리 NVIDIA PyTorch 환경의 실제 8B backward probe 성공 시 FA2, 아니면 SDPA |
 | max length | 512 |
 | global batch | 16 × accumulation 8 = 128 |
 | steps | homogeneous manifest의 `floor(output_rows / 128)`, 약 1 epoch |
@@ -57,6 +57,9 @@ adapter reload, safe merge parity, Sionic 9종 전체, 공식 Korean v1 전체�
 current-student quantile-HN 파생 curriculum을 사용한 경우 exact train/provenance/mining
 audit/manifest는 학습 종료 직후 GPU 평가와 겹쳐 백그라운드로
 `LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1`에 공개한다.
+업로드 전에 final ordered train/provenance를 전수 감사하고 report input SHA, row 수,
+row-hash/batch contract가 실제 publisher 입력과 일치해야 한다. report도 dataset card와
+`metadata/training_data_quality_audit.json`에 포함한다.
 
 ```bash
 WAIT_PID=<post-training-eval-pid> bash scripts/run_scale_1m_queue.sh

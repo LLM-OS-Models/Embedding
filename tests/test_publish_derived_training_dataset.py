@@ -24,6 +24,20 @@ class PublishDerivedTrainingDatasetTest(unittest.TestCase):
             train.write_text("{}\n{}\n", encoding="utf-8")
             provenance.write_text("{}\n{}\n", encoding="utf-8")
             audit.write_text("{}\n{}\n", encoding="utf-8")
+            quality = root / "quality.json"
+            quality.write_text(
+                json.dumps(
+                    {
+                        "rows": 2,
+                        "inputs": {
+                            "train": {"sha256": digest(train)},
+                            "provenance": {"sha256": digest(provenance)},
+                        },
+                        "contract_checks": {"status": "pass"},
+                    }
+                ),
+                encoding="utf-8",
+            )
             manifest = root / "final.json"
             manifest.write_text(
                 json.dumps(
@@ -57,12 +71,14 @@ class PublishDerivedTrainingDatasetTest(unittest.TestCase):
                 manifest=manifest,
                 mining_manifest=mining,
                 mining_audit=audit,
+                quality_audit=quality,
                 repo_id="org/fixture",
                 title="Fixture",
                 source_dataset=["org/source"],
             )
             result = validate(args)
             self.assertEqual(result["rows"], 2)
+            self.assertIn("quality_audit", result["evidence"])
             card = dataset_card(args, result)
             self.assertIn("score-rank", card)
             self.assertIn("release eligible: **false**", card)

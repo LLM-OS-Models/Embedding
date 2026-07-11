@@ -102,7 +102,10 @@ LR `1e-5`, legal/general 비율 `25/75`, 한 curriculum pass를 사용한다. mo
 최종 exact legal25/general75 train·provenance와 mining audit/manifest는 모델 평가와
 동시에 `LLM-OS-Models/korean-legal-quantile-hn7-replay-v1` dataset repository로
 공개한다. publisher는 file SHA/row 수, quantile/pool24/HN7 계약을 다시 검증하고
-target-adapted·non-commercial·upstream 권리 비승계 문구를 card에 강제한다.
+target-adapted·non-commercial·upstream 권리 비승계 문구를 card에 강제한다. 공개 직전
+실제 final train/provenance를 streaming 전수 감사하고, quality report의 input SHA와
+row 수가 publisher 입력과 정확히 같아야 `metadata/training_data_quality_audit.json`과
+card를 함께 올린다. 1M quantile dataset도 같은 gate를 쓴다.
 
 ## 1M 적용
 
