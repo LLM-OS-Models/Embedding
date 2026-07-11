@@ -103,6 +103,7 @@
 20. [근거 기반 합성 query·hard-negative 공장](docs/19_GROUNDED_SYNTHETIC_QUERY_FACTORY.md)
 21. [상위 모델 로컬 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md)
 22. [Qwen3 임베딩 vLLM·TEI·FA2 서빙](docs/21_QWEN3_EMBEDDING_SERVING.md)
+23. [1M scale 학습·평가 실행 계약](docs/22_SCALE_1M_EXECUTION.md)
 
 ## 실험 지도
 
