@@ -24,6 +24,9 @@ RUNS=(
   qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64
   qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64
 )
+FULL_RUNS=(
+  qwen3-embedding-8b-ko-performance200k-last4
+)
 
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$MODEL_ROOT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
@@ -76,6 +79,28 @@ for run_name in "${RUNS[@]}"; do
     --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9/$run_name"
 done
 
+for run_name in "${FULL_RUNS[@]}"; do
+  run_dir="$ROOT/outputs/$run_name"
+  [[ -d "$run_dir" ]] || continue
+  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
+    "$run_dir" --print-path 2>/dev/null)" || continue
+  [[ -n "$checkpoint" ]] || continue
+  packaged_rel="artifacts/models/${run_name}-best-full"
+  packaged="$ROOT/$packaged_rel"
+  if [[ ! -s "$packaged/full_tuning_report.json" ]]; then
+    run_stage "package-$run_name" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/package_full_embedding_checkpoint.py" \
+      --checkpoint "$checkpoint" --output-dir "$packaged" \
+      --device cuda --dtype bfloat16 --attn-implementation flash_attention_2 || continue
+  fi
+  run_stage "sionic9-$run_name" \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
+    --model "$packaged_rel" --batch-size 192 --max-length 8192 \
+    --attn-implementation flash_attention_2 \
+    --output-dir "$SIONIC_OUT" \
+    --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9/$run_name"
+done
+
 SELECTION="$LOG_DIR/sionic9-selection.json"
 run_stage "select-best-sionic9" \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_sionic_model.py" \
@@ -84,8 +109,13 @@ run_stage "select-best-sionic9" \
 if [[ -s "$SELECTION" ]]; then
   best_model="$(jq -r '.best.model' "$SELECTION")"
   best_abs="$ROOT/$best_model"
-  adapter_sha="$(jq -r '.adapter.weights_sha256' "$best_abs/merge_report.json")"
-  local_revision="adapter-${adapter_sha:0:12}"
+  if [[ -s "$best_abs/merge_report.json" ]]; then
+    weights_sha="$(jq -r '.adapter.weights_sha256' "$best_abs/merge_report.json")"
+    local_revision="adapter-${weights_sha:0:12}"
+  else
+    weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/full_tuning_report.json")"
+    local_revision="partial-full-${weights_sha:0:12}"
+  fi
   run_stage "official-korean-v1-best" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
     --model "$best_model" --revision "$local_revision" --max-length 8192 \

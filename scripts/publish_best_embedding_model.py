@@ -57,12 +57,15 @@ def sha256(path: Path) -> str:
 
 def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     model_dir = args.model_dir.resolve()
+    model_evidence_path = model_dir / "merge_report.json"
+    if not model_evidence_path.is_file():
+        model_evidence_path = model_dir / "full_tuning_report.json"
     required = [
         model_dir / "config.json",
         model_dir / "modules.json",
         model_dir / "1_Pooling/config.json",
         model_dir / "2_Normalize",
-        model_dir / "merge_report.json",
+        model_evidence_path,
         args.sionic_summary.resolve(),
         args.official_summary.resolve(),
         args.training_manifest.resolve(),
@@ -72,13 +75,13 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         raise FileNotFoundError(f"Missing publication evidence: {missing}")
     if not list(model_dir.glob("model*.safetensors")):
         raise FileNotFoundError(f"No merged safetensors weights under {model_dir}")
-    merge = read_json(model_dir / "merge_report.json")
+    model_evidence = read_json(model_evidence_path)
     sionic = read_json(args.sionic_summary.resolve())
     official = read_json(args.official_summary.resolve())
     training = read_json(args.training_manifest.resolve())
-    if merge.get("status") != "pass":
-        raise ValueError("Merge parity did not pass")
-    contract = merge.get("sentence_transformers_contract", {})
+    if model_evidence.get("status") != "pass":
+        raise ValueError("Model packaging/parity evidence did not pass")
+    contract = model_evidence.get("sentence_transformers_contract", {})
     if contract.get("pooling") != "last_token" or contract.get("normalize") is not True:
         raise ValueError("Merged SentenceTransformers contract drifted")
     if sionic.get("completed_tasks") != 9 or set(sionic.get("scores", {})) != set(
@@ -87,7 +90,17 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         raise ValueError("Sionic-9 summary is incomplete")
     if official.get("complete") is not True or official.get("completed_tasks") != 6:
         raise ValueError("Official Korean v1 summary is incomplete")
-    return merge, sionic, official, training
+    return model_evidence, sionic, official, training
+
+
+def is_full_update(evidence: dict[str, Any]) -> bool:
+    return str(evidence.get("training_method", "")).startswith("partial-full")
+
+
+def weights_sha(evidence: dict[str, Any]) -> str:
+    if is_full_update(evidence):
+        return str(evidence["model"]["weights_sha256"])
+    return str(evidence["adapter"]["weights_sha256"])
 
 
 def score_table(scores: dict[str, float], order: list[str]) -> str:
@@ -121,13 +134,14 @@ def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
 
 def build_card(
     repo_id: str,
-    merge: dict[str, Any],
+    evidence: dict[str, Any],
     sionic: dict[str, Any],
     official: dict[str, Any],
     training: dict[str, Any],
 ) -> str:
     delta = float(sionic["average"]) - 0.793
-    adapter = merge["adapter_config"]
+    full_update = is_full_update(evidence)
+    adapter = evidence.get("adapter_config", {})
     official_order = list(official["scores"])
     dataset_repos = training_dataset_repos(training)
     dataset_yaml = (
@@ -149,6 +163,29 @@ def build_card(
         if target_adapted
         else "이 모델의 task-family 학습 노출은 아래와 같이 공개한다."
     )
+    method_intro = (
+        "Qwen3-Embedding-8B의 상위 transformer block을 부분 full-parameter update한 "
+        "한국어 retrieval 성능 후보다. optimizer state를 제외한 SentenceTransformers "
+        "artifact를 만들고 last-token/L2 계약과 실제 embedding probe를 검증했다."
+        if full_update
+        else "Qwen3-Embedding-8B를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업 "
+        "성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와 "
+        "SentenceTransformers last-token/L2/prompt 계약을 검증했다."
+    )
+    if full_update:
+        method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
+- method: partial full-parameter contrastive fine-tuning, InfoNCE/explicit negatives
+- packaged model weight SHA-256: `{weights_sha(evidence)}`
+- packaged probe maximum norm error: `{evidence['probe']['metrics']['maximum_norm_error']}`
+- packaged probe positive margin: `{evidence['probe']['metrics']['positive_margin']}`"""
+    else:
+        method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
+- method: LoRA continued contrastive fine-tuning, InfoNCE/explicit negatives
+- LoRA rank/alpha/dropout: `{adapter.get('r')}` / `{adapter.get('lora_alpha')}` / `{adapter.get('lora_dropout')}`
+- target modules: `{', '.join(adapter.get('target_modules') or [])}`
+- adapter weight SHA-256: `{weights_sha(evidence)}`
+- merge minimum probe cosine: `{evidence['probe']['metrics']['minimum_row_cosine']}`
+- merge maximum pairwise score delta: `{evidence['probe']['metrics']['maximum_pairwise_score_difference']}`"""
     return f"""---
 language:
 - ko
@@ -168,9 +205,7 @@ tags:
 
 # {repo_id.split('/')[-1]}
 
-Qwen3-Embedding-8B를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업
-성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와
-SentenceTransformers last-token/L2/prompt 계약을 검증했다.
+{method_intro}
 
 {adaptation_notice}
 
@@ -185,7 +220,7 @@ SentenceTransformers last-token/L2/prompt 계약을 검증했다.
 - 9-task average: **{float(sionic['average']):.5f}**
 - Comsat 카드의 0.7930 대비: **{delta:+.5f}**
 - protocol: `{sionic['protocol_id']}`
-- model revision evidence: adapter SHA `{merge['adapter']['weights_sha256']}`
+- model revision evidence SHA: `{weights_sha(evidence)}`
 
 ### 공식 MTEB Korean v1 로컬 재현
 
@@ -200,15 +235,9 @@ SentenceTransformers last-token/L2/prompt 계약을 검증했다.
 
 ## 학습
 
-- base: `{merge['base_model']}@{merge['base_revision']}`
-- method: LoRA continued contrastive fine-tuning, InfoNCE/explicit negatives
-- LoRA rank/alpha/dropout: `{adapter.get('r')}` / `{adapter.get('lora_alpha')}` / `{adapter.get('lora_dropout')}`
-- target modules: `{', '.join(adapter.get('target_modules') or [])}`
+{method_rows}
 - training manifest phase: `{training.get('phase', training.get('purpose', 'documented in manifest'))}`
 - manifest rows: `{training_rows(training)}`
-- adapter weight SHA-256: `{merge['adapter']['weights_sha256']}`
-- merge minimum probe cosine: `{merge['probe']['metrics']['minimum_row_cosine']}`
-- merge maximum pairwise score delta: `{merge['probe']['metrics']['maximum_pairwise_score_difference']}`
 
 학습 데이터에는 official train/task-family source가 포함될 수 있다. Sionic 9에서는
 MIRACL, MrTidy, MLDR, Ko-StrategyQA 계열 노출을 명시하며, official Korean v1 결과를
@@ -288,30 +317,36 @@ benchmark한다.
 
 def main() -> None:
     args = parse_args()
-    merge, sionic, official, training = validate(args)
+    evidence, sionic, official, training = validate(args)
     model_dir = args.model_dir.resolve()
-    card = build_card(args.repo_id, merge, sionic, official, training)
+    card = build_card(args.repo_id, evidence, sionic, official, training)
     card_path = model_dir / "README.md"
     card_path.write_text(card, encoding="utf-8")
     evidence_dir = model_dir / "evaluation"
     evidence_dir.mkdir(exist_ok=True)
-    evidence = {
+    evidence_files = {
         "sionic9_summary.json": args.sionic_summary.resolve(),
         "mteb_korean_v1_summary.json": args.official_summary.resolve(),
         "training_manifest.json": args.training_manifest.resolve(),
     }
-    for name, source in evidence.items():
+    for name, source in evidence_files.items():
         shutil.copy2(source, evidence_dir / name)
+    evidence_name = (
+        "full_tuning_report.json" if is_full_update(evidence) else "merge_report.json"
+    )
     publication_manifest = {
         "schema_version": 1,
         "repo_id": args.repo_id,
         "model_dir": str(model_dir),
-        "merge_report_sha256": sha256(model_dir / "merge_report.json"),
+        "model_evidence": {
+            "file": evidence_name,
+            "sha256": sha256(model_dir / evidence_name),
+        },
         "card_sha256": sha256(card_path),
         "evidence": {
-            name: {"sha256": sha256(evidence_dir / name)} for name in evidence
+            name: {"sha256": sha256(evidence_dir / name)} for name in evidence_files
         },
-        "adapter_weights_sha256": merge["adapter"]["weights_sha256"],
+        "model_weights_evidence_sha256": weights_sha(evidence),
     }
     (model_dir / "publication_manifest.json").write_text(
         json.dumps(publication_manifest, ensure_ascii=False, indent=2) + "\n",

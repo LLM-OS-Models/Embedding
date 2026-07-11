@@ -177,11 +177,21 @@ if [[ -s "$PILOT_TRAIN" && -s "$PILOT_VAL" ]]; then
     "$ROOT/experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"
 fi
 
+LAST4_PROBE_OK=0
 for mode in lora_r64 dora_r32 last4 galore standard_full; do
-  run_stage "memory-probe-$mode" env \
+  if run_stage "memory-probe-$mode" env \
     DATA="$PILOT_TRAIN" MAX_LENGTH=512 ATTN_IMPL=flash_attention_2 \
-    "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" "$mode"
+    "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" "$mode"; then
+    [[ "$mode" == last4 ]] && LAST4_PROBE_OK=1
+  fi
 done
+
+if (( LAST4_PROBE_OK == 1 )) && perf200_ready && [[ -s "$PILOT_VAL" ]]; then
+  run_stage "qwen3-embedding-8b-ko-performance200k-last4" env \
+    RUN_NAME=qwen3-embedding-8b-ko-performance200k-last4 \
+    TRAIN_FILE="$PERF200_DIR/train.homogeneous-b16.jsonl" VAL_FILE="$PILOT_VAL" \
+    "$ROOT/experiments/070_tuning_strategy/train_quality.sh" last4
+fi
 
 # The 50K builder may have completed while the ablations ran.
 if perf50_ready && [[ -s "$PILOT_VAL" \

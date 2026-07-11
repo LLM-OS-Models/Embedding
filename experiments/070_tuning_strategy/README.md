@@ -64,8 +64,11 @@ ALLOW_STANDARD_FULL=1 experiments/070_tuning_strategy/train_quality.sh standard_
 ```
 
 full/partial checkpoint는 LoRA adapter가 아니므로 `merge_embedding_adapter.py`에 넣지
-않는다. full model packaging/last-token+Normalize contract 복원이 검증된 뒤에만 MTEB
-평가·공개 대상으로 승격한다.
+않는다. ms-swift가 저장한 SentenceTransformers checkpoint에서 optimizer를 제외한
+배포 artifact는 `scripts/package_full_embedding_checkpoint.py`가 만들고 last-token,
+Normalize, 4096-d, 실제 positive-margin probe를 확인한다. 이 gate를 통과한 모델만
+Sionic 9/MTEB 평가와 공개 대상으로 승격한다. 야간 queue는 last4 production-length
+memory probe가 통과하면 동일 200K data의 quality run을 자동 실행한다.
 
 ## 성공 기준
 
