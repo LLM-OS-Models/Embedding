@@ -13,16 +13,64 @@
 
 자세한 판단은 [요약 문서](docs/00_EXECUTIVE_SUMMARY.md)부터 읽으면 됩니다.
 
+## 성능 보드 3종
+
+세 표는 평가 대상과 집계법이 달라서 **서로 평균내지 않습니다**. 공식 Korean 보드는 한국어 전반의 6-task Borda/평균, Sionic 보드는 검색 9종 NDCG@10, 종합 보드는 오염을 차단한 자체 holdout과 효율을 봅니다. `—`는 0점이 아니라 미제출·미측정입니다.
+
+### 1. 공식 MTEB Korean v1
+
+공식 보드의 값을 그대로 신뢰하는 snapshot입니다. Comsat은 공식 제출 행이 없어서 같은 MTEB `2.18.0`/6-task protocol로 로컬 재현 중이며, 완료 전에는 순위를 부여하지 않습니다.
+
+| 구분 | 모델 | Borda | Mean(Task) | Mean(Type) | Retrieval | Zero-shot | 출처 |
+|---|---|---:|---:|---:|---:|---:|---|
+| 공식 #1 | `codefuse-ai/F2LLM-v2-8B` | 1 | **75.11** | 72.68 | 73.42 | 66% | MTEB live |
+| 공식 #2 | `codefuse-ai/F2LLM-v2-14B` | 2 | 74.85 | 72.43 | 72.33 | 66% | MTEB live |
+| 공식 #3 | `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | 3 | **77.01** | **75.92** | 72.15 | 16% | MTEB live |
+| 비교 | `sionic-ai/comsat-embed-ko-8b-preview` | — | 측정 중 | 측정 중 | 측정 중 | 별도 감사 | 동일 protocol 로컬 run |
+| 비교 | `Qwen/Qwen3-Embedding-8B` | — | — | — | — | — | 공식 미제출 |
+| 우리 모델 | smoke LoRA r32 | — | 미측정 | 미측정 | 미측정 | 100% | pipeline 검증 전용 |
+
+`F2LLM-v2-8B`는 Borda 1위지만 단순 평균 1위는 PwC입니다. PwC는 6개 중 5개 평가 계열을 학습한 in-domain specialist이므로 zero-shot 일반화와 구분합니다. 전체 task별 값과 방법론 감사는 [Korean leaderboard 문서](docs/08_KOREAN_LEADERBOARD_AND_F2LLM.md)에 있습니다.
+
+### 2. Sionic Korean retrieval 9종
+
+9개 retrieval task의 macro NDCG@10입니다. `AutoRAG`의 `실측` 표시는 같은 고정 evaluator로 full corpus를 직접 실행한 값이고, Avg/나머지 값은 Sionic 카드의 공개 표입니다.
+
+| 모델 | 9-task Avg | AutoRAG NDCG@10 | 측정 상태 | Comsat 대비 Avg |
+|---|---:|---:|---|---:|
+| `sionic-ai/comsat-embed-ko-8b-preview` | **0.7930** | **0.85222** 실측 | 9개 카드 + 1개 재현 | 기준 |
+| `Qwen/Qwen3-Embedding-8B` | 0.7825 | 0.82765 실측 | 9개 카드 + 1개 재현 | -0.0105 |
+| `codefuse-ai/F2LLM-v2-8B` | 0.7621 | 0.76611 실측 | 9개 카드 + 1개 재현 | -0.0309 |
+| `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | — | 0.78329 실측 | AutoRAG만 측정 | — |
+| 우리 smoke LoRA r32 | — | 미측정 | 성능 주장 금지 | — |
+| 우리 공개 후보 목표 | **> 0.7930** | 회귀 없음 | 9개 전부 직접 측정 | **> 0** |
+
+현재 근거로 Comsat은 “별로인 모델”이 아니라 Qwen 대비 한국어 retrieval에 잘 특화된 모델입니다. 다만 선택된 9개 task만으로 일반 한국어·다국어 SOTA라고 할 수는 없습니다. raw run과 revision은 [평가 로그](docs/09_EVALUATION_RESULTS.md)에 기록합니다.
+
+### 3. Clean Korean 종합 보드
+
+우리의 실제 모델 선택 보드입니다. public leaderboard test를 보며 튜닝하지 않고, 데이터 provenance와 중복 차단이 확인된 holdout에서만 checkpoint를 고릅니다. 아직 clean 데이터셋을 구축 중이므로 수치를 만들지 않습니다.
+
+| 모델 | Clean retrieval | Broad semantic | Long-context | Noise/OCR robustness | Peak VRAM | 상태 |
+|---|---:|---:|---:|---:|---:|---|
+| Qwen3-Embedding-8B | 예정 | 예정 | 예정 | 예정 | 예정 | 기준선 |
+| Comsat-embed-ko-8b-preview | 예정 | 예정 | 예정 | 예정 | 예정 | 비교군 |
+| 우리 smoke LoRA r32 | 평가 제외 | 평가 제외 | 평가 제외 | 평가 제외 | **17.07 GiB** 학습 | pipeline-only |
+| 우리 release candidate | 예정 | 예정 | 예정 | 예정 | 예정 | 권리 확인 데이터로 학습 예정 |
+
+종합 보드는 clean retrieval, STS/분류, 긴 문맥의 evidence 위치, OCR·띄어쓰기·질의체 변화, 처리량·VRAM·차원/저장비용을 각각 보고합니다. 설계와 승격 기준은 [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md)에 고정합니다.
+
 ## 현재 상태
 
 | 항목 | 상태 | 위치 |
 |---|---|---|
 | Qwen3-Embedding 공식 저장소 | clone 완료 | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
-| 공식 후속학습 프레임워크 `ms-swift` | commit 고정 및 설치 중 | [`third_party/ms-swift/`](third_party/ms-swift/) |
+| 공식 후속학습 프레임워크 `ms-swift` | commit 고정, 격리 환경 설치 완료 | [`third_party/ms-swift/`](third_party/ms-swift/) |
 | Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
-| 2026-07 라이브 MTEB 조사 | 1차 완료, 모델별 심층 조사 중 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
+| 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
 | 데이터 manifest / 오염 차단 | 구현 중 | [docs/05_DATA_AND_GOVERNANCE.md](docs/05_DATA_AND_GOVERNANCE.md) |
-| 첫 8B LoRA pilot | 환경 준비 중 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
+| 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
+| LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
 
 ## 문서 지도
 
@@ -36,6 +84,7 @@
 8. [실행 및 재현 runbook](docs/07_RUNBOOK.md)
 9. [MTEB Korean 상위 모델과 F2LLM/PwC 감사](docs/08_KOREAN_LEADERBOARD_AND_F2LLM.md)
 10. [실제 평가 결과 로그](docs/09_EVALUATION_RESULTS.md)
+11. [Clean Korean 종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md)
 
 ## 실험 지도
 
@@ -50,6 +99,7 @@
 | [`040_long_context`](experiments/040_long_context/) | 512/2K/4K/8K 길이·evidence 위치 curriculum |
 | [`050_model_merge`](experiments/050_model_merge/) | checkpoint/domain adapter 평균·SLERP |
 | [`060_backbone_ablation`](experiments/060_backbone_ablation/) | Qwen 0.6B/4B/8B, Nemotron, Gemma 계열 비교 |
+| [`070_tuning_strategy`](experiments/070_tuning_strategy/) | LoRA/DoRA/부분학습/full FT의 품질·VRAM·속도 비교 |
 
 ## 원칙
 

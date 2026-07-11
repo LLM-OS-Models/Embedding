@@ -4,7 +4,7 @@ library_name: transformers
 pipeline_tag: feature-extraction
 language:
   - ko
-license: apache-2.0
+license: other
 tags:
   - sentence-transformers
   - embedding
@@ -24,6 +24,16 @@ This repository is a **private pipeline-validation artifact**, not a performance
 - Purpose: verify data formatting, optimization, saving, loading, and evaluation plumbing
 - Public benchmark claim: **none**
 - Release eligibility: **no**; the smoke source dataset does not declare an explicit license
+- Distribution: private adapter artifact only; the base model's Apache-2.0 license does not resolve the missing training-data license
+
+## Measured pipeline checks
+
+- Trainable parameters: 87.294M / 8.276B (1.0548%)
+- Training: 20 steps in 43.81 seconds on one H100 80GB
+- Peak training memory: 17.07 GiB at an average sequence length of about 39 tokens
+- Fresh-process adapter reload: pass; 4096-dimensional embeddings and a positive-minus-negative probe margin of 0.44580
+
+These checks are not benchmark results. The validation loss saturated immediately because the smoke negatives were too easy.
 
 ## Planned fair comparison
 

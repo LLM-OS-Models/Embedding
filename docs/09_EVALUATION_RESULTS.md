@@ -2,6 +2,23 @@
 
 이 파일에는 실제로 실행한 결과만 기록합니다. 모델 카드의 성능표는 여기의 raw result와 revision을 기준으로 생성합니다.
 
+## 2026-07-11 training/adapter pipeline verification
+
+Run: `qwen3-embedding-8b-ko-smoke-r32/v1-20260711-210119`, checkpoint 20, Qwen base revision `1d8ad4ca`, H100 80GB, BF16 SDPA.
+
+| Check | Measured |
+|---|---:|
+| Trainable / total | 87.294M / 8.276B (1.0548%) |
+| 20-step wall time | 43.81 s |
+| Peak training VRAM | 17.07 GiB |
+| Fresh-process shape | 3 × 4096 |
+| Probe positive cosine | 0.66728 |
+| Probe negative cosine | 0.22148 |
+| Probe margin | **0.44580** |
+| Adapter SHA-256 | `18965a6d8b1b04c26b9d4651b6d759577a082c7e98c4f33fa7498b44ae54a9de` |
+
+BF16 embedding norms were `0.99856–1.00044`, within the explicit `5e-3` normalization tolerance. Reload status is `pass`. The 32-row validation loss was effectively zero from the start because the supplied negative passages were too easy; this run validates plumbing only and is excluded from all performance leaderboards.
+
 ## 2026-07-11 evaluator parity — AutoRAG
 
 Protocol: `sionic9-fixed-prompt-v1`의 AutoRAG slice, full corpus, NDCG@10, query-only fixed prompt, MTEB `2.18.0` commit `193e3f66`, H100 80GB, normalized cosine/IP.

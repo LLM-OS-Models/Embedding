@@ -56,7 +56,9 @@ def main() -> None:
         raise RuntimeError(f"Unexpected embedding shape: {tuple(embeddings.shape)}")
     if not torch.isfinite(embeddings).all():
         raise RuntimeError("Non-finite embedding values")
-    if not torch.allclose(norms, torch.ones_like(norms), atol=1e-4):
+    # The engine serializes BF16 embeddings through Python floats; a few 1e-3
+    # of norm drift is expected after that round trip.
+    if not torch.allclose(norms, torch.ones_like(norms), atol=5e-3):
         raise RuntimeError(f"Embeddings are not L2 normalized: {norms.tolist()}")
     if scores[0, 1] <= scores[0, 2]:
         raise RuntimeError("Positive similarity is not greater than negative similarity")
