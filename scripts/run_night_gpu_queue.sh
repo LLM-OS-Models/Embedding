@@ -16,6 +16,7 @@ PILOT_DIR="$ROOT/data/processed/ko_triplet_pilot_10k"
 PILOT_TRAIN="$PILOT_DIR/train.hn-qwen3-r095-n4.jsonl"
 PILOT_VAL="$PILOT_DIR/validation.hn-qwen3-r095-n4.jsonl"
 PERF50_DIR="$ROOT/outputs/data/performance-v1/pilot-50k"
+PERF200_DIR="$ROOT/outputs/data/performance-v1/ablation-200k"
 
 mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
@@ -38,6 +39,12 @@ perf50_ready() {
   [[ -s "$PERF50_DIR/train.jsonl" && -s "$PERF50_DIR/manifest.json" ]] || return 1
   [[ "$(jq -r '.phase + ":" + (.built_rows | tostring)' "$PERF50_DIR/manifest.json")" == \
     "pilot_50k:50000" ]]
+}
+
+perf200_ready() {
+  [[ -s "$PERF200_DIR/train.jsonl" && -s "$PERF200_DIR/manifest.json" ]] || return 1
+  [[ "$(jq -r '.phase + ":" + (.built_rows | tostring)' "$PERF200_DIR/manifest.json")" == \
+    "ablation_200k:200000" ]]
 }
 
 if [[ -f "$ROOT/.env" ]]; then
@@ -98,13 +105,27 @@ run_lora_training() {
   local run_name="$1"
   local train_file="$2"
   local max_steps="$3"
+  local interval=40
+  if (( max_steps > 1000 )); then
+    interval=250
+  fi
   run_stage "$run_name" env \
     RUN_NAME="$run_name" TRAIN_FILE="$train_file" VAL_FILE="$PILOT_VAL" \
-    MAX_STEPS="$max_steps" EVAL_STEPS=40 SAVE_STEPS=40 \
+    MAX_STEPS="$max_steps" EVAL_STEPS="$interval" SAVE_STEPS="$interval" \
     TRAIN_BATCH_SIZE=16 GRAD_ACCUM_STEPS=4 \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
   local latest
   latest="$(find "$ROOT/outputs/$run_name" -maxdepth 1 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+  if [[ -z "$latest" || ! -s "$latest/adapter_model.safetensors" ]]; then
+    local fallback_name="${run_name}-b8"
+    run_stage "$fallback_name" env \
+      RUN_NAME="$fallback_name" TRAIN_FILE="$train_file" VAL_FILE="$PILOT_VAL" \
+      MAX_STEPS="$max_steps" EVAL_STEPS="$interval" SAVE_STEPS="$interval" \
+      TRAIN_BATCH_SIZE=8 GRAD_ACCUM_STEPS=8 \
+      "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
+    run_name="$fallback_name"
+    latest="$(find "$ROOT/outputs/$run_name" -maxdepth 1 -type d -name 'checkpoint-*' 2>/dev/null | sort -V | tail -n 1)"
+  fi
   if [[ -n "$latest" && -s "$latest/adapter_model.safetensors" ]]; then
     run_stage "$run_name-verify" \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
@@ -120,6 +141,11 @@ fi
 if perf50_ready && [[ -s "$PILOT_VAL" ]]; then
   run_lora_training "qwen3-embedding-8b-ko-performance50k-lora-r64" \
     "$PERF50_DIR/train.jsonl" 800
+fi
+
+if perf200_ready && [[ -s "$PILOT_VAL" ]]; then
+  run_lora_training "qwen3-embedding-8b-ko-performance200k-lora-r64" \
+    "$PERF200_DIR/train.jsonl" 3125
 fi
 
 if [[ -s "$PILOT_TRAIN" && -s "$PILOT_VAL" ]]; then
@@ -147,6 +173,12 @@ if perf50_ready && [[ -s "$PILOT_VAL" \
       && ! -d "$ROOT/outputs/qwen3-embedding-8b-ko-performance50k-lora-r64" ]]; then
   run_lora_training "qwen3-embedding-8b-ko-performance50k-lora-r64" \
     "$PERF50_DIR/train.jsonl" 800
+fi
+
+if perf200_ready && [[ -s "$PILOT_VAL" \
+      && ! -d "$ROOT/outputs/qwen3-embedding-8b-ko-performance200k-lora-r64" ]]; then
+  run_lora_training "qwen3-embedding-8b-ko-performance200k-lora-r64" \
+    "$PERF200_DIR/train.jsonl" 3125
 fi
 
 echo "[$(timestamp)] GPU queue complete"
