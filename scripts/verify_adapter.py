@@ -28,11 +28,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--model", default="Qwen/Qwen3-Embedding-8B")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--allow-disqualified-diagnostic", action="store_true")
     return parser.parse_args()
+
+
+def disqualification_marker(adapter: Path) -> Path | None:
+    resolved = adapter.expanduser().resolve()
+    for directory in (resolved, *resolved.parents):
+        marker = directory / "DISQUALIFIED.json"
+        if marker.is_file() and marker.stat().st_size > 0:
+            return marker
+    return None
 
 
 def main() -> None:
     args = parse_args()
+    marker = disqualification_marker(args.adapter)
+    if marker is not None and not args.allow_disqualified_diagnostic:
+        raise RuntimeError(
+            "Refusing candidate verification for a disqualified run: "
+            f"{marker}. Use --allow-disqualified-diagnostic only for an explicitly "
+            "labelled diagnostic check."
+        )
     adapter_config = json.loads(
         (args.adapter / "adapter_config.json").read_text(encoding="utf-8")
     )
