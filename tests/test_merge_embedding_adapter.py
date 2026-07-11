@@ -81,6 +81,27 @@ class ContractTests(unittest.TestCase):
                 merge.DEFAULT_BASE_REVISION,
             )
 
+    def test_disqualified_run_cannot_be_merged_by_default(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        run = Path(temp.name) / "outputs" / "candidate"
+        adapter = run / "v1" / "checkpoint-40"
+        adapter.mkdir(parents=True)
+        marker = run / "DISQUALIFIED.json"
+        marker.write_text('{"status":"disqualified"}\n', encoding="utf-8")
+        self.assertEqual(merge.find_disqualification_marker(adapter), marker)
+        with self.assertRaisesRegex(RuntimeError, "Refusing to merge"):
+            merge.assert_adapter_publishable(adapter, allow_diagnostic=False)
+
+    def test_disqualified_diagnostic_merge_requires_explicit_opt_in(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        run = Path(temp.name) / "candidate"
+        adapter = run / "checkpoint-40"
+        adapter.mkdir(parents=True)
+        (run / "DISQUALIFIED.json").write_text("{}\n", encoding="utf-8")
+        merge.assert_adapter_publishable(adapter, allow_diagnostic=True)
+
 
 class ParityTests(unittest.TestCase):
     def test_identical_embeddings_pass_exactly(self) -> None:

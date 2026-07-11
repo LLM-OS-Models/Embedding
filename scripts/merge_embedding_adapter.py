@@ -116,6 +116,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Keep the temporary output after a failed merge for debugging.",
     )
+    parser.add_argument(
+        "--allow-disqualified-diagnostic",
+        action="store_true",
+        help=(
+            "Allow merging a run whose ancestor contains DISQUALIFIED.json. "
+            "This is diagnostic-only and is intentionally opt-in."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -164,6 +172,28 @@ def adapter_weight_path(adapter_dir: Path) -> Path:
             f"adapter_model.bin: {adapter_dir}"
         )
     return present[0]
+
+
+def find_disqualification_marker(adapter_dir: Path) -> Path | None:
+    """Return the nearest run-level disqualification marker, if present."""
+
+    resolved = adapter_dir.expanduser().resolve()
+    for directory in (resolved, *resolved.parents):
+        marker = directory / "DISQUALIFIED.json"
+        if marker.is_file() and marker.stat().st_size > 0:
+            return marker
+    return None
+
+
+def assert_adapter_publishable(adapter_dir: Path, allow_diagnostic: bool) -> None:
+    marker = find_disqualification_marker(adapter_dir)
+    if marker is None or allow_diagnostic:
+        return
+    raise RuntimeError(
+        "Refusing to merge a disqualified training run into a publishable model: "
+        f"{marker}. Pass --allow-disqualified-diagnostic only for an explicitly "
+        "labelled diagnostic artifact."
+    )
 
 
 def validate_adapter(adapter_dir: Path) -> dict[str, Any]:
@@ -654,6 +684,7 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
 
 def main() -> None:
     args = parse_args()
+    assert_adapter_publishable(args.adapter, args.allow_disqualified_diagnostic)
     output_dir = args.output_dir.expanduser().resolve()
     if output_dir.exists():
         raise FileExistsError(
