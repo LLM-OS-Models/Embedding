@@ -4,7 +4,7 @@
 
 ## 현재 한 줄 상태
 
-평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**. 현재 최우선은 비상업 `performance` 트랙이다. Comsat 공식 Korean 6-task 측정 완료, tuning memory probe, 10K hard-negative pilot 뒤 744K–2M으로 즉시 확대한다. 권리가 정리된 `clean/release` 트랙은 별도로 유지하되 performance 학습을 막지 않는다.
+평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**. 최적화·보고 순서는 **Sionic retrieval 9종 → 공식 MTEB Korean v1 → clean 종합 보드**다. 현재 실행 중인 Comsat 공식 Korean 6-task 측정을 끝낸 뒤 tuning memory probe와 10K hard-negative pilot을 수행하고, 744K–2M으로 즉시 확대한다. 첫 후보는 비상업 공개가 가능한 `performance` 트랙이며, 권리가 정리된 `clean/release` 트랙은 별도로 유지하되 performance 학습을 막지 않는다.
 
 ## 두 개의 모델 트랙
 
@@ -29,6 +29,8 @@
 | 공식 Korean protocol | 정확한 6 task와 prompt fallback 구현 | local result를 official submission과 구분 |
 | 논문/데이터 감사 | Qwen/F2/Nemotron/KaLM/Harrier 및 2026 후속 matrix | 공개 사실, 누락, 채택/기각 분리 |
 | hard-negative miner | exact blockwise dense mining, `.95*s_pos`, pool24 | dry-run/fake encoder/strict validator 통과 |
+| benchmark seal | Sionic 9 + 공식 Korean 6의 ID/text/qrel fingerprint | deterministic gzip/manifest 빌더 검증 통과 |
+| 공개 가능 데이터 공장 | KOGL·법률·Wikipedia·PMC·CDC 1,000,000행 계획 | source/revision/license 및 생성·검수 gate 고정 |
 | 10K private pilot 입력 | train 10,000 / validation 512, hash 검증 | source license 미명시로 public release 불가 |
 | vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | GPU parity는 아직 실행 전 |
 
@@ -59,7 +61,7 @@ Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
 
 ### 1. 대규모 performance mix 변환과 균형
 
-학습 데이터가 없는 것이 아니다. 즉시 쓸 수 있는 `ko-triplet-v1.0` 744,862 rows, F2LLM-v2 composite 60.1M/한국어 약 1.083M, KaLM fine-tuning 6.34M, Nemotron 약 16.1–16.4M과 target 계열 train split이 있다. 현재 병목은 이를 같은 schema로 변환하고 source가 큰 gradient를 독점하지 않게 균형화하며, 실제로 어려운 negative를 보존하는 일이다.
+학습 데이터가 없는 것이 아니다. 즉시 쓸 수 있는 `ko-triplet-v1.0` 744,862 rows, F2LLM-v2 composite 60.1M/한국어 약 1.083M, KaLM fine-tuning 6.34M, Nemotron 약 16.1–16.4M과 target 계열 train split이 있다. 추가로 `legalize-kr`의 법령·행정규칙·판례·자치법규와 `LLM-Ko-Datasets`가 가리키는 한국어 원천을 감사 중이다. 현재 병목은 이를 같은 schema로 변환하고 source가 큰 gradient를 독점하지 않게 균형화하며, 실제로 어려운 negative를 보존하는 일이다.
 
 해소 조건:
 
