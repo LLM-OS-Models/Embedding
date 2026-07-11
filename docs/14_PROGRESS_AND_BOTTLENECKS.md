@@ -39,8 +39,8 @@
 | vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | Ko-Strategy parity/처리량 측정 완료; 이 workload에서는 FA2가 더 빠름 |
 | adapter 병합/공개 | safe merge, 6-probe parity, ST contract, 카드/대용량 upload 코드 | tiny Qwen 실제 LoRA merge에서 max pair delta `4.68e-8` |
 | homogeneous batching | provenance source별 16-row microbatch compiler | 50K `49,904`, 200K `199,904` rows; 모든 emitted batch 단일 source |
-| performance 1M mix | 1,000,000 rows build·strict validation·public HF upload | train SHA `094d44…3c0a`, provenance SHA `94334a…18c1` |
-| performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous length buckets | ordered train SHA `436dc7…2c00`; source remainder 총 64 rows |
+| performance 1M mix | critical hash decontamination 후 1,000,000 rows 재충전·공개 | raw `056aba…d2fa`; critical row 2,839 교체; final critical overlap 0; public `5a2a3ab7` |
+| performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous length buckets | ordered train `7f2641…9009`, provenance `b036f6…6646`; batch/SHA violation 0 |
 | SQuADKorV1 train-family 60K | 원본 KorQuAD train 질문→문맥 변환·전수 감사·공개 | 60,000 rows; query/evaluation-text overlap 0, shared Wikipedia eval-corpus hash 6,426; clean 아님; public `8fbc6d6d`; HN/replay queue 연결 |
 | PublicHealth health-domain 100K | F2 medical QA/instruction/flashcard 7-source mix 전수 감사·공개 | 100,000 rows; query/evaluation-text overlap 0, PublicHealthQA exact overlap 0; corpus-only 114; public `5fc4bb81`; HN/replay queue 연결 |
 | AutoRAG domain 100K | F2 finance/banking/commerce/legal 5-source mix 전수 감사·공개 | 100,000 rows; query/evaluation-text overlap 0, AutoRAG exact overlap 0; corpus-only 1; public `9140e9e0`; HN/replay queue 연결 |
@@ -124,6 +124,17 @@ step 440은 loss `0.00353363`, margin `0.04320235`, mean negative/positive
 `0.04329265`, mean negative/positive `0.17398748/0.72946346`로 step 200을 넘어 새
 50K best가 됐다. watcher가 checkpoint 480을 별도 보존했다. 다만 10K best
 `0.00338515`보다 `0.00011976` 높아 continual-promotion gate는 아직 닫혀 있다.
+
+step 520/560/600 loss는 각각 `0.00350941`/`0.00351278`/`0.00350653`으로
+step 480을 넘지 못했다. step 600 margin은 `0.04314961`, mean negative/positive는
+`0.17448193/0.72877163`이다. 따라서 보존 best와 promotion 판단은 변하지 않는다.
+
+별도의 15-task exact text-hash audit 결과, 10K exhaustive-HN train은 overlap 0이지만
+현재 50K trainer order에는 evaluation query hash가 고유 4개 있었다. Ko-StrategyQA
+train source 3건이 dev query와 exact match했고 F2 KoAlpaca-realQA 1건이 SQuADKorV1
+query와 match했다. 따라서 50K run은 loss/속도/pipeline diagnostic에는 남기지만 public
+winner selection과 대표 모델 공개에서는 `DISQUALIFIED.json`으로 자동 제외한다. 다음
+200K active input은 critical row 12개를 교체해 final critical overlap 0을 확인했다.
 
 현재 200-step best는 trainer의 rolling `save_total_limit=3` 삭제 범위 밖에 필수
 adapter/config/state/log만 hard-link snapshot으로 보존했다. active-run watcher가 매

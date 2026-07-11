@@ -104,6 +104,10 @@ export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
 for run_name in "${RUNS[@]}"; do
   run_dir="$ROOT/outputs/$run_name"
   [[ -d "$run_dir" ]] || continue
+  if [[ -s "$run_dir/DISQUALIFIED.json" ]]; then
+    echo "[$(timestamp)] skip disqualified candidate: $run_name"
+    continue
+  fi
   checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
     "$run_dir" --print-path 2>/dev/null)" || continue
   [[ -n "$checkpoint" ]] || continue
@@ -124,6 +128,10 @@ done
 for run_name in "${FULL_RUNS[@]}"; do
   run_dir="$ROOT/outputs/$run_name"
   [[ -d "$run_dir" ]] || continue
+  if [[ -s "$run_dir/DISQUALIFIED.json" ]]; then
+    echo "[$(timestamp)] skip disqualified candidate: $run_name"
+    continue
+  fi
   checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
     "$run_dir" --checkpoint-kind full --print-path 2>/dev/null)" || continue
   [[ -n "$checkpoint" ]] || continue
