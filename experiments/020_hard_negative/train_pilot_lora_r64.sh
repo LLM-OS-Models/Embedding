@@ -92,6 +92,7 @@ fi
   --torch_dtype bfloat16 \
   --gradient_checkpointing true \
   --max_length "${MAX_LENGTH:-512}" \
+  --truncation_strategy right \
   --per_device_train_batch_size "${TRAIN_BATCH_SIZE:-16}" \
   --per_device_eval_batch_size "${EVAL_BATCH_SIZE:-4}" \
   --gradient_accumulation_steps "${GRAD_ACCUM_STEPS:-4}" \

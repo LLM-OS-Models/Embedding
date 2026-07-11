@@ -260,6 +260,7 @@ def build_card(
 - target modules: `{', '.join(adapter.get('target_modules') or [])}`
 - adapter weight SHA-256: `{weights_sha(evidence)}`
 - merge requested/effective dtype: `{evidence.get('merge', {}).get('requested_dtype', merge_dtype)}` / `{merge_dtype}`
+- actual trainer rows after tokenization/filtering: `{evidence.get('adapter', {}).get('training', {}).get('actual_train_rows', 'not recorded')}`
 - merge minimum probe cosine: `{evidence['probe']['metrics']['minimum_row_cosine']}`
 - merge maximum pairwise score delta: `{evidence['probe']['metrics']['maximum_pairwise_score_difference']}`"""
     return f"""---

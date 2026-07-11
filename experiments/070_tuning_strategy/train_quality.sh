@@ -56,6 +56,7 @@ COMMON=(
   --attn_impl "${ATTN_IMPL:-sdpa}"
   --torch_dtype bfloat16
   --max_length 512
+  --truncation_strategy right
   --per_device_train_batch_size "$TRAIN_BATCH_SIZE"
   --per_device_eval_batch_size 2
   --gradient_accumulation_steps "$GRAD_ACCUM_STEPS"

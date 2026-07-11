@@ -185,12 +185,45 @@ def validate_adapter(adapter_dir: Path) -> dict[str, Any]:
     ):
         raise ValueError("Adapter target_modules must be a non-empty list")
     weight_path = adapter_weight_path(adapter_dir)
+    training: dict[str, Any] = {}
+    args_path = adapter_dir / "args.json"
+    if args_path.is_file():
+        training_args = read_json(args_path)
+        training["args_sha256"] = sha256(args_path)
+        training["arguments"] = {
+            key: training_args.get(key)
+            for key in (
+                "dataset",
+                "val_dataset",
+                "max_length",
+                "per_device_train_batch_size",
+                "gradient_accumulation_steps",
+                "learning_rate",
+                "max_steps",
+                "loss_type",
+                "truncation_strategy",
+                "seed",
+            )
+        }
+    logging_path = adapter_dir.parent / "logging.jsonl"
+    if logging_path.is_file():
+        training["logging_sha256"] = sha256(logging_path)
+        for line in reversed(logging_path.read_text(encoding="utf-8").splitlines()):
+            row = json.loads(line)
+            summary = row.get("train_dataset")
+            if isinstance(summary, str) and "size=" in summary:
+                try:
+                    training["actual_train_rows"] = int(summary.rsplit("size=", 1)[1])
+                except ValueError:
+                    pass
+                break
     return {
         "config": config,
         "config_sha256": sha256(config_path),
         "weights_filename": weight_path.name,
         "weights_sha256": sha256(weight_path),
         "weights_bytes": weight_path.stat().st_size,
+        "training": training,
     }
 
 
