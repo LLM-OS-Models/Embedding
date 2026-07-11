@@ -228,6 +228,13 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 
 ## 1M exact curriculum 품질 감사
 
+초기 loss/튜닝 선택에 쓰는 exhaustive dense-HN pilot도 별도 공개했다. train 10,000행과
+validation 512행에 Qwen3 base exact top-24 후보 중 `s_neg < .95*s_pos`인 4개를
+붙였고, 두 split 모두 Sionic 9 + 공식 Korean 6의 query/evaluation/train-family/shared
+corpus exact match가 0이다. 고정 artifact는
+[`korean-embedding-ko-triplet-hn-pilot-10k@0865276`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k/tree/0865276985dd2eae5efec33a4fa181ee3086bd5f)이며
+source/HN manifest, text-free score audit, benchmark-overlap audit를 함께 포함한다.
+
 [`audit_embedding_training_data.py`](../scripts/audit_embedding_training_data.py)로 실제
 학습 순서의 999,936 rows와 provenance를 line-aligned streaming 감사했다. 결과는
 [`performance-1m-decontaminated-training-data-audit.json`](../reports/performance-1m-decontaminated-training-data-audit.json)에

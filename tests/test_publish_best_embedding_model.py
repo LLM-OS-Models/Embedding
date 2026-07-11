@@ -14,6 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublishBestModelTests(unittest.TestCase):
+    def test_pilot_card_links_published_hard_negative_dataset(self) -> None:
+        self.assertEqual(
+            training_dataset_repos(
+                {"purpose": "training-only-dense-hard-negative-mining"}
+            ),
+            ["LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k"],
+        )
+
     def test_target_adapted_cards_link_exact_derived_datasets(self) -> None:
         scale = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-performance1m-current-student"}

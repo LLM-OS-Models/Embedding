@@ -300,6 +300,8 @@ def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
             "LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
+    if manifest.get("purpose") == "training-only-dense-hard-negative-mining":
+        return ["LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k"]
     repo = {
         "pilot_50k": "LLM-OS-Models/korean-embedding-performance-v1-pilot-50k",
         "ablation_200k": "LLM-OS-Models/korean-embedding-performance-v1-ablation-200k",
@@ -307,12 +309,16 @@ def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
     }.get(manifest.get("phase"))
     if repo is None:
         train_path = str(manifest.get("inputs", {}).get("train", {}).get("path", ""))
+        if not train_path:
+            train_path = str(manifest.get("input", {}).get("path", ""))
         if "pilot-50k" in train_path:
             repo = "LLM-OS-Models/korean-embedding-performance-v1-pilot-50k"
         elif "ablation-200k" in train_path:
             repo = "LLM-OS-Models/korean-embedding-performance-v1-ablation-200k"
         elif "performance-1m" in train_path:
             repo = "LLM-OS-Models/korean-embedding-performance-v1-performance-1m"
+        elif "ko_triplet_pilot_10k" in train_path:
+            repo = "LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k"
     return [repo] if repo else []
 
 
