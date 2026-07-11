@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-11T18:23:33.801990+00:00",
+  "inputs": {
+    "train": {
+      "path": "outputs/data/performance-v1/performance-1m/train.homogeneous-b16.jsonl",
+      "sha256": "436dc7486578f6f077bef9f4479bc0d98310d855306bd2aad0c0d40fffbf2c00"
+    },
+    "provenance": {
+      "path": "outputs/data/performance-v1/performance-1m/provenance.homogeneous-b16.jsonl",
+      "sha256": "60619726c69c9f04d9539a8140ef90599a37ca3019b771780e80d26fbc674b9f"
+    }
+  },
+  "rows": 999936,
+  "source_counts": {
+    "nlpai_ko_triplet": 600240,
+    "f2_mqa_ko": 100000,
+    "f2_komagpie": 80000,
+    "f2_webfaq_kor": 70000,
+    "kalm_finetuning_replay": 26000,
+    "f2_paracrawl_ko_en": 20000,
+    "f2_pawsx_ko": 20000,
+    "f2_paracrawl_en_ko": 20000,
+    "f2_koalpaca": 20000,
+    "f2_koalpaca_realqa": 16992,
+    "klue_ynat_train": 14992,
+    "klue_sts_train": 4000,
+    "f2_mldr_ko_train": 2240,
+    "ko_strategyqa_train": 2096,
+    "kor_sts_train": 1488,
+    "f2_mrtidy_korean_train": 1200,
+    "f2_miracl_ko_train": 688
+  },
+  "negative_count_distribution": {
+    "1": 607824,
+    "2": 5,
+    "3": 18,
+    "4": 166,
+    "5": 1211,
+    "6": 20801,
+    "7": 369911
+  },
+  "instruction_counts": {
+    "Instruct: Given a Korean web search query, retrieve relevant passages that answer the query": 600240,
+    "unprompted": 377120,
+    "Instruct: Classify the Korean news headline by topic": 14992,
+    "Instruct: Retrieve semantically similar Korean text": 5488,
+    "Instruct: Given a Korean question requiring implicit reasoning, retrieve evidence passages that answer it": 2096
+  },
+  "query_style_heuristic": {
+    "natural_question": 477737,
+    "comma_keyword_list": 266604,
+    "long_statement_or_search": 175264,
+    "short_search_or_title": 80331
+  },
+  "benchmark_train_exposure_rows": {
+    "multiple published MTEB training task families": 26000,
+    "PAWS-X task family": 20000,
+    "KLUE-TC": 14992,
+    "KLUE-STS": 4000,
+    "MultiLongDocRetrieval": 2240,
+    "Ko-StrategyQA": 2096,
+    "KorSTS": 1488,
+    "MrTidyRetrieval": 1200,
+    "MIRACLRetrieval": 688,
+    "MIRACLReranking": 688
+  },
+  "character_lengths": {
+    "query_body": {
+      "min": 4,
+      "mean": 67.37938428059395,
+      "p50": 47,
+      "p95": 156,
+      "p99": 219,
+      "max": 2295
+    },
+    "positive": {
+      "min": 2,
+      "mean": 231.45086385528674,
+      "p50": 101,
+      "p95": 764,
+      "p99": 1117,
+      "max": 18456
+    },
+    "negative": {
+      "min": 2,
+      "mean": 281.9779613613355,
+      "p50": 142,
+      "p95": 819,
+      "p99": 1172,
+      "max": 59545
+    }
+  },
+  "exact_duplicates": {
+    "query_beyond_first_occurrence": 2618,
+    "positive_beyond_first_occurrence": 149633
+  },
+  "contract_checks": {
+    "row_sha256_mismatches": 0,
+    "homogeneous_batch_violations": 0,
+    "status": "pass"
+  },
+  "style_note": "Heuristic counts guide ablations; they are not human relevance labels."
+}

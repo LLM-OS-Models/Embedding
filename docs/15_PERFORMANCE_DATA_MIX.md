@@ -226,6 +226,43 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 `train.homogeneous-b16-length-bucketed.jsonl`, 대응 provenance, manifest까지 공개했다.
 따라서 모델 카드의 training SHA에서 실제 입력 순서를 그대로 복원할 수 있다.
 
+## 1M exact curriculum 품질 감사
+
+[`audit_embedding_training_data.py`](../scripts/audit_embedding_training_data.py)로 실제
+학습 순서의 999,936 rows와 provenance를 line-aligned streaming 감사했다. 결과는
+[`performance-1m-training-data-audit.json`](../reports/performance-1m-training-data-audit.json)에
+고정했다.
+
+| 항목 | 실측 |
+|---|---:|
+| row SHA mismatch | **0** |
+| homogeneous batch violation | **0** |
+| natural-question heuristic | 477,737 (47.78%) |
+| comma keyword list | 266,604 (26.66%) |
+| long statement/search | 175,264 (17.53%) |
+| short search/title | 80,331 (8.03%) |
+| explicit negative 1개인 row | 607,824 (60.79%) |
+| explicit negative 7개인 row | 369,911 (36.99%) |
+| exact query 재등장(첫 발생 제외) | 2,618 (0.26%) |
+| exact positive 재등장(첫 발생 제외) | 149,633 (14.96%) |
+
+positive 반복은 곧 row 중복을 뜻하지 않는다. 같은 passage에 서로 다른 query가 붙는
+multi-query/분류 변환이 포함되기 때문이다. 다만 특정 passage가 gradient를 과점할 수
+있으므로 source cap과 homogeneous batch를 유지하고, 후속 mix에서는 positive-frequency
+cap ablation을 추가한다. query exact 반복은 낮지만 0은 아니므로 current-student mining
+뒤 strict pair dedup을 다시 확인한다.
+
+더 직접적인 병목은 60.79%가 explicit negative 하나뿐이라는 점이다. 그래서 1M scale은
+원 curriculum을 그대로 장기 학습하지 않고, current student로 pool 24를 만들고
+positive-relative `.95` filter 뒤 score-rank quantile 7개로 교체한다. 또한 쉼표형
+keyword query 26.66%를 전부 자연 질문으로 치환하지 않는다. 실제 검색어 강건성에는
+유용하지만 비중이 과한지 `natural/scenario` grounded synthetic shard와 10–25% 교체하는
+ablation으로 판단한다.
+
+문자 길이는 query p50/p95 `47/156`, positive `101/764`, negative `142/819`였다. max는
+각각 `2,295/18,456/59,545` characters이므로 후속 trainer가
+`truncation_strategy=right`를 명시하는 이유이기도 하다.
+
 ## 현재 병목과 학습 결정
 
 현재 병목은 “데이터를 못 찾음”이 아니다.
