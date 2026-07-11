@@ -201,6 +201,8 @@ def build_card(
     delta = float(sionic["average"]) - 0.793
     full_update = is_full_update(evidence)
     adapter = evidence.get("adapter_config", {})
+    merge_dtype = str(evidence.get("merge", {}).get("dtype", "bfloat16"))
+    torch_dtype = "torch.float32" if merge_dtype == "float32" else "torch.bfloat16"
     official_order = list(official["scores"])
     dataset_repos = training_dataset_repos(training)
     dataset_yaml = (
@@ -249,6 +251,7 @@ def build_card(
 - LoRA rank/alpha/dropout: `{adapter.get('r')}` / `{adapter.get('lora_alpha')}` / `{adapter.get('lora_dropout')}`
 - target modules: `{', '.join(adapter.get('target_modules') or [])}`
 - adapter weight SHA-256: `{weights_sha(evidence)}`
+- merge requested/effective dtype: `{evidence.get('merge', {}).get('requested_dtype', merge_dtype)}` / `{merge_dtype}`
 - merge minimum probe cosine: `{evidence['probe']['metrics']['minimum_row_cosine']}`
 - merge maximum pairwise score delta: `{evidence['probe']['metrics']['maximum_pairwise_score_difference']}`"""
     return f"""---
@@ -312,11 +315,15 @@ MIRACL, MrTidy, MLDR, Ko-StrategyQA 계열 노출을 명시하며, official Kore
 ## SentenceTransformers 사용법
 
 ```python
+import torch
 from sentence_transformers import SentenceTransformer
 
 model = SentenceTransformer(
     "{repo_id}",
-    model_kwargs={{"attn_implementation": "flash_attention_2"}},
+    model_kwargs={{
+        "attn_implementation": "flash_attention_2",
+        "torch_dtype": {torch_dtype},
+    }},
     tokenizer_kwargs={{"padding_side": "left"}},
 )
 queries = model.encode(
@@ -340,6 +347,7 @@ query에는 model의 `query` prompt를 적용하고 document에는 instruction�
 MODEL_ID={repo_id} \\
 SERVED_MODEL_NAME=qwen3-embedding-8b-ko \\
 MAX_MODEL_LEN=8192 \\
+DTYPE={merge_dtype} \\
 scripts/serve_vllm_embedding.sh
 ```
 
@@ -356,7 +364,10 @@ result = client.embeddings.create(
 )
 ```
 
-vLLM pooling은 동시 요청 API에 적합하지만 offline 고정 대량 corpus에서는 항상
+공개 점수 재현에는 model card의 evaluation dtype
+(`{sionic.get('environment', {}).get('torch_dtype', merge_dtype)}`)을 유지한다. 다른
+dtype은 별도 parity/회귀 측정 없이 같은 점수라고 간주하지 않는다. vLLM pooling은
+동시 요청 API에 적합하지만 offline 고정 대량 corpus에서는 항상
 SentenceTransformers+FlashAttention 2보다 빠르지 않다. 실제 traffic으로 두 경로를
 benchmark한다.
 

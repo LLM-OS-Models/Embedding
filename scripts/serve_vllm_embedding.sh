@@ -13,6 +13,7 @@ MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-65536}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-512}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
+DTYPE="${DTYPE:-bfloat16}"
 VLLM_BIN="${VLLM_BIN:-$ROOT/.venv-vllm/bin/vllm}"
 
 if [[ ! -x "$VLLM_BIN" ]]; then
@@ -27,7 +28,7 @@ exec "$VLLM_BIN" serve "$MODEL_ID" \
   --served-model-name "$SERVED_MODEL_NAME" \
   --host "$HOST" \
   --port "$PORT" \
-  --dtype bfloat16 \
+  --dtype "$DTYPE" \
   --max-model-len "$MAX_MODEL_LEN" \
   --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS" \
   --max-num-seqs "$MAX_NUM_SEQS" \
