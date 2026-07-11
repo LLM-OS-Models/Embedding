@@ -103,6 +103,12 @@ class PublishBestModelTests(unittest.TestCase):
             self.assertIn("9-task average: **0.80000**", card)
             self.assertIn("SentenceTransformers", card)
             self.assertIn("zero-shot", card)
+            publication = json.loads((model / "publication_manifest.json").read_text())
+            self.assertEqual(set(publication["evidence"]), {
+                "sionic9_summary.json",
+                "mteb_korean_v1_summary.json",
+                "training_manifest.json",
+            })
 
 
 if __name__ == "__main__":

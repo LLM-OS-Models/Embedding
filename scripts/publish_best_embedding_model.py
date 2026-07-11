@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,14 @@ def read_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"Expected JSON object: {path}")
     return value
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
@@ -275,10 +285,35 @@ def main() -> None:
     card = build_card(args.repo_id, merge, sionic, official, training)
     card_path = model_dir / "README.md"
     card_path.write_text(card, encoding="utf-8")
+    evidence_dir = model_dir / "evaluation"
+    evidence_dir.mkdir(exist_ok=True)
+    evidence = {
+        "sionic9_summary.json": args.sionic_summary.resolve(),
+        "mteb_korean_v1_summary.json": args.official_summary.resolve(),
+        "training_manifest.json": args.training_manifest.resolve(),
+    }
+    for name, source in evidence.items():
+        shutil.copy2(source, evidence_dir / name)
+    publication_manifest = {
+        "schema_version": 1,
+        "repo_id": args.repo_id,
+        "model_dir": str(model_dir),
+        "merge_report_sha256": sha256(model_dir / "merge_report.json"),
+        "card_sha256": sha256(card_path),
+        "evidence": {
+            name: {"sha256": sha256(evidence_dir / name)} for name in evidence
+        },
+        "adapter_weights_sha256": merge["adapter"]["weights_sha256"],
+    }
+    (model_dir / "publication_manifest.json").write_text(
+        json.dumps(publication_manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     report = {
         "repo_id": args.repo_id,
         "model_dir": str(model_dir),
         "card": str(card_path),
+        "publication_manifest": str(model_dir / "publication_manifest.json"),
         "sionic9_average": sionic["average"],
         "official_mean_task": official["mean_task_leaderboard_points"],
         "visibility": "public" if args.public else "private",

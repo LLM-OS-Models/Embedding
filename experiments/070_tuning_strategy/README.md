@@ -36,7 +36,11 @@ Qwen3-Embedding-8B를 한국어 retrieval에 적응시킬 때 LoRA의 낮은 메
 
 Qwen3-Embedding checkpoint에는 `lm_head.weight`가 없지만 ms-swift loader는 약 621M parameter의 임의 BF16 head를 만든 뒤 embedding forward에서 사용하지 않는다. full/partial/GaLore에서는 이 미사용 head를 반드시 `--freeze_parameters lm_head`로 동결한다.
 
-현재 환경에는 FlashAttention, bitsandbytes, Q-GaLore, DeepSpeed가 없으므로 SDPA를 사용한다. 비양자 GaLore는 ms-swift 내부 구현으로 별도 package 없이 쓸 수 있다. 단일 GPU에서는 ZeRO/FSDP 통신 이득도 없다.
+현재 격리 학습 환경에는 FlashAttention 2가 설치돼 production probe와 LoRA/F2
+quality run에 사용한다. bitsandbytes, Q-GaLore, DeepSpeed는 기본 의존으로 두지
+않는다. 비양자 GaLore는 ms-swift 내부 구현으로 별도 package 없이 쓸 수 있다. 단일
+GPU에서는 ZeRO/FSDP 통신 이득도 없다. memory probe는 더 이상 64-token smoke로
+낙관 측정하지 않고 mined training row, max length 512, FA2에서 실행한다.
 
 첫 실전 후보는 `LoRA r64 → DoRA r32 → 마지막 4층 partial FT → GaLore full` 순서다. 마지막 4층+final norm은 771.790M trainable parameters이고, all-linear LoRA r64는 174.588M이다. 충분히 어려운 hard negatives에서 앞 설정이 Comsat 격차를 닫지 못할 때 full update를 승격한다. F2LLM의 full FT 결과만 보고 우리 데이터 규모에서도 full FT가 자동으로 낫다고 가정하지 않는다.
 
