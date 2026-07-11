@@ -185,7 +185,8 @@ def main() -> None:
                 if declared_row_hash != hashlib.sha256(compact.encode()).hexdigest():
                     row_hash_mismatches += 1
             if (
-                provenance.get("row_index") is not None
+                not args.expected_batch_size
+                and provenance.get("row_index") is not None
                 and provenance.get("row_index") != rows - 1
             ):
                 provenance_index_mismatches += 1

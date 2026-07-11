@@ -218,8 +218,8 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 
 | Phase | Ordered rows | Ordered train SHA-256 | Public dataset revision |
 |---|---:|---|---|
-| 50K active run (49,904 ordered; tokenizer-filtered 45,316) | 49,904 | `39078ebbbea895b2fbb0fa701367cb839a60c4d9460246b39753d783c7a5d717` | [`29c23fc`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k/tree/29c23fcdc7b34279a060ee765448e7ecadd1563e) |
-| 200K | 199,904 | `59b08c0691caaa02e7520e9c98cf31f890679a82262ead789c1a7614f8baf285` | [`2872bfd`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/2872bfd02fe65cabf37cc29c08b66865bc3e58a4) |
+| 50K active run (49,904 ordered; tokenizer-filtered 45,316) | 49,904 | `39078ebbbea895b2fbb0fa701367cb839a60c4d9460246b39753d783c7a5d717` | [`da0b0ff`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k/tree/da0b0ff09ea0b14d2281a88671d2d346a45ebfbe) |
+| 200K | 199,904 | `59b08c0691caaa02e7520e9c98cf31f890679a82262ead789c1a7614f8baf285` | [`0a3a0e3`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/0a3a0e38fa766ba99fdd8f82ee49862e25f0aaf4) |
 | 1M | 999,936 | `436dc7486578f6f077bef9f4479bc0d98310d855306bd2aad0c0d40fffbf2c00` | [`ac3e806`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/ac3e806f2c01f2aa9f45686207b822e992889da2) |
 
 세 repository에 base `train.jsonl`/provenance뿐 아니라 exact
@@ -232,6 +232,10 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 학습 순서의 999,936 rows와 provenance를 line-aligned streaming 감사했다. 결과는
 [`performance-1m-training-data-audit.json`](../reports/performance-1m-training-data-audit.json)에
 고정했다.
+같은 검사를 [50K exact run](../reports/pilot-50k-training-data-audit.json)과
+[200K ordered run](../reports/ablation-200k-training-data-audit.json)에도 실행했고, 각 HF
+dataset의 `metadata/training_data_quality_audit.json`과 card에 공개했다. 세 run 모두
+declared per-row SHA mismatch와 homogeneous-batch violation이 0이다.
 동일 보고서는 HF dataset의 `metadata/training_data_quality_audit.json`에도 공개했다.
 
 | 항목 | 실측 |
@@ -268,7 +272,7 @@ inline F2/KaLM instruction 안의 실제 query body까지 분리해 보니 4자 
 (0.091%)였다. 대부분 KaLM replay 830 rows이며 현재 1M artifact에서는 lineage 보존을
 위해 숨기지 않는다. 대신 builder를 고쳐 앞으로는 긴 instruction 길이가 짧은 body를
 통과시키지 못하게 했고, 다음 revision에서는 source cap을 채울 다음 유효 row로
-결정론적으로 대체한다.
+결정론적으로 대체한다. 같은 수치는 50K 16 rows, 200K 33 rows다.
 
 ## 현재 병목과 학습 결정
 
