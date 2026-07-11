@@ -32,9 +32,9 @@ COMMON=(
   --dataset "$DATA"
   --load_from_cache_file false
   --split_dataset_ratio 0
-  --attn_impl sdpa
+  --attn_impl "${ATTN_IMPL:-flash_attention_2}"
   --torch_dtype bfloat16
-  --max_length 64
+  --max_length "${MAX_LENGTH:-512}"
   --per_device_train_batch_size 1
   --gradient_accumulation_steps 1
   --learning_rate 6e-6

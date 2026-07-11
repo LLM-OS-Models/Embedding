@@ -178,7 +178,8 @@ if [[ -s "$PILOT_TRAIN" && -s "$PILOT_VAL" ]]; then
 fi
 
 for mode in lora_r64 dora_r32 last4 galore standard_full; do
-  run_stage "memory-probe-$mode" \
+  run_stage "memory-probe-$mode" env \
+    DATA="$PILOT_TRAIN" MAX_LENGTH=512 ATTN_IMPL=flash_attention_2 \
     "$ROOT/experiments/070_tuning_strategy/probe_memory.sh" "$mode"
 done
 
