@@ -7,3 +7,6 @@
 [submodule "third_party/mteb"]
 	path = third_party/mteb
 	url = https://github.com/embeddings-benchmark/mteb.git
+[submodule "third_party/CodeFuse-Embeddings"]
+	path = third_party/CodeFuse-Embeddings
+	url = https://github.com/codefuse-ai/CodeFuse-Embeddings.git
