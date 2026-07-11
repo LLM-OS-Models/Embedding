@@ -4,7 +4,7 @@
 
 ## 현재 한 줄 상태
 
-평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**. 최적화·보고 순서는 **Sionic retrieval 9종 → 공식 MTEB Korean v1 → clean 종합 보드**다. Comsat 공식 Korean 6-task와 10K exhaustive hard-negative mining을 완료했고, 현재 첫 10K LoRA r64 품질 학습이 실행 중이다. 이후 같은 자동 queue가 50K→200K→F2 dual/MRL→1M→법률 replay로 확대한다. 첫 후보는 비상업 공개가 가능한 `performance` 트랙이며, 권리가 정리된 `clean/release` 트랙은 별도로 유지하되 performance 학습을 막지 않는다.
+평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**. 최적화·보고 순서는 **Sionic retrieval 9종 → 공식 MTEB Korean v1 → clean 종합 보드**다. Comsat 공식 Korean 6-task, 10K exhaustive hard-negative mining, 첫 10K LoRA r64 학습을 완료했고 현재 50K LoRA r64가 실행 중이다. 이후 같은 자동 queue가 200K→F2 dual/MRL→1M→법률 replay로 확대한다. 첫 후보는 비상업 공개가 가능한 `performance` 트랙이며, 권리가 정리된 `clean/release` 트랙은 별도로 유지하되 performance 학습을 막지 않는다.
 
 ## 두 개의 모델 트랙
 
@@ -66,12 +66,19 @@ Comsat의 공식 `MTEB(kor, v1)` 6개를 모두 직접 측정했다.
 6위이며 공식 row 자체가 아니다. 완료 즉시 GPU는 10K hard-negative mining으로 넘어갔고,
 mining도 완료됐다.
 
-현재 `Qwen3-Embedding-8B + LoRA r64 + InfoNCE(batch negatives + explicit HN 4개)`
-10K run이 H100에서 실행 중이다. BF16/SDPA, microbatch 16, accumulation 4이며
-실측 학습 구간은 약 3.1초/step, GPU utilization은 최대 100%, board power는 약
-600–625W다. 40/80/120-step validation loss는 각각 `0.00338727`, `0.00338515`,
-`0.00338534`다. 이것은 아직 retrieval benchmark 점수가 아니며, 완료 후 minimum-loss
-checkpoint를 safe merge한 다음 Sionic 7-task early screen에서 처음 성능을 판정한다.
+`Qwen3-Embedding-8B + LoRA r64 + InfoNCE(batch negatives + explicit HN 4개)`
+10K run은 160 steps/626.7초에 완료됐다. BF16/SDPA, microbatch 16, accumulation 4이며
+최선 checkpoint는 80-step(`eval_loss=0.00338515`)이다. peak allocated VRAM은
+22.17GiB, trainable parameters는 174.588M이었다. BF16 직접 fold는 adapter 대비 probe
+minimum cosine `0.992115767`로 엄격 gate `0.999`를 통과하지 못했다. 따라서 점수를
+만들지 않고, 다음 merge부터 FP32 fold로 자동 재시도해 같은 parity gate를 통과한 경우만
+평가한다.
+
+현재 50K LoRA r64는 평균 tokenized length `118.44±124.54`, 512-token cap에서
+H100 100%, 약 56.38GiB, 약 22.8초/step이며 초기 예상은 약 5시간이다. 200K와 1M
+ordered curriculum은 source-homogeneous 계약을 유지하면서 length bucket을 적용했다.
+200K 문자 길이 proxy 기준 random batching 대비 padding이 `160,181,088 → 85,258,880`,
+즉 46.77% 줄었다.
 
 `performance_1m` 1,000,000-row base mix와 999,936-row/62,496-batch homogeneous 파생
 파일은 build를 마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에
@@ -84,7 +91,7 @@ benchmark decontamination blocklist는 Sionic 9와 공식 Korean 6의 15/15 task
 
 - 288-row LoRA의 loss는 첫 step부터 거의 0이었다. negative가 너무 쉬워 pipeline 검사 외 의미가 없다.
 - adapter probe의 positive margin `0.44580`은 세 문장 무결성 검사이지 retrieval benchmark 점수가 아니다.
-- 10K hard-negative mining은 완료됐고 LoRA r64 학습 중이다. validation InfoNCE loss만으로 Comsat 우위를 주장하지 않으며 Sionic 9 전체가 끝나야 한다.
+- 10K hard-negative mining과 LoRA r64 학습은 완료됐다. validation InfoNCE loss와 merge probe만으로 Comsat 우위를 주장하지 않으며 Sionic 9 전체가 끝나야 한다.
 - vLLM Ko-StrategyQA는 `0.83830`, 기존 FA2는 `0.84016`으로 `-0.00186` 차이였다. 65K-token 설정은 약 200 docs/s로 FA2보다 느렸고, 131K-token/1024-seq/95% VRAM은 75.85GiB에서 OOM이 나 공식 full run에는 쓰지 않는다.
 - clean comprehensive suite는 설계만 고정됐고 rights-safe holdout 수치는 아직 없다.
 
@@ -137,7 +144,7 @@ F2는 45M example full FT 선례지만 우리 budget과 base는 다르다. stand
 | 방식 | Trainable | Peak/예상 VRAM | 상태 |
 |---|---:|---:|---|
 | LoRA r32 | 87.294M | **17.07GiB 실측** | pipeline pass |
-| LoRA r64 | 174.588M | 18–20GiB 예상 | 1-step/품질 run 대기 |
+| LoRA r64 | 174.588M | 10K **22.17GiB**, 50K long mix **56.38GiB** 실측 | 10K 완료, 50K 실행 중 |
 | DoRA r32 | 약 88.695M | 17–19GiB 예상 | 대기 |
 | 마지막 4층 + norm | 771.790M | 20–25GiB 예상 | 대기 |
 | GaLore full | encoder full update | 35–45GiB 예상 | 대기 |
