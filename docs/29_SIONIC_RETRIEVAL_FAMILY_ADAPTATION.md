@@ -11,7 +11,7 @@ MLDR `0.0147`이다. 그런데 decontaminated 1M curriculum의 해당 train-fami
 
 ## Source artifact
 
-[`korean-embedding-performance-v1-sionic-retrieval-train-family-4146@d131081`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146/tree/d131081f6d8a6a76b1b9242e9e4e8ae89241a3b3)은
+[`korean-embedding-performance-v1-sionic-retrieval-train-family-4146@c847cbc`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146/tree/c847cbcbf8a72a69b6c817bd448c42ede8aa76d9)은
 decontaminated 1M의 aligned train/provenance에서 다음 `source_id`만 parent order 그대로
 추출한다.
 

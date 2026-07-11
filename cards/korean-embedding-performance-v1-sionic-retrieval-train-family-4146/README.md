@@ -85,6 +85,6 @@ score-quantile negative 7개를 고른 뒤, 같은 수의 1M general row와 50:5
 
 `release_eligible: false`, 통합 라이선스 `other`인 연구·비상업 performance artifact다.
 F2 composite 상단 조건이 upstream 권리를 자동으로 재허가한다고 주장하지 않는다.
-일부 passage/negative가 매우 길어 trainer는 `max_length=512`와 right truncation을
-명시한다. 4,146행을 여러 epoch 반복해 외우지 않고 50% general replay와 낮은 LR로
-한 번의 짧은 specialist 실험만 수행한다.
+일부 passage/negative가 매우 길어 specialist trainer는 `max_length=2048`, right
+truncation, batch 2/accumulation 32를 명시한다. 4,146행을 여러 epoch 반복해 외우지
+않고 50% general replay와 낮은 LR로 한 번의 짧은 specialist 실험만 수행한다.
