@@ -50,6 +50,17 @@ run_stage() {
   return "$status"
 }
 
+retry_stage() {
+  local name="$1" attempts="$2" attempt status=1
+  shift 2
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    run_stage "$name-attempt-$attempt" "$@" && return 0
+    status=$?
+    (( attempt == attempts )) || sleep 15
+  done
+  return "$status"
+}
+
 run_sionic_with_fallback() {
   local label="$1" model="$2" revision="$3" cache="$4"
   local batch
@@ -195,7 +206,7 @@ if [[ -s "$SELECTION" ]]; then
     robustness_args=()
     [[ -s "$robustness_summary" ]] && \
       robustness_args+=(--robustness-summary "$robustness_summary")
-    if run_stage "publish-best-public-model" env HF_TOKEN="${HF_TOKEN:-}" \
+    if retry_stage "publish-best-public-model" 3 env HF_TOKEN="${HF_TOKEN:-}" \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
       --model-dir "$best_abs" \
       --sionic-summary "$sionic_summary" \

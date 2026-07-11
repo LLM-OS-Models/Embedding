@@ -52,6 +52,17 @@ run_stage() {
   return "$status"
 }
 
+retry_stage() {
+  local name="$1" attempts="$2" attempt status=1
+  shift 2
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    run_stage "$name-attempt-$attempt" "$@" && return 0
+    status=$?
+    (( attempt == attempts )) || sleep 15
+  done
+  return "$status"
+}
+
 run_sionic_with_fallback() {
   local model="$1" revision="$2" cache="$3" batch
   for batch in 192 96 48; do
@@ -213,7 +224,7 @@ if [[ -z "$checkpoint" ]]; then
   checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 6
 fi
 
-run_stage upload-derived-legal-replay \
+retry_stage upload-derived-legal-replay 3 \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --manifest "$CURRICULUM_MANIFEST" \
@@ -275,7 +286,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   robustness_args=()
   [[ -s "$ROBUST_SUMMARY" ]] && \
     robustness_args+=(--robustness-summary "$ROBUST_SUMMARY")
-  if run_stage publish-legal-target-adapted \
+  if retry_stage publish-legal-target-adapted 3 \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
