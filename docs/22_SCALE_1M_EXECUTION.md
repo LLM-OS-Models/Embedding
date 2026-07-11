@@ -1,8 +1,10 @@
 # 1M scale 실행 계약
 
-`performance_1m`은 1,000,000 rows를 실제 한 epoch 상당으로 학습하는 scale
-experiment다. 50K/200K에서 방법론을 먼저 비교하고, 그 결과와 독립적으로 base
-Qwen3-Embedding-8B의 1M data-scale 효과를 측정한다.
+`performance_1m`은 1,000,000 rows를 실제 한 epoch 상당으로 학습하는 performance
+curriculum이다. 50K/200K에서 여러 loss와 update를 먼저 비교하고, Sionic 9에서 선택된
+safe-merged winner가 있으면 그 모델에서 이어 학습한다. selection 또는 merge evidence가
+없을 때만 pinned Qwen3-Embedding-8B로 fallback한다. 따라서 기본 실행 결과는 순수한
+base-only data-size ablation이 아니라 최종 성능을 우선한 연속 학습 결과다.
 
 ## 데이터
 
@@ -26,7 +28,7 @@ homogeneous compiler는 999,936 rows/62,496 batches를 내고 source remainder 6
 
 | 항목 | 값 |
 |---|---|
-| base | `Qwen/Qwen3-Embedding-8B@1d8ad4c...` |
+| base | post-training Sionic winner의 safe merge; 없으면 `Qwen/Qwen3-Embedding-8B@1d8ad4c...` |
 | tuner | LoRA r64, alpha128 |
 | loss | ms-swift InfoNCE, tau .02, explicit HN 4, fake-negative mask |
 | attention | FlashAttention 2 |

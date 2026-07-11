@@ -17,6 +17,7 @@ MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
 MODEL_DIR="$ROOT/$MODEL_REL"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-scale1m"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-scale1m"
+POSTTRAIN_SELECTION="$ROOT/outputs/post-training-eval-20260711/sionic9-selection.json"
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
@@ -54,6 +55,21 @@ if [[ ! -s "$VAL_FILE" ]]; then
   exit 2
 fi
 
+CONTINUAL_BASE="Qwen/Qwen3-Embedding-8B"
+CONTINUAL_REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+if [[ -s "$POSTTRAIN_SELECTION" ]]; then
+  selected_rel="$(jq -r '.best.model // empty' "$POSTTRAIN_SELECTION")"
+  selected_abs="$ROOT/$selected_rel"
+  if [[ -n "$selected_rel" && -s "$selected_abs/merge_report.json" ]]; then
+    CONTINUAL_BASE="$selected_abs"
+    CONTINUAL_REVISION=""
+    echo "[$(timestamp)] continuing 1M curriculum from post-training winner: $selected_abs"
+  fi
+fi
+if [[ "$CONTINUAL_BASE" == Qwen/Qwen3-Embedding-8B ]]; then
+  echo "[$(timestamp)] post-training winner unavailable; using pinned Qwen base"
+fi
+
 if [[ ! -s "$HOMOGENEOUS_MANIFEST" ]]; then
   run_stage "build-homogeneous-1m-batches" \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
@@ -74,6 +90,7 @@ train_scale() {
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
     TRAIN_DATALOADER_SHUFFLE=false \
     LEARNING_RATE=2e-5 WARMUP_RATIO=.05 \
+    BASE_MODEL="$CONTINUAL_BASE" BASE_REVISION="$CONTINUAL_REVISION" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }
 
