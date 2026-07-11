@@ -28,6 +28,11 @@ RUNS=(
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$MODEL_ROOT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
+if [[ -f "$ROOT/.env" ]]; then
+  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
+  export HF_TOKEN
+fi
+
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 
 run_stage() {
@@ -87,6 +92,28 @@ if [[ -s "$SELECTION" ]]; then
     --batch-size 192 --attn-implementation flash_attention_2 \
     --output-dir "$OFFICIAL_OUT" \
     --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-best"
+
+  safe_model_name="${best_model//\//__}"
+  official_summary="$OFFICIAL_OUT/$safe_model_name/$local_revision/summary.json"
+  sionic_summary="$(jq -r '.best.summary' "$SELECTION")"
+  if [[ "$best_model" == *performance200k* ]]; then
+    training_manifest="$ROOT/outputs/data/performance-v1/ablation-200k/manifest.json"
+  elif [[ "$best_model" == *performance50k* ]]; then
+    training_manifest="$ROOT/outputs/data/performance-v1/pilot-50k/manifest.json"
+  else
+    training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/train.hn-qwen3-r095-n4.jsonl.manifest.json"
+    [[ -s "$training_manifest" ]] || training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/manifest.json"
+  fi
+  if [[ -s "$official_summary" && -s "$sionic_summary" && -s "$training_manifest" ]]; then
+    run_stage "publish-best-public-model" env HF_TOKEN="${HF_TOKEN:-}" \
+      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
+      --model-dir "$best_abs" \
+      --sionic-summary "$sionic_summary" \
+      --official-summary "$official_summary" \
+      --training-manifest "$training_manifest" \
+      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
+      --upload --public
+  fi
 fi
 
 echo "[$(timestamp)] post-training evaluation queue complete"
