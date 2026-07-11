@@ -51,6 +51,35 @@ run_stage() {
   return "$status"
 }
 
+run_sionic_with_fallback() {
+  local model="$1" revision="$2" cache="$3" batch
+  for batch in 192 96 48; do
+    if run_stage "sionic9-$RUN_NAME-b$batch" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
+      --model "$model" --revision "$revision" --batch-size "$batch" --max-length 8192 \
+      --attn-implementation flash_attention_2 --output-dir "$SIONIC_OUT" \
+      --embedding-cache-dir "$cache"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_official_with_fallback() {
+  local model="$1" revision="$2" cache="$3" batch
+  for batch in 192 96 48; do
+    if run_stage "official-korean-$RUN_NAME-b$batch" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
+      --model "$model" --revision "$revision" --max-length 8192 \
+      --qwen3-instruction-loader --batch-size "$batch" \
+      --attn-implementation flash_attention_2 --output-dir "$OFFICIAL_OUT" \
+      --embedding-cache-dir "$cache"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 if [[ -n "$WAIT_PID" ]]; then
   echo "[$(timestamp)] waiting for post-training evaluation pid=$WAIT_PID"
   while kill -0 "$WAIT_PID" 2>/dev/null; do sleep 20; done
@@ -210,38 +239,34 @@ fi
 
 model_sha="$(jq -r '.model.weights_sha256' "$MODEL_DIR/merge_report.json")"
 local_revision="model-${model_sha:0:12}"
-run_stage "sionic9-$RUN_NAME" \
-  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
-  --model "$MODEL_REL" --revision "$local_revision" --batch-size 192 --max-length 8192 \
-  --attn-implementation flash_attention_2 --output-dir "$SIONIC_OUT" \
-  --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9-scale1m"
+run_sionic_with_fallback "$MODEL_REL" "$local_revision" \
+  "$ROOT/outputs/embedding-cache/sionic9-scale1m" || true
 
 safe="${MODEL_REL//\//__}"
 SIONIC_SUMMARY="$SIONIC_OUT/$safe/summary.json"
-run_stage "official-korean-$RUN_NAME" \
-  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
-  --model "$MODEL_REL" --revision "$local_revision" --max-length 8192 \
-  --qwen3-instruction-loader \
-  --batch-size 192 --attn-implementation flash_attention_2 \
-  --output-dir "$OFFICIAL_OUT" \
-  --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-scale1m"
+run_official_with_fallback "$MODEL_REL" "$local_revision" \
+  "$ROOT/outputs/embedding-cache/official-scale1m" || true
 
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$local_revision/summary.json"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
-run_stage "clean-legal-$RUN_NAME" \
-  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
-  --model "$MODEL_REL" --revision "$local_revision" --batch-size 192 \
-  --max-length 8192 --attn-implementation flash_attention_2 \
-  --output-dir "$CLEAN_OUT" \
-  --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" || true
+for batch in 192 96 48; do
+  run_stage "clean-legal-$RUN_NAME-b$batch" \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
+    --model "$MODEL_REL" --revision "$local_revision" --batch-size "$batch" \
+    --max-length 8192 --attn-implementation flash_attention_2 \
+    --output-dir "$CLEAN_OUT" \
+    --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" && break
+done
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$local_revision/summary.json"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
-run_stage "robustness-$RUN_NAME" \
-  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
-  --model "$MODEL_REL" --revision "$local_revision" --batch-size 192 \
-  --max-length 8192 --attn-implementation flash_attention_2 \
-  --output-dir "$ROBUST_OUT" \
-  --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" || true
+for batch in 192 96 48; do
+  run_stage "robustness-$RUN_NAME-b$batch" \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
+    --model "$MODEL_REL" --revision "$local_revision" --batch-size "$batch" \
+    --max-length 8192 --attn-implementation flash_attention_2 \
+    --output-dir "$ROBUST_OUT" \
+    --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" && break
+done
 ROBUST_SUMMARY="$ROBUST_OUT/$safe/$local_revision/summary.json"
 if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()

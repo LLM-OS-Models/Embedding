@@ -50,6 +50,37 @@ run_stage() {
   return "$status"
 }
 
+run_sionic_with_fallback() {
+  local label="$1" model="$2" revision="$3" cache="$4"
+  local batch
+  for batch in 192 96 48; do
+    if run_stage "sionic9-$label-b$batch" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
+      --model "$model" --revision "$revision" --batch-size "$batch" --max-length 8192 \
+      --attn-implementation flash_attention_2 --output-dir "$SIONIC_OUT" \
+      --embedding-cache-dir "$cache"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_official_with_fallback() {
+  local label="$1" model="$2" revision="$3" cache="$4"
+  local batch
+  for batch in 192 96 48; do
+    if run_stage "official-korean-$label-b$batch" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
+      --model "$model" --revision "$revision" --max-length 8192 \
+      --qwen3-instruction-loader --batch-size "$batch" \
+      --attn-implementation flash_attention_2 --output-dir "$OFFICIAL_OUT" \
+      --embedding-cache-dir "$cache"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 if [[ -n "$WAIT_PID" ]]; then
   echo "[$(timestamp)] waiting for training queue pid=$WAIT_PID"
   while kill -0 "$WAIT_PID" 2>/dev/null; do sleep 15; done
@@ -75,12 +106,8 @@ for run_name in "${RUNS[@]}"; do
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
   revision="model-${weights_sha:0:12}"
-  run_stage "sionic9-$run_name" \
-    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
-    --model "$merged_rel" --revision "$revision" --batch-size 192 --max-length 8192 \
-    --attn-implementation flash_attention_2 \
-    --output-dir "$SIONIC_OUT" \
-    --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9/$run_name"
+  run_sionic_with_fallback "$run_name" "$merged_rel" "$revision" \
+    "$ROOT/outputs/embedding-cache/sionic9/$run_name" || true
 done
 
 for run_name in "${FULL_RUNS[@]}"; do
@@ -99,12 +126,8 @@ for run_name in "${FULL_RUNS[@]}"; do
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$packaged/full_tuning_report.json")"
   revision="model-${weights_sha:0:12}"
-  run_stage "sionic9-$run_name" \
-    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
-    --model "$packaged_rel" --revision "$revision" --batch-size 192 --max-length 8192 \
-    --attn-implementation flash_attention_2 \
-    --output-dir "$SIONIC_OUT" \
-    --embedding-cache-dir "$ROOT/outputs/embedding-cache/sionic9/$run_name"
+  run_sionic_with_fallback "$run_name" "$packaged_rel" "$revision" \
+    "$ROOT/outputs/embedding-cache/sionic9/$run_name" || true
 done
 
 SELECTION="$LOG_DIR/sionic9-selection.json"
@@ -124,13 +147,8 @@ if [[ -s "$SELECTION" ]]; then
     weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/full_tuning_report.json")"
     local_revision="model-${weights_sha:0:12}"
   fi
-  run_stage "official-korean-v1-best" \
-    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
-    --model "$best_model" --revision "$local_revision" --max-length 8192 \
-    --qwen3-instruction-loader \
-    --batch-size 192 --attn-implementation flash_attention_2 \
-    --output-dir "$OFFICIAL_OUT" \
-    --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-best"
+  run_official_with_fallback "v1-best" "$best_model" "$local_revision" \
+    "$ROOT/outputs/embedding-cache/official-best" || true
 
   safe_model_name="${best_model//\//__}"
   official_summary="$OFFICIAL_OUT/$safe_model_name/$local_revision/summary.json"
