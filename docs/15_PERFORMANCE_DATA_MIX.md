@@ -218,7 +218,7 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 
 | Phase | Ordered rows | Ordered train SHA-256 | Public dataset revision |
 |---|---:|---|---|
-| 50K active run (source-homogeneous, random within source) | 49,904 | `39078ebbbea895b2fbb0fa701367cb839a60c4d9460246b39753d783c7a5d717` | [`29c23fc`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k/tree/29c23fcdc7b34279a060ee765448e7ecadd1563e) |
+| 50K active run (49,904 ordered; tokenizer-filtered 45,316) | 49,904 | `39078ebbbea895b2fbb0fa701367cb839a60c4d9460246b39753d783c7a5d717` | [`29c23fc`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k/tree/29c23fcdc7b34279a060ee765448e7ecadd1563e) |
 | 200K | 199,904 | `59b08c0691caaa02e7520e9c98cf31f890679a82262ead789c1a7614f8baf285` | [`2872bfd`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/2872bfd02fe65cabf37cc29c08b66865bc3e58a4) |
 | 1M | 999,936 | `436dc7486578f6f077bef9f4479bc0d98310d855306bd2aad0c0d40fffbf2c00` | [`fa9cfee`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/fa9cfee59356e173827ea33339c06d8d8b388acc) |
 

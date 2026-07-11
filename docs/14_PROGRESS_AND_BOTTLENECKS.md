@@ -80,6 +80,11 @@ ordered curriculum은 source-homogeneous 계약을 유지하면서 length bucket
 200K 문자 길이 proxy 기준 random batching 대비 padding이 `160,181,088 → 85,258,880`,
 즉 46.77% 줄었다.
 
+이 50K active run은 ms-swift 기본 `truncation_strategy=delete`로 49,904 입력 중
+45,316 rows를 실제 사용했다. 공개 ordered artifact와 trainer log에 둘 다 기록한다.
+후속 200K/1M/법률 run은 `truncation_strategy=right`를 명시해 긴 row를 삭제하지 않고
+512-token boundary에서 보존한다.
+
 `performance_1m` 1,000,000-row base mix와 999,936-row/62,496-batch homogeneous 파생
 파일은 build를 마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에
 공개됐고, GPU campaign은 완료된 manifest를 자동 감지해 scale run에 사용한다.
