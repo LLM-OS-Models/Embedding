@@ -4,6 +4,7 @@ language:
 - en
 license: other
 task_categories:
+- text-retrieval
 - sentence-similarity
 - feature-extraction
 pretty_name: Korean Embedding Performance v1 Pilot 50K
@@ -17,6 +18,11 @@ configs:
 ---
 
 # Korean Embedding Performance v1 — Pilot 50K
+
+> **주의: 이 revision은 공개 benchmark 성능 후보 학습에 사용하면 안 된다.**
+> 사후 15-task exact text-hash 감사에서 평가 query 고유 hash 4개가 확인됐다.
+> 파이프라인·최적화 진단과 contamination ablation에만 남기며, 교체본은
+> [`ablation-200k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k)이다.
 
 Qwen3-Embedding 계열의 한국어 retrieval 성능 실험을 위한 50,000-row 연구용
 contrastive dataset이다. 각 row는 instruction-aware query, positive passage 1개,
@@ -52,9 +58,17 @@ CC-BY-SA-4.0, upstream 조건이 혼재한다. 이 카드가 upstream 권리를 
 
 Sionic 9개 retrieval task 중 MIRACL, MrTidy, MLDR, Ko-StrategyQA 4개는
 train/task-family 노출이 있다. AutoRAG, PublicHealthQA, Belebele,
-SQuADKorV1, LawIRKo의 evaluation row는 사용하지 않았다. 공식 MTEB Korean v1은
-여섯 task 모두에 직·간접 train-family 노출이 있으므로 점수는 in-domain 결과로
-표기해야 한다.
+SQuADKorV1, LawIRKo의 evaluation split을 builder가 의도적으로 읽지는 않았다. 그러나
+사후 exact-hash audit에서 Ko-StrategyQA train source 3개가 dev query와, F2
+`koalpaca_realqa` 1개가 SQuADKorV1 test query와 일치했다. 공식 MTEB Korean v1은
+여섯 task 모두에 직·간접 train-family 노출이 있고 위 critical overlap도 있으므로,
+이 revision의 모델 점수를 공개 leaderboard 성능 주장에 사용하지 않는다.
+
+raw 50,000행과 실제 trainer order 49,904행 모두 동일한 critical 고유 hash 4개를
+포함한다. ordered audit의 shared retrieval corpus 고유 hash는 15,241,
+declared train-family hash는 5,215다. 상세 감사는
+`metadata/benchmark_overlap_audit.json`과
+`metadata/ordered_benchmark_overlap_audit.json`에 공개한다.
 
 ## 스키마
 
@@ -132,6 +146,9 @@ refresh, positive-relative false-negative filtering, temperature/MRL ablation을
 - build config: `configs/performance_data_mix_v1.json`
 - builder: `scripts/build_performance_mix.py`
 - publisher: `scripts/publish_performance_dataset.py`
+- benchmark blocklist manifest SHA-256:
+  `24f1eba04ec16436cab674c3709788c5dff2571106cd6159d75f5d711314ac1d`
+- raw/ordered critical query or evaluation hash: **4 / 4**
 
 ```bash
 .venv-train/bin/python scripts/build_performance_mix.py \
@@ -150,3 +167,4 @@ refresh, positive-relative false-negative filtering, temperature/MRL ablation을
 - 일부 negative는 현재 Qwen3-Embedding-8B에 너무 쉬울 수 있다.
 - source별 upstream 권리와 개인정보·유해 콘텐츠를 독립적으로 감사하지 않았다.
 - 공개 leaderboard 점수에는 학습 task 노출을 반드시 함께 표시해야 한다.
+- 이 revision은 critical overlap 때문에 대표 모델 선택·병합·공개에서 자동 제외한다.
