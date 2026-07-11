@@ -107,9 +107,9 @@ corpus config: id, text
 | phase | rows | 역할 | 중요한 구성 |
 |---|---:|---|---|
 | `pilot_50k` | 50,000 | LoRA rank/loss/negative/length ablation | ko-triplet 25,147 + F2 Korean 21,400 + benchmark train 3,453 |
-| `ablation_200k` | 200,000 | LoRA vs partial/full FT 첫 품질 비교 | ko-triplet 100,248, F2 hard-negative·cross-lingual 확대, official train task signals |
-| `ko_core_744k` | 744,000 | 큰 Korean core | ko-triplet 465,248, F2 231,152, benchmark train 17,600, KaLM replay 30K |
-| `performance_1m` | 1,000,000 | private performance candidate | ko-triplet 600,248, F2 Korean/cross-lingual 351,152, benchmark train 22,600, KaLM replay 26K |
+| `ablation_200k` | 200,000 | LoRA vs partial/full FT 첫 품질 비교 | ko-triplet 100,254, F2 hard-negative·cross-lingual 확대, official train task signals |
+| `ko_core_744k` | 744,000 | 큰 Korean core | ko-triplet 465,254, F2 231,146, benchmark train 17,600, KaLM replay 30K |
+| `performance_1m` | 1,000,000 | private performance candidate | ko-triplet 600,254, F2 Korean/cross-lingual 351,146, benchmark train 22,600, KaLM replay 26K |
 
 `744K`라는 이름은 `ko-triplet` 744,862개를 모두 그대로 쓰겠다는 뜻이 아니다. 쉬운 negative가 많은 한 source를 전량 복제하기보다 F2의 24-candidate rows, STS/classification, long retrieval, cross-lingual replay를 섞는다. 각 큰 phase는 작은 phase의 결정론적 prefix를 포함하므로 scale curve를 비교하기 쉽다.
 
