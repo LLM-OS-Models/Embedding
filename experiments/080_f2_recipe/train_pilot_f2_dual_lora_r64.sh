@@ -9,7 +9,8 @@ VAL_FILE="${VAL_FILE:-$DATA_DIR/validation.hn-qwen3-r095-n4.jsonl}"
 RUN_NAME="${RUN_NAME:-qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
 PLUGIN="$ROOT/experiments/080_f2_recipe/f2_dual_loss_plugin.py"
-BASE_REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
+BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
 if [[ -f "$ROOT/.env" ]]; then
   HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
@@ -37,14 +38,16 @@ if [[ "${USE_F2_MRL:-0}" == "1" ]]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
+MODEL_ARGS=(--model "$BASE_MODEL" --use_hf true)
+if [[ -n "$BASE_REVISION" ]]; then
+  MODEL_ARGS+=(--model_revision "$BASE_REVISION")
+fi
 "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
   "$TRAIN_FILE" "$VAL_FILE"
 
 "$TRAIN_ENV/bin/swift" sft \
   --external_plugins "$PLUGIN" \
-  --model Qwen/Qwen3-Embedding-8B \
-  --use_hf true \
-  --model_revision "$BASE_REVISION" \
+  "${MODEL_ARGS[@]}" \
   --model_type qwen3_emb \
   --task_type embedding \
   --tuner_type lora \
@@ -81,4 +84,3 @@ mkdir -p "$OUTPUT_DIR"
   --loss_type f2_dual_infonce \
   "${MRL_ARGS[@]}" \
   2>&1 | tee "$OUTPUT_DIR/train.log"
-

@@ -290,7 +290,7 @@ def load_encoder(args: argparse.Namespace) -> tuple[Any, Any, str, str]:
     torch_dtype = getattr(torch, dtype_name)
     model = SentenceTransformer(
         args.model,
-        revision=args.revision,
+        revision=args.revision or None,
         device=device,
         trust_remote_code=args.trust_remote_code,
         model_kwargs={

@@ -8,7 +8,8 @@ TRAIN_FILE="${TRAIN_FILE:-$DATA_DIR/train.hn-qwen3-r095-n4.jsonl}"
 VAL_FILE="${VAL_FILE:-$DATA_DIR/validation.hn-qwen3-r095-n4.jsonl}"
 RUN_NAME="${RUN_NAME:-qwen3-embedding-8b-ko-hn10k-lora-r64}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
-BASE_REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
+BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
 if [[ -f "$ROOT/.env" ]]; then
   HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
@@ -34,13 +35,16 @@ export INFONCE_INCLUDE_DD="${INFONCE_INCLUDE_DD:-false}"
 
 mkdir -p "$OUTPUT_DIR"
 
+MODEL_ARGS=(--model "$BASE_MODEL" --use_hf true)
+if [[ -n "$BASE_REVISION" ]]; then
+  MODEL_ARGS+=(--model_revision "$BASE_REVISION")
+fi
+
 "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
   "$TRAIN_FILE" "$VAL_FILE"
 
 "$TRAIN_ENV/bin/swift" sft \
-  --model Qwen/Qwen3-Embedding-8B \
-  --use_hf true \
-  --model_revision "$BASE_REVISION" \
+  "${MODEL_ARGS[@]}" \
   --model_type qwen3_emb \
   --task_type embedding \
   --tuner_type lora \

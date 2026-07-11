@@ -68,6 +68,32 @@ input/output index를 이용해 provenance를 투영한다.
   --batch-size 16
 ```
 
+법률만 한 epoch 더 돌리면 일반 검색·STS·다국어 표현이 회귀할 수 있다. 실제 campaign은
+위 법률 batch 250K를 primary 25%로 두고, 공개된 `performance_1m` homogeneous
+batch에서 750K를 replay 75%로 뽑아 두 번째 1M curriculum을 만든다. row를 섞지 않고
+완전한 16-row source-homogeneous batch 단위로만 전역 shuffle한다.
+
+```bash
+.venv-train/bin/python scripts/build_replay_curriculum.py \
+  --primary-train outputs/data/legal-performance-v1/train.faiss-r095-n7.homogeneous-b16.jsonl \
+  --primary-provenance outputs/data/legal-performance-v1/provenance.faiss-r095-n7.homogeneous-b16.jsonl \
+  --primary-rows 250000 \
+  --replay-train outputs/data/performance-v1/performance-1m/train.homogeneous-b16.jsonl \
+  --replay-provenance outputs/data/performance-v1/performance-1m/provenance.homogeneous-b16.jsonl \
+  --replay-rows 750000 \
+  --output outputs/data/legal-performance-v1/train.faiss-r095-n7.legal25-replay75.jsonl \
+  --provenance-output outputs/data/legal-performance-v1/provenance.faiss-r095-n7.legal25-replay75.jsonl \
+  --manifest-output outputs/data/legal-performance-v1/faiss-r095-n7.legal25-replay75.manifest.json \
+  --batch-size 16 --seed 42 \
+  --adaptation-label target-adapted-legal25-general75
+```
+
+가능하면 miner와 학습 모두 직전 1M merged checkpoint에서 이어간다. 1M merge가 없을
+때만 pinned Qwen base로 돌아가며 이 fallback은 queue log에 남긴다. continual stage는
+LR `1e-5`, legal/general 비율 `25/75`, 한 curriculum pass를 사용한다. model card에는
+법률 250K와 general 1M 두 dataset, target-adapted 표기, curriculum manifest를 함께
+싣는다.
+
 ## 1M 적용
 
 1M 전체를 처음부터 refresh하기 전에 source별 loss-active rate를 10K–50K sample로

@@ -97,7 +97,7 @@ def score_table(scores: dict[str, float], order: list[str]) -> str:
 
 
 def training_rows(manifest: dict[str, Any]) -> str:
-    for key in ("built_rows", "rows", "configured_target_rows"):
+    for key in ("built_rows", "rows", "output_rows", "configured_target_rows"):
         if key in manifest:
             return str(manifest[key])
     files = manifest.get("files", {})
@@ -105,14 +105,18 @@ def training_rows(manifest: dict[str, Any]) -> str:
     return str(max((value for value in values if isinstance(value, int)), default="unknown"))
 
 
-def training_dataset_repo(manifest: dict[str, Any]) -> str | None:
+def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
     if str(manifest.get("benchmark_adaptation", "")).startswith("target-adapted"):
-        return "LLM-OS-Models/korean-legal-retrieval-source-native-250k"
-    return {
+        return [
+            "LLM-OS-Models/korean-legal-retrieval-source-native-250k",
+            "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
+        ]
+    repo = {
         "pilot_50k": "LLM-OS-Models/korean-embedding-performance-v1-pilot-50k",
         "ablation_200k": "LLM-OS-Models/korean-embedding-performance-v1-ablation-200k",
         "performance_1m": "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
     }.get(manifest.get("phase"))
+    return [repo] if repo else []
 
 
 def build_card(
@@ -125,11 +129,15 @@ def build_card(
     delta = float(sionic["average"]) - 0.793
     adapter = merge["adapter_config"]
     official_order = list(official["scores"])
-    dataset_repo = training_dataset_repo(training)
-    dataset_yaml = f"datasets:\n- {dataset_repo}\n" if dataset_repo else ""
+    dataset_repos = training_dataset_repos(training)
+    dataset_yaml = (
+        "datasets:\n" + "".join(f"- {repo}\n" for repo in dataset_repos)
+        if dataset_repos
+        else ""
+    )
     dataset_link = (
-        f"https://huggingface.co/datasets/{dataset_repo}"
-        if dataset_repo
+        ", ".join(f"https://huggingface.co/datasets/{repo}" for repo in dataset_repos)
+        if dataset_repos
         else "Training manifest is preserved with the model evaluation artifacts."
     )
     target_adapted = str(training.get("benchmark_adaptation", "")).startswith(

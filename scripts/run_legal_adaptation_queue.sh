@@ -14,8 +14,14 @@ MINED_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.jsonl"
 ORDERED="$DATA_DIR/train.faiss-r095-n7.homogeneous-b16.jsonl"
 ORDERED_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.homogeneous-b16.jsonl"
 ORDERED_MANIFEST="$DATA_DIR/faiss-r095-n7.homogeneous-b16.manifest.json"
+GENERAL_DIR="$ROOT/outputs/data/performance-v1/performance-1m"
+GENERAL_TRAIN="$GENERAL_DIR/train.homogeneous-b16.jsonl"
+GENERAL_PROVENANCE="$GENERAL_DIR/provenance.homogeneous-b16.jsonl"
+CURRICULUM="$DATA_DIR/train.faiss-r095-n7.legal25-replay75.jsonl"
+CURRICULUM_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.legal25-replay75.jsonl"
+CURRICULUM_MANIFEST="$DATA_DIR/faiss-r095-n7.legal25-replay75.manifest.json"
 VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
-RUN_NAME="qwen3-embedding-8b-ko-legal250k-lora-r64"
+RUN_NAME="qwen3-embedding-8b-ko-legal25-replay75-lora-r64"
 MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
 MODEL_DIR="$ROOT/$MODEL_REL"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-legal250k"
@@ -45,16 +51,30 @@ run_stage() {
 if [[ -n "$WAIT_PID" ]]; then
   while kill -0 "$WAIT_PID" 2>/dev/null; do sleep 20; done
 fi
-[[ -s "$BOOTSTRAP" && -s "$DATA_DIR/provenance.jsonl" && -s "$VAL_FILE" ]] || exit 2
+[[ -s "$BOOTSTRAP" && -s "$DATA_DIR/provenance.jsonl" && -s "$VAL_FILE" \
+  && -s "$GENERAL_TRAIN" && -s "$GENERAL_PROVENANCE" ]] || exit 2
+
+CONTINUAL_BASE="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-best-merged"
+if [[ ! -s "$CONTINUAL_BASE/merge_report.json" ]]; then
+  CONTINUAL_BASE="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-b8-best-merged"
+fi
+if [[ -s "$CONTINUAL_BASE/merge_report.json" ]]; then
+  MINING_MODEL="$CONTINUAL_BASE"
+  MINING_REVISION=""
+  echo "[$(timestamp)] continuing from 1M model: $CONTINUAL_BASE"
+else
+  MINING_MODEL="Qwen/Qwen3-Embedding-8B"
+  MINING_REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+  echo "[$(timestamp)] 1M merged model unavailable; using pinned Qwen base"
+fi
 
 if [[ ! -s "$MINING_MANIFEST" ]]; then
   run_stage legal-faiss-hard-negative-mining \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/mine_faiss_hard_negatives.py" \
     --input "$BOOTSTRAP" --output "$MINED" \
     --audit-output "$AUDIT" --manifest-output "$MINING_MANIFEST" \
-    --work-dir "$DATA_DIR/faiss-work-qwen3-base" \
-    --model Qwen/Qwen3-Embedding-8B \
-    --revision 1d8ad4ca9b3dd8059ad90a75d4983776a23d44af \
+    --work-dir "$DATA_DIR/faiss-work-current-student" \
+    --model "$MINING_MODEL" --revision "$MINING_REVISION" \
     --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
     --num-negatives 7 --positive-relative-ratio .95 \
     --nlist 512 --nprobe 32 --training-points 50000 \
@@ -77,21 +97,36 @@ if [[ ! -s "$ORDERED_MANIFEST" ]]; then
     --manifest-output "$ORDERED_MANIFEST" --batch-size 16 --seed 42 || exit 5
 fi
 
-MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$ORDERED_MANIFEST")"
+if [[ ! -s "$CURRICULUM_MANIFEST" ]]; then
+  LEGAL_ROWS="$(jq -r '.output_rows' "$ORDERED_MANIFEST")"
+  REPLAY_ROWS="$((LEGAL_ROWS * 3))"
+  run_stage build-legal25-general75-curriculum \
+    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_replay_curriculum.py" \
+    --primary-train "$ORDERED" --primary-provenance "$ORDERED_PROVENANCE" \
+    --primary-rows "$LEGAL_ROWS" \
+    --replay-train "$GENERAL_TRAIN" --replay-provenance "$GENERAL_PROVENANCE" \
+    --replay-rows "$REPLAY_ROWS" --output "$CURRICULUM" \
+    --provenance-output "$CURRICULUM_PROVENANCE" \
+    --manifest-output "$CURRICULUM_MANIFEST" --batch-size 16 --seed 42 \
+    --adaptation-label target-adapted-legal25-general75 || exit 6
+fi
+
+MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$CURRICULUM_MANIFEST")"
 if (( MAX_STEPS < 1 )); then
   echo "[$(timestamp)] no complete legal training steps" >&2
   exit 6
 fi
 run_stage validate-legal-mined-data \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
-  "$ORDERED" "$VAL_FILE" || exit 6
+  "$CURRICULUM" "$VAL_FILE" || exit 6
 train_legal() {
   local output_name="$1" batch="$2" accum="$3"
   run_stage "train-$output_name" env \
-    RUN_NAME="$output_name" TRAIN_FILE="$ORDERED" VAL_FILE="$VAL_FILE" \
+    RUN_NAME="$output_name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
-    TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=2e-5 \
+    TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=1e-5 \
+    BASE_MODEL="$MINING_MODEL" BASE_REVISION="$MINING_REVISION" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }
 
@@ -140,7 +175,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   run_stage publish-legal-target-adapted \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
-    --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$MINING_MANIFEST" \
+    --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
     --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
     --upload --public
 fi
