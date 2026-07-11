@@ -22,8 +22,13 @@ class AuditEmbeddingTrainingDataTest(unittest.TestCase):
             provenance_lines = []
             for index in range(2):
                 query = "가, 나, 다" if index == 0 else "무엇을 찾나요?"
+                formatted = (
+                    f"Task\nQuery:{query}"
+                    if index == 0
+                    else f"Instruct: Retrieve evidence. Query: {query}"
+                )
                 row = {
-                    "messages": [{"role": "user", "content": f"Task\nQuery:{query}"}],
+                    "messages": [{"role": "user", "content": formatted}],
                     "positive_messages": [
                         [{"role": "user", "content": f"positive {index}"}]
                     ],
@@ -70,6 +75,9 @@ class AuditEmbeddingTrainingDataTest(unittest.TestCase):
             self.assertEqual(report["rows"], 2)
             self.assertEqual(report["query_style_heuristic"]["comma_keyword_list"], 1)
             self.assertEqual(report["query_style_heuristic"]["natural_question"], 1)
+            self.assertEqual(
+                report["instruction_counts"]["Instruct: Retrieve evidence."], 1
+            )
             self.assertEqual(report["contract_checks"]["status"], "pass")
 
 

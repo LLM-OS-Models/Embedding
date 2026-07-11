@@ -237,10 +237,10 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 |---|---:|
 | row SHA mismatch | **0** |
 | homogeneous batch violation | **0** |
-| natural-question heuristic | 477,737 (47.78%) |
-| comma keyword list | 266,604 (26.66%) |
-| long statement/search | 175,264 (17.53%) |
-| short search/title | 80,331 (8.03%) |
+| natural-question heuristic | 487,941 (48.80%) |
+| comma keyword list | 251,138 (25.12%) |
+| short search/title | 160,985 (16.10%) |
+| long statement/search | 99,872 (9.99%) |
 | explicit negative 1개인 row | 607,824 (60.79%) |
 | explicit negative 7개인 row | 369,911 (36.99%) |
 | exact query 재등장(첫 발생 제외) | 2,618 (0.26%) |
@@ -255,13 +255,19 @@ cap ablation을 추가한다. query exact 반복은 낮지만 0은 아니므로 
 더 직접적인 병목은 60.79%가 explicit negative 하나뿐이라는 점이다. 그래서 1M scale은
 원 curriculum을 그대로 장기 학습하지 않고, current student로 pool 24를 만들고
 positive-relative `.95` filter 뒤 score-rank quantile 7개로 교체한다. 또한 쉼표형
-keyword query 26.66%를 전부 자연 질문으로 치환하지 않는다. 실제 검색어 강건성에는
+keyword query 25.12%를 전부 자연 질문으로 치환하지 않는다. 실제 검색어 강건성에는
 유용하지만 비중이 과한지 `natural/scenario` grounded synthetic shard와 10–25% 교체하는
 ablation으로 판단한다.
 
-문자 길이는 query p50/p95 `47/156`, positive `101/764`, negative `142/819`였다. max는
-각각 `2,295/18,456/59,545` characters이므로 후속 trainer가
+instruction을 제외한 query 문자 길이는 p50/p95 `30/91`, positive `101/764`,
+negative `142/819`였다. max는 각각 `2,201/18,456/59,545` characters이므로 후속 trainer가
 `truncation_strategy=right`를 명시하는 이유이기도 하다.
+
+inline F2/KaLM instruction 안의 실제 query body까지 분리해 보니 4자 미만이 905 rows
+(0.091%)였다. 대부분 KaLM replay 830 rows이며 현재 1M artifact에서는 lineage 보존을
+위해 숨기지 않는다. 대신 builder를 고쳐 앞으로는 긴 instruction 길이가 짧은 body를
+통과시키지 못하게 했고, 다음 revision에서는 source cap을 채울 다음 유효 row로
+결정론적으로 대체한다.
 
 ## 현재 병목과 학습 결정
 

@@ -38,10 +38,13 @@ def text(sequence: Any) -> str:
 
 
 def query_body(value: str) -> tuple[str, str]:
-    if QUERY_MARKER not in value:
-        return "unprompted", value.strip()
-    instruction, body = value.split(QUERY_MARKER, 1)
-    return instruction.strip(), body.strip()
+    if QUERY_MARKER in value:
+        instruction, body = value.split(QUERY_MARKER, 1)
+        return instruction.strip(), body.strip()
+    if value.lstrip().startswith("Instruct:") and "Query:" in value:
+        instruction, _, body = value.rpartition("Query:")
+        return instruction.strip(), body.strip()
+    return "unprompted", value.strip()
 
 
 def query_style(value: str) -> str:
@@ -107,6 +110,7 @@ def main() -> None:
     instruction_counts: Counter[str] = Counter()
     style_counts: Counter[str] = Counter()
     exposure_counts: Counter[str] = Counter()
+    too_short_query_counts: Counter[str] = Counter()
     query_lengths: list[int] = []
     positive_lengths: list[int] = []
     negative_lengths: list[int] = []
@@ -167,6 +171,8 @@ def main() -> None:
             if not isinstance(source, str) or not source:
                 raise ValueError(f"Missing source_id at row {rows}")
             source_counts[source] += 1
+            if len(body) < 4:
+                too_short_query_counts[source] += 1
             for task in provenance.get("trained_on_tasks") or []:
                 exposure_counts[str(task)] += 1
             batch = provenance.get("homogeneous_batch")
@@ -198,6 +204,9 @@ def main() -> None:
         "instruction_counts": dict(instruction_counts.most_common()),
         "query_style_heuristic": dict(style_counts.most_common()),
         "benchmark_train_exposure_rows": dict(exposure_counts.most_common()),
+        "query_body_below_4_chars_by_source": dict(
+            too_short_query_counts.most_common()
+        ),
         "character_lengths": {
             "query_body": length_summary(query_lengths),
             "positive": length_summary(positive_lengths),

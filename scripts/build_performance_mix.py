@@ -36,7 +36,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--phase", default="pilot_50k")
     parser.add_argument("--output-dir", type=Path)
-    parser.add_argument("--list", action="store_true", help="List validated phases and sources")
+    parser.add_argument(
+        "--list", action="store_true", help="List validated phases and sources"
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -87,6 +89,14 @@ def instructed_query(query: str, instruction: str) -> str:
     if query.lstrip().startswith("Instruct:"):
         return query
     return f"Instruct: {instruction}\nQuery: {query}"
+
+
+def semantic_query_body(query: str) -> str:
+    """Return user text, excluding an upstream instruction prefix if present."""
+
+    if query.lstrip().startswith("Instruct:") and "Query:" in query:
+        return query.rpartition("Query:")[2].strip()
+    return query.strip()
 
 
 def format_row(query: str, positive: str, negatives: list[str]) -> dict[str, Any]:
@@ -141,7 +151,9 @@ def validate_config(config: dict[str, Any]) -> None:
         if not re.fullmatch(r"[0-9a-f]{40}", revision):
             raise ValueError(f"{source_id}: revision must be a pinned 40-character SHA")
         if source.get("adapter") not in supported_adapters:
-            raise ValueError(f"{source_id}: unsupported adapter {source.get('adapter')!r}")
+            raise ValueError(
+                f"{source_id}: unsupported adapter {source.get('adapter')!r}"
+            )
         if not isinstance(source.get("trained_on_tasks"), list):
             raise ValueError(f"{source_id}: trained_on_tasks must be a list")
         blocked = blocked_by_policy(config, source)
@@ -176,7 +188,9 @@ def selected_caps(config: dict[str, Any], args: argparse.Namespace) -> dict[str,
         unknown = requested - set(caps)
         if unknown:
             raise ValueError(f"Sources not present in {args.phase}: {sorted(unknown)}")
-        caps = {source_id: cap for source_id, cap in caps.items() if source_id in requested}
+        caps = {
+            source_id: cap for source_id, cap in caps.items() if source_id in requested
+        }
     if args.sample_cap is not None:
         if args.sample_cap <= 0:
             raise ValueError("--sample-cap must be positive")
@@ -275,7 +289,9 @@ def iter_f2_fields(
             (field for field in row if NEGATIVE_FIELD_RE.match(field)),
             key=lambda field: int(NEGATIVE_FIELD_RE.match(field).group(1)),  # type: ignore[union-attr]
         )
-        yield row.get("query"), row.get("passage"), [row.get(k) for k in negative_fields]
+        yield row.get("query"), row.get("passage"), [
+            row.get(k) for k in negative_fields
+        ]
 
 
 def iter_kalm_lists(
@@ -301,7 +317,9 @@ def iter_classification(
     label_values = schema["label_values"]
     for row in load_hf_dataset_stream(source, seed):
         label = row.get(schema["label_field"])
-        positive = label_values[label] if isinstance(label, int) else normalize_text(label)
+        positive = (
+            label_values[label] if isinstance(label, int) else normalize_text(label)
+        )
         negatives = [candidate for candidate in label_values if candidate != positive]
         yield row.get(schema["text_field"]), positive, negatives
 
@@ -318,7 +336,9 @@ def iter_sts_pairs(
             if candidate:
                 negative_pool.append(candidate)
     if not negative_pool:
-        raise RuntimeError(f"{source['repo_id']}: STS adapter found no low-score negatives")
+        raise RuntimeError(
+            f"{source['repo_id']}: STS adapter found no low-score negatives"
+        )
     for row in load_hf_dataset_stream(source, seed, shuffle=True):
         score = float(nested_value(row, schema["score_field"]))
         if score < float(schema["positive_threshold"]):
@@ -352,7 +372,9 @@ def iter_beir_join(
     queries_ds = load_part(queries_spec)
     corpus_ds = load_part(corpus_spec)
     queries = {
-        str(row[queries_spec["id_field"]]): normalize_text(row[queries_spec["text_field"]])
+        str(row[queries_spec["id_field"]]): normalize_text(
+            row[queries_spec["text_field"]]
+        )
         for row in queries_ds
     }
     corpus: dict[str, str] = {}
@@ -440,11 +462,16 @@ def cleaned_example(
     max_document_chars = int(
         source.get("max_document_chars", defaults["max_document_chars"])
     )
-    if len(query) < min_query_chars or len(positive) < min_document_chars or not negatives:
-        return None, "missing_or_short", []
-    if source.get("require_hangul", defaults["require_hangul"]) and not HANGUL_RE.search(
-        query
+    query_body = semantic_query_body(query)
+    if (
+        len(query_body) < min_query_chars
+        or len(positive) < min_document_chars
+        or not negatives
     ):
+        return None, "missing_or_short", []
+    if source.get(
+        "require_hangul", defaults["require_hangul"]
+    ) and not HANGUL_RE.search(query_body):
         return None, "non_korean_query", []
     negatives = [
         negative
@@ -469,7 +496,9 @@ def write_mix(
         raise ValueError("--output-dir is required for a real build")
     output_dir = args.output_dir.resolve()
     if output_dir.exists() and not args.overwrite:
-        raise FileExistsError(f"{output_dir} already exists; pass --overwrite to replace it")
+        raise FileExistsError(
+            f"{output_dir} already exists; pass --overwrite to replace it"
+        )
     temporary = output_dir.with_name(f".{output_dir.name}.tmp-{os.getpid()}")
     if temporary.exists():
         shutil.rmtree(temporary)
@@ -484,7 +513,9 @@ def write_mix(
     source_stats: dict[str, Any] = {}
     total_rows = 0
     try:
-        with train_path.open("w", encoding="utf-8") as train_handle, provenance_path.open(
+        with train_path.open(
+            "w", encoding="utf-8"
+        ) as train_handle, provenance_path.open(
             "w", encoding="utf-8"
         ) as provenance_handle:
             for source_id, target in caps.items():
@@ -509,7 +540,9 @@ def write_mix(
                         continue
                     global_pairs.add(pair_hash)
                     row = format_row(query, positive, negatives)
-                    row_json = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
+                    row_json = json.dumps(
+                        row, ensure_ascii=False, separators=(",", ":")
+                    )
                     row_hash = hashlib.sha256(row_json.encode("utf-8")).hexdigest()
                     train_handle.write(row_json + "\n")
                     provenance = {
@@ -525,7 +558,10 @@ def write_mix(
                         "release_eligible": source.get("release_eligible", False),
                     }
                     provenance_handle.write(
-                        json.dumps(provenance, ensure_ascii=False, separators=(",", ":")) + "\n"
+                        json.dumps(
+                            provenance, ensure_ascii=False, separators=(",", ":")
+                        )
+                        + "\n"
                     )
                     total_rows += 1
                     accepted += 1
