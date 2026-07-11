@@ -314,5 +314,10 @@ if wait "$DATA_UPLOAD_PID"; then
 else
   echo "[$(timestamp)] derived legal dataset upload failed; see log" >&2
 fi
+if [[ "${ENABLE_SIONIC_COMBINED_ADAPTATION:-1}" == 1 ]]; then
+  run_stage sionic-combined-target-adaptation env \
+    LOG_DIR="$ROOT/outputs/sionic-combined-adaptation-20260712" \
+    bash "$ROOT/scripts/run_sionic_combined_adaptation_queue.sh" || true
+fi
 
 echo "[$(timestamp)] legal target-adaptation queue complete"

@@ -44,6 +44,7 @@
 | SQuADKorV1 train-family 60K | 원본 KorQuAD train 질문→문맥 변환·전수 감사·공개 | 60,000 rows; query/evaluation-text overlap 0, shared Wikipedia eval-corpus hash 6,426; clean 아님; public `8fbc6d6d`; HN/replay queue 연결 |
 | PublicHealth health-domain 100K | F2 medical QA/instruction/flashcard 7-source mix 전수 감사·공개 | 100,000 rows; query/evaluation-text overlap 0, PublicHealthQA exact overlap 0; corpus-only 114; public `5fc4bb81`; HN/replay queue 연결 |
 | AutoRAG domain 100K | F2 finance/banking/commerce/legal 5-source mix 전수 감사·공개 | 100,000 rows; query/evaluation-text overlap 0, AutoRAG exact overlap 0; corpus-only 1; public `9140e9e0`; HN/replay queue 연결 |
+| Sionic combined curriculum | N개 domain의 complete homogeneous batch mixer·audit·train/eval/publication 구현 | 사전 mixture 40K SQuAD + 40K health + 40K AutoRAG + 60K legal + 220K general; upstream mining 완료 뒤 build |
 | scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute + pool24 score-rank quantile7 | index persist/resume, positive-relative filter, selection/cache-contract test 통과 |
 | public model artifact contract | model card, 사용법, data/evaluation manifest, Sionic/official/clean/noise summary와 per-query rank 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
 | derived dataset publication | actual train/provenance/mining audit/manifest SHA·row·quantile contract 검증 후 공개 | 1M/법률 학습 종료 뒤 GPU 평가와 background upload하도록 연결 |
@@ -230,9 +231,10 @@ Sionic 9와 공식 MTEB를 반복해 checkpoint를 고르면 leaderboard overfit
 | 11 | PublicHealth health-domain 100K adaptation | 1M/SQuAD stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
 | 12 | AutoRAG domain 100K adaptation | 1M/SQuAD/health stage 종료 | current-student FAISS HN, 50:50 replay, Sionic 9/official/clean, public model |
 | 13 | 법률 250K target-adaptation | 1M/SQuAD/health/AutoRAG stage 종료 | FAISS HN, provenance projection, Sionic 9/official, public model |
-| 14 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
-| 15 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
-| 16 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
+| 14 | combined target 400K | 네 target mining + legal stage 종료 | multidomain audit, LoRA, Sionic 9/official/clean, public model/data |
+| 15 | top-model Sionic 동등 평가 | target stage 종료 | Comsat/Qwen/F2/PwC/Harrier/KaLM/Nemotron raw results |
+| 16 | partial/DoRA/GaLore/full 품질 비교 | memory probe 통과 | 동일 200K/token budget Pareto |
+| 17 | rights-safe 50K→500K clean model | source gate 완료 | license/provenance/blocklist audit pass |
 
 ## 주장 gate
 

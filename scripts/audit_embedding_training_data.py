@@ -137,6 +137,7 @@ def main() -> None:
     row_hash_mismatches = 0
     provenance_index_mismatches = 0
     batch_contract_violations = 0
+    batch_contract_fields: Counter[str] = Counter()
     rows = 0
 
     with args.train.open(encoding="utf-8") as train_handle, args.provenance.open(
@@ -197,7 +198,19 @@ def main() -> None:
             for task in provenance.get("trained_on_tasks") or []:
                 exposure_counts[str(task)] += 1
             if args.expected_batch_size:
-                batch = provenance.get("homogeneous_batch")
+                batch_field = next(
+                    (
+                        name
+                        for name in (
+                            "multidomain_curriculum_batch",
+                            "curriculum_batch",
+                            "homogeneous_batch",
+                        )
+                        if isinstance(provenance.get(name), dict)
+                    ),
+                    None,
+                )
+                batch = provenance.get(batch_field) if batch_field else None
                 if not isinstance(batch, dict):
                     batch_contract_violations += 1
                 elif (
@@ -208,6 +221,8 @@ def main() -> None:
                     != (rows - 1) // args.expected_batch_size
                 ):
                     batch_contract_violations += 1
+                if batch_field:
+                    batch_contract_fields[batch_field] += 1
 
     report = {
         "schema_version": 1,
@@ -244,6 +259,7 @@ def main() -> None:
             "row_sha256_mismatches": row_hash_mismatches,
             "provenance_row_index_mismatches": provenance_index_mismatches,
             "homogeneous_batch_checked": bool(args.expected_batch_size),
+            "batch_contract_field_counts": dict(batch_contract_fields),
             "homogeneous_batch_violations": batch_contract_violations,
             "status": (
                 "pass"

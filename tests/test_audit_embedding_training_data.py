@@ -80,6 +80,72 @@ class AuditEmbeddingTrainingDataTest(unittest.TestCase):
             )
             self.assertEqual(report["contract_checks"]["status"], "pass")
 
+    def test_latest_curriculum_batch_contract_overrides_stale_input_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            train = root / "train.jsonl"
+            provenance = root / "provenance.jsonl"
+            output = root / "audit.json"
+            train_rows = []
+            provenance_rows = []
+            for index in range(2):
+                row = {
+                    "messages": [{"role": "user", "content": f"질문 {index} 내용"}],
+                    "positive_messages": [
+                        [{"role": "user", "content": f"정답 문서 {index}"}]
+                    ],
+                    "negative_messages": [
+                        [{"role": "user", "content": f"오답 문서 {index}"}]
+                    ],
+                }
+                train_rows.append(json.dumps(row, ensure_ascii=False, separators=(",", ":")))
+                provenance_rows.append(
+                    json.dumps(
+                        {
+                            "source_id": "fixture",
+                            "homogeneous_batch": {
+                                "batch_index": 99,
+                                "batch_size": 2,
+                                "source_id": "fixture",
+                                "output_row_index": 99 + index,
+                            },
+                            "multidomain_curriculum_batch": {
+                                "batch_index": 0,
+                                "batch_size": 2,
+                                "role": "general",
+                                "source_id": "fixture",
+                                "output_row_index": index,
+                            },
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                )
+            train.write_text("\n".join(train_rows) + "\n", encoding="utf-8")
+            provenance.write_text(
+                "\n".join(provenance_rows) + "\n", encoding="utf-8"
+            )
+            subprocess.check_call(
+                [
+                    "python",
+                    str(ROOT / "scripts/audit_embedding_training_data.py"),
+                    "--train",
+                    str(train),
+                    "--provenance",
+                    str(provenance),
+                    "--output",
+                    str(output),
+                    "--expected-batch-size",
+                    "2",
+                ]
+            )
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["contract_checks"]["status"], "pass")
+            self.assertEqual(
+                report["contract_checks"]["batch_contract_field_counts"],
+                {"multidomain_curriculum_batch": 2},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

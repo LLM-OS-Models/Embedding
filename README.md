@@ -95,6 +95,7 @@ row는 101개였다.
 | SQuADKorV1 train-family 60K | 원본 KorQuAD train 질문→문맥 60K; 평가 query/evaluation-text match 0, Wikipedia shared eval-corpus 6,426 고유 hash 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k/tree/8fbc6d6d5c93c3493456079d930921ac90ec6801) |
 | PublicHealth health-domain 100K | F2 medical QA/instruction/flashcard 100K; critical eval-text overlap 0, PublicHealthQA exact overlap 0·공개 완료 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-health-100k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-health-100k/tree/5fc4bb817f6970a710be53376f35e0225201d2e2) |
 | AutoRAG domain 100K | F2 finance/banking/commerce/legal 100K; critical eval-text 0, AutoRAG query/corpus exact overlap 0·공개 완료 | [`LLM-OS-Models/korean-embedding-performance-v1-sionic-autorag-100k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-autorag-100k/tree/9140e9e02bb3f40ac1c22a6e595d58208770f696) |
+| Sionic combined target 400K | SQuAD 10% + health 10% + AutoRAG 10% + legal 15% + general 55%; multidomain batch/provenance/audit queue 구현 | [combined 모델 설계](docs/28_SIONIC_COMBINED_TARGET_MODEL.md) |
 | 법률 source-native 250K | 4개 source 균형 shard + bootstrap 한계·질의 분포 전수 감사/카드 공개 | [`LLM-OS-Models/korean-legal-retrieval-source-native-250k`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-retrieval-source-native-250k/tree/ec2f09a220dc5aa326c5d63b8e49adbf3a5524bc) |
 | 성능 우선 1M 데이터 | 1,000,000 rows + exact 999,936-row train/provenance + 품질 감사·카드 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-performance-1m`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/ac3e806f2c01f2aa9f45686207b822e992889da2) |
 | 평가 오염 방지 blocklist | Sionic 9 + 공식 Korean 6, 원문 없는 SHA-256 547MB | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
@@ -137,6 +138,7 @@ row는 101개였다.
 26. [Sionic SQuADKorV1 train-family 60K target adaptation](docs/25_SIONIC_SQUAD_TARGET_ADAPTATION.md)
 27. [Sionic PublicHealthQA multilingual health-domain adaptation](docs/26_SIONIC_PUBLIC_HEALTH_ADAPTATION.md)
 28. [Sionic AutoRAG finance/commerce/legal domain adaptation](docs/27_SIONIC_AUTORAG_DOMAIN_ADAPTATION.md)
+29. [Sionic 9 combined target-domain final candidate](docs/28_SIONIC_COMBINED_TARGET_MODEL.md)
 
 ## 실험 지도
 
@@ -156,6 +158,7 @@ row는 101개였다.
 | [`090_sionic_squad_adaptation`](experiments/090_sionic_squad_adaptation/) | KorQuAD train 60K current-student HN + general replay와 broad 회귀 |
 | [`100_sionic_health_adaptation`](experiments/100_sionic_health_adaptation/) | F2 medical 100K current-student HN + general replay와 PublicHealth/broad 회귀 |
 | [`110_sionic_autorag_adaptation`](experiments/110_sionic_autorag_adaptation/) | F2 finance/commerce/legal 100K current-student HN + general replay와 AutoRAG/broad 회귀 |
+| [`120_sionic_combined_target`](experiments/120_sionic_combined_target/) | 네 target domain + general replay를 한 400K 최종 후보로 결합 |
 
 ## 원칙
 
