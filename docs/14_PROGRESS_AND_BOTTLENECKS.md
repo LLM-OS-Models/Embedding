@@ -35,7 +35,7 @@
 | performance 50K mix | 계획 수량 전체 build·strict validation 완료 | train SHA `b46a7be…258a`, provenance SHA `e8ccca…6031` |
 | performance 200K mix | 200,000 rows build·strict validation·공개 업로드 | train SHA `379694…e480`, provenance SHA `7243e6…17b8` |
 | 법률 source-native mix | 4개 pinned repository에서 균형 250,000 rows build·공개 업로드 | train SHA `1d8136…4c90`, provenance SHA `a1b3cd…de3e`; bootstrap negative 표시 |
-| 데이터 공개 | 50K, 200K, 법률 250K, 성능 우선 1M dataset card/provenance/manifest | `LLM-OS-Models` HF organization의 public dataset 4개, 원격 API에서 `private=false`와 파일 확인 |
+| 데이터 공개 | 50K, 200K, 법률 250K, 성능 우선 1M, benchmark blocklist | `LLM-OS-Models` HF organization의 public dataset 5개, 원격 API에서 `private=false`와 파일 확인 |
 | vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | Ko-Strategy parity/처리량 측정 완료; 이 workload에서는 FA2가 더 빠름 |
 | adapter 병합/공개 | safe merge, 6-probe parity, ST contract, 카드/대용량 upload 코드 | tiny Qwen 실제 LoRA merge에서 max pair delta `4.68e-8` |
 | homogeneous batching | provenance source별 16-row microbatch compiler | 50K `49,904`, 200K `199,904` rows; 모든 emitted batch 단일 source |
@@ -43,6 +43,7 @@
 | performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous batches | ordered train SHA `ac39ea…0169`; source remainder 총 64 rows |
 | scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute | 250K legal dry-run, index persist/resume, false-negative filter test 통과 |
 | public model artifact contract | model card, 사용법, data/evaluation manifest와 Sionic/official raw summary 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
+| benchmark blocklist | Sionic 9 + 공식 Korean 6의 exact hash artifact 15/15 | 547,245,091 bytes, 104 files, public revision `5e876f266068`; 원문·raw ID 없음 |
 
 ## 현재 실행 중
 
@@ -58,7 +59,7 @@ Comsat의 공식 `MTEB(kor, v1)` 6개 중 5개를 직접 측정했다.
 | MIRACLRetrieval | 실행 중: 1,486,752 documents |
 
 마지막 retrieval은 H100 1장, FlashAttention 2, batch 224에서 실행 중이다. 2026-07-12
-00:14 KST 기준 50K corpus chunk 18개, 즉 약 900K document embedding을 atomic cache에
+00:26 KST 기준 50K corpus chunk 20개, 즉 1,000,000 document embedding을 atomic cache에
 저장했고 GPU utilization 100%, 약 59.3GiB VRAM을 사용했다. exact
 float32 embedding cache를 켜고 MTEB의 50K corpus chunk가 끝날 때마다 약 819MB씩
 atomic 저장한다. 실측 GPU 메모리는 corpus batch에 따라 약 47–60GiB이며 GPU compute
@@ -67,9 +68,9 @@ atomic 저장한다. 실측 GPU 메모리는 corpus batch에 따라 약 47–60G
 `performance_1m` 1,000,000-row base mix와 999,936-row/62,496-batch homogeneous 파생
 파일은 build를 마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에
 공개됐고, GPU campaign은 완료된 manifest를 자동 감지해 scale run에 사용한다.
-benchmark decontamination blocklist는 CPU에서 Sionic 9와 공식 Korean task를 순차
-fingerprint하고 있다. 이것은 평가 전용이며 어떤 query/text/qrel도 학습 데이터 생성이나
-checkpoint 선택에 사용하지 않는다.
+benchmark decontamination blocklist는 Sionic 9와 공식 Korean 6의 15/15 task build를
+완료해 Hugging Face에 공개했다. 이것은 평가 전용이며 어떤 query/text/qrel도 학습 데이터
+생성이나 checkpoint 선택에 사용하지 않는다.
 
 ## 아직 성능 결과가 아닌 것
 
