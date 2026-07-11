@@ -41,8 +41,9 @@
 | homogeneous batching | provenance source별 16-row microbatch compiler | 50K `49,904`, 200K `199,904` rows; 모든 emitted batch 단일 source |
 | performance 1M mix | 1,000,000 rows build·strict validation·public HF upload | train SHA `094d44…3c0a`, provenance SHA `94334a…18c1` |
 | performance 1M homogeneous | 999,936 rows / 62,496 source-homogeneous length buckets | ordered train SHA `436dc7…2c00`; source remainder 총 64 rows |
-| scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute | 250K legal dry-run, index persist/resume, false-negative filter test 통과 |
-| public model artifact contract | model card, 사용법, data/evaluation manifest와 Sionic/official raw summary 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
+| scalable hard-negative miner | resumable float32 embedding memmap + FAISS IVFFlat + exact selected-score recompute + pool24 score-rank quantile7 | index persist/resume, positive-relative filter, selection/cache-contract test 통과 |
+| public model artifact contract | model card, 사용법, data/evaluation manifest, Sionic/official/clean/noise summary와 per-query rank 동봉 | post-training/1M/legal 각 캠페인에 공개 upload stage 연결 |
+| derived dataset publication | actual train/provenance/mining audit/manifest SHA·row·quantile contract 검증 후 공개 | 1M/법률 학습 종료 뒤 GPU 평가와 background upload하도록 연결 |
 | benchmark blocklist | Sionic 9 + 공식 Korean 6의 exact hash artifact 15/15 | 547,245,091 bytes, 104 files, public revision `5e876f266068`; 원문·raw ID 없음 |
 | 10K exhaustive HN | 10,000×10,000 exact cosine, 4 negatives/row, drop 0 | 91.75초; negative mean `0.50020`, p95 `0.59108`; train SHA `3df507…5adc` |
 | clean 법률 retrieval holdout | 10,000 queries/docs/qrels, grade I-not-Z | training ID/document overlap 0, benchmark query/positive overlap 0, verifier pass, public `ee1300f` |
