@@ -93,6 +93,41 @@ class AuditTrainingBenchmarkOverlapTest(unittest.TestCase):
             self.assertEqual(report["unique_retrieval_corpus_matches"], 1)
             self.assertEqual(report["status"], "pass_with_retrieval_corpus_exposure")
 
+    def test_declared_nonretrieval_train_family_is_expected_exposure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            blocklist = root / "blocklist"
+            self.write_hash(
+                blocklist,
+                "official/KLUE-STS/default/validation",
+                "evaluation_text.sha256.gz",
+                "공식 학습 문장",
+            )
+            train, provenance = self.write_data(
+                root,
+                [training_row("새 학습 질문", "공식 학습 문장", "다른 오답 문장")],
+            )
+            provenance.write_text(
+                json.dumps(
+                    {
+                        "source_id": "klue_sts_train",
+                        "row_index": 0,
+                        "trained_on_tasks": ["KLUE-STS"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            report = audit(train, provenance, blocklist)
+
+            self.assertEqual(report["unique_critical_query_or_evaluation_matches"], 0)
+            self.assertEqual(report["unique_expected_train_family_matches"], 1)
+            self.assertEqual(report["matches"][0]["critical_sources"], [])
+            self.assertEqual(
+                report["matches"][0]["expected_train_family_sources"],
+                ["klue_sts_train"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

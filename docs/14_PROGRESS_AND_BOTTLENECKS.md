@@ -33,7 +33,7 @@
 | 공개 가능 데이터 공장 | KOGL·법률·Wikipedia·PMC·CDC 1,000,000행 계획 | source/revision/license 및 생성·검수 gate 고정 |
 | 10K private pilot 입력 | train 10,000 / validation 512, hash 검증 | source license 미명시로 public release 불가 |
 | performance 50K mix | 계획 수량 전체 build·strict validation 완료 | train SHA `b46a7be…258a`, provenance SHA `e8ccca…6031` |
-| performance 200K mix | 200,000 rows build·strict validation·공개 업로드 | train SHA `379694…e480`, provenance SHA `7243e6…17b8` |
+| performance 200K mix | critical hash decontamination 후 200,000 rows 재충전·199,904 ordered·공개 | raw `087c54…a3c2` / ordered `8e2731…5e3c`; retrieval eval-query row 12 교체; final critical overlap 0; public `f605128d` |
 | 법률 source-native mix | 4개 pinned repository에서 균형 250,000 rows build·공개 업로드 | train SHA `1d8136…4c90`, provenance SHA `a1b3cd…de3e`; bootstrap negative 표시 |
 | 데이터 공개 | 50K, 200K, 법률 250K, 성능 우선 1M, benchmark blocklist, clean 법률 holdout | `LLM-OS-Models` HF organization의 public dataset 6개, 원격 API에서 `private=false`와 파일 확인 |
 | vLLM 환경 | 별도 `.venv-vllm`, vLLM 0.24/Torch 2.11 설치 | Ko-Strategy parity/처리량 측정 완료; 이 workload에서는 FA2가 더 빠름 |

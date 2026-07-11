@@ -39,6 +39,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fail-on-critical", action="store_true")
     parser.add_argument("--fail-on-any-text", action="store_true")
+    parser.add_argument(
+        "--max-match-records",
+        type=int,
+        default=1000,
+        help="Maximum per-hash records in JSON; aggregate counts always cover all matches",
+    )
     return parser.parse_args()
 
 
@@ -124,13 +130,17 @@ def audit(
     train: Path,
     provenance: Path | None,
     blocklist_root: Path,
+    max_match_records: int = 1000,
 ) -> dict[str, Any]:
+    if max_match_records < 0:
+        raise ValueError("max_match_records must be non-negative")
     files = blocklist_files(blocklist_root)
     blocked, blocked_occurrences = load_blocked(files)
     checked: Counter[str] = Counter()
     matched_occurrences: Counter[str] = Counter()
     matched: dict[bytes, Counter[str]] = defaultdict(Counter)
     matched_sources: dict[bytes, Counter[str]] = defaultdict(Counter)
+    source_declared_tasks: dict[str, set[str]] = defaultdict(set)
     rows = 0
 
     provenance_handle = provenance.open(encoding="utf-8") if provenance else None
@@ -159,6 +169,9 @@ def audit(
                         provenance_row.get("source_id")
                         or provenance_row.get("source")
                         or "unknown"
+                    )
+                    source_declared_tasks[source].update(
+                        str(task) for task in provenance_row.get("trained_on_tasks") or []
                     )
                 values = [
                     ("query_full", query),
@@ -193,19 +206,49 @@ def audit(
                 )
 
     unique_critical: set[bytes] = set()
+    unique_expected_train_family: set[bytes] = set()
     unique_corpus: set[bytes] = set()
     matches = []
+    location_unique_matches: Counter[str] = Counter()
+    source_match_occurrences: Counter[str] = Counter()
+    critical_source_occurrences: Counter[str] = Counter()
+    expected_source_occurrences: Counter[str] = Counter()
     for digest in sorted(matched):
         kinds = {location["kind"] for location in locations[digest]}
-        if kinds & CRITICAL_KINDS:
+        critical_sources: set[str] = set()
+        expected_sources: set[str] = set()
+        for source in matched_sources[digest]:
+            for location in locations[digest]:
+                if location["kind"] == "query_text":
+                    critical_sources.add(source)
+                elif location["kind"] == "evaluation_text":
+                    task = location["task_path"].split("/")[1]
+                    if task in source_declared_tasks[source]:
+                        expected_sources.add(source)
+                    else:
+                        critical_sources.add(source)
+        if critical_sources:
             unique_critical.add(digest)
+        if expected_sources:
+            unique_expected_train_family.add(digest)
         if "corpus_text" in kinds:
             unique_corpus.add(digest)
+        for location in locations[digest]:
+            location_unique_matches[
+                f"{location['kind']}:{location['task_path']}"
+            ] += 1
+        source_match_occurrences.update(matched_sources[digest])
+        for source in critical_sources:
+            critical_source_occurrences[source] += matched_sources[digest][source]
+        for source in expected_sources:
+            expected_source_occurrences[source] += matched_sources[digest][source]
         matches.append(
             {
                 "sha256": digest.hex(),
                 "training_role_occurrences": dict(sorted(matched[digest].items())),
                 "source_occurrences": dict(sorted(matched_sources[digest].items())),
+                "expected_train_family_sources": sorted(expected_sources),
+                "critical_sources": sorted(critical_sources),
                 "benchmark_locations": locations[digest],
             }
         )
@@ -214,6 +257,8 @@ def audit(
         status = "critical_query_or_evaluation_text_overlap"
     elif unique_corpus:
         status = "pass_with_retrieval_corpus_exposure"
+    elif unique_expected_train_family:
+        status = "pass_with_declared_train_family_exposure"
     else:
         status = "pass_no_exact_text_overlap"
     root_manifest = blocklist_root / "manifest.json"
@@ -242,8 +287,23 @@ def audit(
         "matched_training_text_occurrences": dict(sorted(matched_occurrences.items())),
         "unique_matches": len(matched),
         "unique_critical_query_or_evaluation_matches": len(unique_critical),
+        "unique_expected_train_family_matches": len(unique_expected_train_family),
         "unique_retrieval_corpus_matches": len(unique_corpus),
-        "matches": matches,
+        "aggregate_matches": {
+            "unique_hashes_by_benchmark_location": dict(
+                sorted(location_unique_matches.items())
+            ),
+            "source_occurrences": dict(sorted(source_match_occurrences.items())),
+            "critical_source_occurrences": dict(
+                sorted(critical_source_occurrences.items())
+            ),
+            "expected_train_family_source_occurrences": dict(
+                sorted(expected_source_occurrences.items())
+            ),
+        },
+        "matches_reported": min(len(matches), max_match_records),
+        "matches_truncated": len(matches) > max_match_records,
+        "matches": matches[:max_match_records],
         "status": status,
         "interpretation": (
             "query_text/evaluation_text overlap is critical; corpus-only overlap can "
@@ -259,6 +319,7 @@ def main() -> None:
         args.train.resolve(),
         args.provenance.resolve() if args.provenance else None,
         args.blocklist_root.resolve(),
+        args.max_match_records,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

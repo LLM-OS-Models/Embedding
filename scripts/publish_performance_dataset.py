@@ -44,6 +44,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional text-only benchmark overlap audit uploaded with the dataset",
     )
+    parser.add_argument("--ordered-train", type=Path)
+    parser.add_argument("--ordered-provenance", type=Path)
+    parser.add_argument("--ordered-manifest", type=Path)
+    parser.add_argument("--ordered-quality-audit", type=Path)
+    parser.add_argument("--ordered-benchmark-overlap-audit", type=Path)
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--upload", action="store_true")
     return parser.parse_args()
@@ -74,6 +79,11 @@ def validate(
     provenance_name: str,
     quality_audit: Path | None = None,
     benchmark_overlap_audit: Path | None = None,
+    ordered_train: Path | None = None,
+    ordered_provenance: Path | None = None,
+    ordered_manifest: Path | None = None,
+    ordered_quality_audit: Path | None = None,
+    ordered_benchmark_overlap_audit: Path | None = None,
 ) -> tuple[dict[str, Any], list[Path]]:
     manifest_path = data_dir / "manifest.json"
     train_path = data_dir / train_name
@@ -141,6 +151,60 @@ def validate(
                 "Benchmark overlap audit does not match artifacts or has critical overlap"
             )
         paths.append(benchmark_overlap_audit)
+    ordered_core = (ordered_train, ordered_provenance, ordered_manifest)
+    if any(ordered_core) and not all(ordered_core):
+        raise ValueError("Ordered train/provenance/manifest must be provided together")
+    if all(ordered_core):
+        assert ordered_train and ordered_provenance and ordered_manifest
+        missing_ordered = [
+            str(path)
+            for path in ordered_core
+            if path is not None and not path.is_file()
+        ]
+        if missing_ordered:
+            raise FileNotFoundError(f"Missing ordered artifacts: {missing_ordered}")
+        ordered = json.loads(ordered_manifest.read_text(encoding="utf-8"))
+        ordered_rows = ordered.get("output_rows")
+        ordered_evidence = ordered.get("outputs", {})
+        for role, path in (
+            ("train", ordered_train),
+            ("provenance", ordered_provenance),
+        ):
+            declared = ordered_evidence.get(role, {})
+            if (
+                line_count(path) != ordered_rows
+                or sha256(path) != declared.get("sha256")
+            ):
+                raise ValueError(f"Ordered {role} differs from its manifest")
+        paths.extend([ordered_train, ordered_provenance, ordered_manifest])
+        if ordered_quality_audit:
+            quality = json.loads(ordered_quality_audit.read_text(encoding="utf-8"))
+            if (
+                quality.get("rows") != ordered_rows
+                or quality.get("inputs", {}).get("train", {}).get("sha256")
+                != ordered_evidence["train"]["sha256"]
+                or quality.get("inputs", {}).get("provenance", {}).get("sha256")
+                != ordered_evidence["provenance"]["sha256"]
+                or quality.get("contract_checks", {}).get("status") != "pass"
+            ):
+                raise ValueError("Ordered quality audit differs from ordered artifacts")
+            paths.append(ordered_quality_audit)
+        if ordered_benchmark_overlap_audit:
+            overlap = json.loads(
+                ordered_benchmark_overlap_audit.read_text(encoding="utf-8")
+            )
+            if (
+                overlap.get("rows") != ordered_rows
+                or overlap.get("inputs", {}).get("train", {}).get("sha256")
+                != ordered_evidence["train"]["sha256"]
+                or overlap.get("inputs", {}).get("provenance", {}).get("sha256")
+                != ordered_evidence["provenance"]["sha256"]
+                or overlap.get("unique_critical_query_or_evaluation_matches") != 0
+            ):
+                raise ValueError(
+                    "Ordered benchmark audit differs or has critical overlap"
+                )
+            paths.append(ordered_benchmark_overlap_audit)
     return manifest, paths
 
 
@@ -157,6 +221,19 @@ def main() -> None:
         (
             args.benchmark_overlap_audit.resolve()
             if args.benchmark_overlap_audit
+            else None
+        ),
+        args.ordered_train.resolve() if args.ordered_train else None,
+        args.ordered_provenance.resolve() if args.ordered_provenance else None,
+        args.ordered_manifest.resolve() if args.ordered_manifest else None,
+        (
+            args.ordered_quality_audit.resolve()
+            if args.ordered_quality_audit
+            else None
+        ),
+        (
+            args.ordered_benchmark_overlap_audit.resolve()
+            if args.ordered_benchmark_overlap_audit
             else None
         ),
     )
@@ -207,6 +284,37 @@ def main() -> None:
             CommitOperationAdd(
                 path_in_repo="metadata/benchmark_overlap_audit.json",
                 path_or_fileobj=args.benchmark_overlap_audit.resolve(),
+            )
+        )
+    if args.ordered_train:
+        operations.extend(
+            [
+                CommitOperationAdd(
+                    path_in_repo="data/train.homogeneous-b16-length-bucketed.jsonl",
+                    path_or_fileobj=args.ordered_train.resolve(),
+                ),
+                CommitOperationAdd(
+                    path_in_repo="metadata/provenance.homogeneous-b16-length-bucketed.jsonl",
+                    path_or_fileobj=args.ordered_provenance.resolve(),
+                ),
+                CommitOperationAdd(
+                    path_in_repo="metadata/homogeneous-b16-length-bucketed.manifest.json",
+                    path_or_fileobj=args.ordered_manifest.resolve(),
+                ),
+            ]
+        )
+    if args.ordered_quality_audit:
+        operations.append(
+            CommitOperationAdd(
+                path_in_repo="metadata/ordered_training_data_quality_audit.json",
+                path_or_fileobj=args.ordered_quality_audit.resolve(),
+            )
+        )
+    if args.ordered_benchmark_overlap_audit:
+        operations.append(
+            CommitOperationAdd(
+                path_in_repo="metadata/ordered_benchmark_overlap_audit.json",
+                path_or_fileobj=args.ordered_benchmark_overlap_audit.resolve(),
             )
         )
     commit = api.create_commit(

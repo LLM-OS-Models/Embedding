@@ -219,7 +219,7 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 | Phase | Ordered rows | Ordered train SHA-256 | Public dataset revision |
 |---|---:|---|---|
 | 50K active run (49,904 ordered; tokenizer-filtered 45,316) | 49,904 | `39078ebbbea895b2fbb0fa701367cb839a60c4d9460246b39753d783c7a5d717` | [`da0b0ff`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k/tree/da0b0ff09ea0b14d2281a88671d2d346a45ebfbe) |
-| 200K | 199,904 | `59b08c0691caaa02e7520e9c98cf31f890679a82262ead789c1a7614f8baf285` | [`0a3a0e3`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/0a3a0e38fa766ba99fdd8f82ee49862e25f0aaf4) |
+| 200K | 199,904 | `8e2731ab25299ff558af675f067b253a6ce4375a850aa925acfe3b3117505e3c` | [`f605128`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/f605128d3233e7cc488dc741b8f2af9ecf68b6fa) |
 | 1M | 999,936 | `436dc7486578f6f077bef9f4479bc0d98310d855306bd2aad0c0d40fffbf2c00` | [`ac3e806`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-performance-1m/tree/ac3e806f2c01f2aa9f45686207b822e992889da2) |
 
 세 repository에 base `train.jsonl`/provenance뿐 아니라 exact
@@ -233,7 +233,7 @@ order의 padded proxy는 `160,181,088`, length-bucketed order는 `85,258,880`으
 [`performance-1m-training-data-audit.json`](../reports/performance-1m-training-data-audit.json)에
 고정했다.
 같은 검사를 [50K exact run](../reports/pilot-50k-training-data-audit.json)과
-[200K ordered run](../reports/ablation-200k-training-data-audit.json)에도 실행했고, 각 HF
+[200K decontaminated ordered run](../reports/ablation-200k-decontaminated-training-data-audit.json)에도 실행했고, 각 HF
 dataset의 `metadata/training_data_quality_audit.json`과 card에 공개했다. 세 run 모두
 declared per-row SHA mismatch와 homogeneous-batch violation이 0이다.
 동일 보고서는 HF dataset의 `metadata/training_data_quality_audit.json`에도 공개했다.

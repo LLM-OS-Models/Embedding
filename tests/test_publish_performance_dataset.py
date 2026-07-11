@@ -127,6 +127,70 @@ class PublishPerformanceDatasetTest(unittest.TestCase):
                     overlap,
                 )
 
+    def test_validates_ordered_training_artifacts_and_audits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data, card, _quality = self._fixture(root)
+            ordered_train = root / "ordered.train.jsonl"
+            ordered_provenance = root / "ordered.provenance.jsonl"
+            ordered_manifest = root / "ordered.manifest.json"
+            ordered_train.write_text('{"messages":1}\n', encoding="utf-8")
+            ordered_provenance.write_text('{"source_id":"fixture"}\n', encoding="utf-8")
+            ordered_manifest.write_text(
+                json.dumps(
+                    {
+                        "output_rows": 1,
+                        "outputs": {
+                            "train": {"sha256": sha256(ordered_train)},
+                            "provenance": {"sha256": sha256(ordered_provenance)},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ordered_quality = root / "ordered.quality.json"
+            ordered_quality.write_text(
+                json.dumps(
+                    {
+                        "rows": 1,
+                        "inputs": {
+                            "train": {"sha256": sha256(ordered_train)},
+                            "provenance": {"sha256": sha256(ordered_provenance)},
+                        },
+                        "contract_checks": {"status": "pass"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ordered_overlap = root / "ordered.overlap.json"
+            ordered_overlap.write_text(
+                json.dumps(
+                    {
+                        "rows": 1,
+                        "inputs": {
+                            "train": {"sha256": sha256(ordered_train)},
+                            "provenance": {"sha256": sha256(ordered_provenance)},
+                        },
+                        "unique_critical_query_or_evaluation_matches": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _manifest, paths = validate(
+                data,
+                card,
+                "fixture",
+                1,
+                "train.jsonl",
+                "provenance.jsonl",
+                ordered_train=ordered_train,
+                ordered_provenance=ordered_provenance,
+                ordered_manifest=ordered_manifest,
+                ordered_quality_audit=ordered_quality,
+                ordered_benchmark_overlap_audit=ordered_overlap,
+            )
+            self.assertEqual(paths[-1], ordered_overlap)
+
 
 if __name__ == "__main__":
     unittest.main()

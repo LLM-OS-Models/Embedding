@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import gzip
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ import random
 import re
 import shutil
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -52,6 +53,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--negatives-per-row", type=int)
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--critical-blocklist-root",
+        type=Path,
+        help=(
+            "Optional 15-task text-hash blocklist. Retrieval eval queries and "
+            "undeclared non-retrieval task text matches are rejected."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -97,6 +106,62 @@ def semantic_query_body(query: str) -> str:
     if query.lstrip().startswith("Instruct:") and "Query:" in query:
         return query.rpartition("Query:")[2].strip()
     return query.strip()
+
+
+ZERO_WIDTH_TRANSLATION = str.maketrans("", "", "\u200b\u200c\u200d\u2060\ufeff")
+
+
+def benchmark_text_digest(value: str) -> bytes:
+    normalized = unicodedata.normalize("NFKC", value)
+    normalized = normalized.translate(ZERO_WIDTH_TRANSLATION)
+    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = " ".join(normalized.split())
+    return hashlib.sha256(normalized.encode("utf-8")).digest()
+
+
+class CriticalTextBlocklist:
+    """Small in-memory critical subset of the full benchmark blocklist."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root.resolve()
+        self.query_text: set[bytes] = set()
+        self.evaluation_tasks: dict[bytes, set[str]] = defaultdict(set)
+        query_files = list(self.root.rglob("query_text.sha256.gz"))
+        evaluation_files = list(self.root.rglob("evaluation_text.sha256.gz"))
+        if not query_files and not evaluation_files:
+            raise FileNotFoundError(f"No critical text hashes below {self.root}")
+        for path in query_files:
+            self.query_text.update(self._read(path))
+        for path in evaluation_files:
+            relative = path.relative_to(self.root)
+            if len(relative.parts) < 3:
+                raise ValueError(f"Cannot infer task from blocklist path: {path}")
+            task = relative.parts[1]
+            for digest in self._read(path):
+                self.evaluation_tasks[digest].add(task)
+
+    @staticmethod
+    def _read(path: Path) -> Iterator[bytes]:
+        with gzip.open(path, "rt", encoding="ascii") as handle:
+            for line_number, line in enumerate(handle, 1):
+                value = line.strip()
+                if len(value) != 64:
+                    raise ValueError(f"{path}:{line_number}: invalid SHA-256")
+                yield bytes.fromhex(value)
+
+    def critical_reasons(
+        self, texts: Iterable[str], trained_on_tasks: list[str]
+    ) -> Counter[str]:
+        declared = set(trained_on_tasks)
+        reasons: Counter[str] = Counter()
+        for value in texts:
+            digest = benchmark_text_digest(value)
+            if digest in self.query_text:
+                reasons["retrieval_eval_query_text"] += 1
+            for task in self.evaluation_tasks.get(digest, ()):
+                if task not in declared:
+                    reasons[f"undeclared_nonretrieval_text:{task}"] += 1
+        return reasons
 
 
 def format_row(query: str, positive: str, negatives: list[str]) -> dict[str, Any]:
@@ -565,6 +630,12 @@ def write_mix(
     global_pairs: set[str] = set()
     source_stats: dict[str, Any] = {}
     total_rows = 0
+    critical_blocklist = (
+        CriticalTextBlocklist(args.critical_blocklist_root)
+        if args.critical_blocklist_root
+        else None
+    )
+    critical_reasons_total: Counter[str] = Counter()
     try:
         with train_path.open(
             "w", encoding="utf-8"
@@ -587,6 +658,15 @@ def write_mix(
                         rejected[cleaned[1]] += 1
                         continue
                     query, positive, negatives = cleaned
+                    if critical_blocklist is not None:
+                        reasons = critical_blocklist.critical_reasons(
+                            [semantic_query_body(query), positive, *negatives],
+                            source["trained_on_tasks"],
+                        )
+                        if reasons:
+                            rejected["benchmark_critical_text_overlap"] += 1
+                            critical_reasons_total.update(reasons)
+                            continue
                     pair_hash = stable_hash(query, positive)
                     if pair_hash in global_pairs:
                         rejected["duplicate_query_positive"] += 1
@@ -650,6 +730,31 @@ def write_mix(
                 "a separate rights-safe retrain or distillation pass is required before public release",
             ],
             "source_stats": source_stats,
+            "decontamination": (
+                {
+                    "mode": "critical_text_hash",
+                    "blocklist_root": str(critical_blocklist.root),
+                    "blocklist_manifest_sha256": (
+                        file_hash(critical_blocklist.root / "manifest.json")
+                        if (critical_blocklist.root / "manifest.json").is_file()
+                        else None
+                    ),
+                    "rejected_rows": sum(
+                        stats["rejected"].get("benchmark_critical_text_overlap", 0)
+                        for stats in source_stats.values()
+                    ),
+                    "matched_text_reasons": dict(
+                        sorted(critical_reasons_total.items())
+                    ),
+                    "policy": (
+                        "reject retrieval eval query text in any role; reject "
+                        "non-retrieval blocklist text unless the source explicitly "
+                        "declares the same trained_on_task"
+                    ),
+                }
+                if critical_blocklist is not None
+                else {"mode": "not_applied"}
+            ),
             "files": {
                 "train.jsonl": {
                     "rows": total_rows,
