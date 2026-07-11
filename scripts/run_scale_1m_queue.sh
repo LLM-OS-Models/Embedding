@@ -94,6 +94,7 @@ if [[ ! -s "$HOMOGENEOUS_MANIFEST" ]]; then
 fi
 TRAIN_FILE="$HOMOGENEOUS_TRAIN"
 TRAINING_MANIFEST="$HOMOGENEOUS_MANIFEST"
+TRAIN_HARD_NEGATIVES=4
 
 if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
   if [[ ! -s "$MINING_MANIFEST" ]]; then
@@ -128,6 +129,7 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
   if [[ -s "$MINED_HOMOGENEOUS_MANIFEST" && -s "$MINED_HOMOGENEOUS_TRAIN" ]]; then
     TRAIN_FILE="$MINED_HOMOGENEOUS_TRAIN"
     TRAINING_MANIFEST="$MINED_HOMOGENEOUS_MANIFEST"
+    TRAIN_HARD_NEGATIVES=7
     echo "[$(timestamp)] using current-student mined 1M curriculum"
   else
     echo "[$(timestamp)] current-student mining incomplete; using original homogeneous 1M"
@@ -144,6 +146,7 @@ train_scale() {
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
     TRAIN_DATALOADER_SHUFFLE=false \
     LEARNING_RATE=2e-5 WARMUP_RATIO=.05 \
+    INFONCE_HARD_NEGATIVES="$TRAIN_HARD_NEGATIVES" \
     BASE_MODEL="$CONTINUAL_BASE" BASE_REVISION="$CONTINUAL_REVISION" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }

@@ -17,12 +17,6 @@ ORDERED_MANIFEST="$DATA_DIR/faiss-r095-n7.homogeneous-b16.manifest.json"
 GENERAL_DIR="$ROOT/outputs/data/performance-v1/performance-1m"
 GENERAL_TRAIN="$GENERAL_DIR/train.homogeneous-b16.jsonl"
 GENERAL_PROVENANCE="$GENERAL_DIR/provenance.homogeneous-b16.jsonl"
-if [[ -s "$GENERAL_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json" \
-    && -s "$GENERAL_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl" \
-    && -s "$GENERAL_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl" ]]; then
-  GENERAL_TRAIN="$GENERAL_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl"
-  GENERAL_PROVENANCE="$GENERAL_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl"
-fi
 CURRICULUM="$DATA_DIR/train.faiss-r095-n7.legal25-replay75.jsonl"
 CURRICULUM_PROVENANCE="$DATA_DIR/provenance.faiss-r095-n7.legal25-replay75.jsonl"
 CURRICULUM_MANIFEST="$DATA_DIR/faiss-r095-n7.legal25-replay75.manifest.json"
@@ -60,6 +54,12 @@ run_stage() {
 
 if [[ -n "$WAIT_PID" ]]; then
   while kill -0 "$WAIT_PID" 2>/dev/null; do sleep 20; done
+fi
+if [[ -s "$GENERAL_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json" \
+    && -s "$GENERAL_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl" \
+    && -s "$GENERAL_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl" ]]; then
+  GENERAL_TRAIN="$GENERAL_DIR/train.faiss-current-r095-n7.homogeneous-b16.jsonl"
+  GENERAL_PROVENANCE="$GENERAL_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl"
 fi
 [[ -s "$BOOTSTRAP" && -s "$DATA_DIR/provenance.jsonl" && -s "$VAL_FILE" \
   && -s "$GENERAL_TRAIN" && -s "$GENERAL_PROVENANCE" ]] || exit 2
@@ -136,6 +136,7 @@ train_legal() {
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
     TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=1e-5 \
+    INFONCE_HARD_NEGATIVES=7 \
     BASE_MODEL="$MINING_MODEL" BASE_REVISION="$MINING_REVISION" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }

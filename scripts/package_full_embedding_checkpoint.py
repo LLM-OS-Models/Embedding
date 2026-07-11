@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -155,11 +156,20 @@ def main() -> None:
     args = parse_args()
     checkpoint = args.checkpoint.resolve()
     output = args.output_dir.resolve()
-    stage_checkpoint(checkpoint, output, args.copy_weights)
-    report = verify(output, args)
-    (output / "full_tuning_report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    if output.exists():
+        raise FileExistsError(f"Output already exists: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    staging = output.parent / f".{output.name}.building-{uuid.uuid4().hex}"
+    try:
+        stage_checkpoint(checkpoint, staging, args.copy_weights)
+        report = verify(staging, args)
+        (staging / "full_tuning_report.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        os.replace(staging, output)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
