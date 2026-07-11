@@ -1,6 +1,6 @@
 # Clean Korean 종합 평가 보드
 
-기준일: 2026-07-11. 이 보드는 MTEB Korean 6종이나 Sionic retrieval 9종을 다시 평균내는 제3의 홍보 점수가 아니다. 공개 test에 과적합하지 않고 실제 배포 품질로 checkpoint를 고르기 위한 내부 clean holdout이다.
+기준일: 2026-07-12. 이 보드는 MTEB Korean 6종이나 Sionic retrieval 9종을 다시 평균내는 제3의 홍보 점수가 아니다. 공개 test에 과적합하지 않고 실제 배포 품질로 checkpoint를 고르기 위한 내부 clean holdout이다.
 
 ## 왜 별도 보드가 필요한가
 
@@ -17,7 +17,7 @@
 | Clean retrieval | 정부·법률·보건·금융·상거래·일반 검색 | NDCG@10, Recall@10/100, MRR@10 | domain, query style |
 | Broad semantic | STS, paraphrase, intent/classification | Spearman, accuracy/F1 | task, label balance |
 | Long context | 512/2K/4K/8K, evidence head/middle/tail | NDCG@10, recall | token bucket, evidence position |
-| Robustness | OCR, 띄어쓰기, 오탈자, 존댓말/구어체, 짧은 keyword | relative score retention | perturbation type/severity |
+| Robustness | OCR, 띄어쓰기, 오탈자, 존댓말/구어체, 짧은 keyword, 대화 filler/system artifact | relative score retention, noise top-rank | perturbation type/severity, prompt on/off |
 | Multilingual regression | English 및 기존 multilingual holdout | task metric delta vs base | language/task |
 | Efficiency | encode throughput, p50/p95 latency, VRAM, index size | docs/s, ms/query, GiB | length, batch, dimension |
 
@@ -40,6 +40,12 @@
 4. public MTEB/Sionic query·corpus와 exact URL/hash, normalized text, MinHash, dense-neighbor를 비교한다.
 5. hard negative mining은 train corpus에서만 수행하며 dev/test corpus를 인덱스에 넣지 않는다.
 6. 모든 결과에 dataset manifest SHA, model revision, prompt, max length, dimension, hardware를 남긴다.
+
+대화형 robustness slice는 원 corpus에 의미 없는 filler, metadata header, assistant/system
+형식 artifact를 결정론적으로 0/1/5% 삽입한다. 동일 query를 Qwen 권장 instruction
+prompt on/off로 각각 인코딩하고, clean NDCG 유지율과 가장 높은 noise 문서의 rank를 함께
+보고한다. 이는 clean query 점수만으로 보이지 않는 Qwen3 계열의 구조 노이즈 취약성을
+측정하며, prompt를 모델별로 임의 최적화하지 않고 사전에 고정한다.
 
 ## 모델 승격 gate
 

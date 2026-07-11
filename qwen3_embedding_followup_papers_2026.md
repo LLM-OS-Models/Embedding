@@ -1,6 +1,6 @@
 # Qwen3-Embedding 이후 텍스트 임베딩 학습 연구 정리
 
-> 조사 기준일: 2026-07-11
+> 조사 기준일: 2026-07-12
 > 기준 논문: [Qwen3 Embedding: Advancing Text Embedding and Reranking Through Foundation Models](https://arxiv.org/abs/2506.05176)
 
 ## 1. 조사 범위와 판정 기준
@@ -181,6 +181,22 @@ Qwen3 계열 자체와 후속 연구는 task별 최고 체크포인트를 병합
 - SemEval 등의 단일 shared-task system paper는 synthetic hard-negative 아이디어가 있어도 일반 학습법 근거가 약하면 보조 사례로만 취급
 
 예를 들어 [SemEval 2026 Team HITS](https://aclanthology.org/2026.semeval-1.338/)는 Qwen2.5-32B로 narrative hard negatives를 만들고 Qwen3-Embedding-8B를 multi-negative contrastive/self-distillation하는 사례지만, 단일 shared-task 최적화의 성격이 강해 핵심 13편에는 넣지 않았다.
+
+### 7.1 7월 12일 최신 원문 재검색에서 확인한 인접 연구
+
+아래 연구는 Qwen3 text embedder의 직접 후속 학습 recipe라는 주 목록 조건에는 맞지
+않지만, 현재 실험 설계에는 분명한 함의가 있어 별도로 추적한다.
+
+| 연구 | 확인된 내용 | 이번 프로젝트의 반영 |
+|---|---|---|
+| [Robustness Risk of Conversational Retrieval](https://arxiv.org/abs/2604.06176) | Qwen3-Embedding은 query prompt가 없을 때 구조화된 대화 filler·system artifact가 상위 검색 결과에 침투하는 현상이 나타났고, 가벼운 query prompt로 완화됐다. clean query benchmark만으로 잘 드러나지 않는 실패다. | 고정 Sionic prompt를 유지하고, clean 보드에 대화 filler/system header 0/1/5% 삽입과 prompt on/off paired slice를 추가한다. |
+| [KV-Embedding](https://aclanthology.org/2026.acl-long.540/) | frozen decoder LLM의 마지막 token KV state를 prefix로 재배치하는 training-free 방식이며, Qwen/Mistral/Llama의 MTEB에서 기존 training-free baseline 대비 최대 10% 개선과 4,096-token 결과를 보고했다. | 현재 Qwen3-Embedding 후속학습 checkpoint와 저장 형식이 달라 주력 경로에는 넣지 않는다. `060`의 frozen-backbone architecture ablation 후보로만 둔다. |
+| [LEAF](https://aclanthology.org/2026.acl-long.2008/) | 학생 벡터를 teacher 공간에 직접 정렬해 query는 작은 학생, corpus는 큰 teacher로 인코딩하는 비대칭 검색을 가능하게 한다. hard negative·judgment 없이 작은 batch로 학습 가능하며 teacher의 MRL/quantization robustness도 상속한다고 보고한다. | 최고 8B 모델 확정 후 query-side 저지연 학생을 만드는 `120_compression` 후보로 둔다. 교사와 학생의 벡터 호환성은 현재 Sionic 추월용 8B 품질 학습과 분리한다. |
+| [Qwen3-VL-Embedding](https://arxiv.org/abs/2601.04720) | 텍스트·이미지·문서 이미지·비디오용 별도 multimodal 계열이다. large-scale contrastive pre-training → reranker distillation → MRL이라는 단계가 공개됐다. | text-only Korean 보드의 직접 비교 모델은 아니지만, reranker 연속 신호와 MRL을 뒤 단계에 두는 방향을 재확인한다. OCR 문서 이미지는 future multimodal track으로 분리한다. |
+
+이 재검색으로 현재 우선순위는 바뀌지 않는다. 다만 **prompt/noise robustness**는 학습
+데이터를 더 넣기 전에도 실패를 검출할 수 있으므로 clean 종합 보드의 필수 paired test로
+승격한다.
 
 ## 8. 요약
 

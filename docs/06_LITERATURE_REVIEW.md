@@ -1,6 +1,6 @@
 # Literature review
 
-이 문서는 Qwen3-Embedding의 선행·인용·후속 연구를 방법론별로 정리합니다. 2026-07-11 기준 primary paper와 공식 code/model card만 최종 근거로 사용합니다.
+이 문서는 Qwen3-Embedding의 선행·인용·후속 연구를 방법론별로 정리합니다. 2026-07-12 기준 primary paper와 공식 code/model card만 최종 근거로 사용합니다.
 
 ## 중심 논문
 
@@ -53,3 +53,11 @@ Qwen3 논문을 실제로 인용한 2025 하반기~2026 논문 13편의 날짜, 
 4. generic reasoning/RLVR checkpoint 자체는 자동 이득이 아니며 retrieval reward나 latent-CoT 증류처럼 목적에 직접 연결해야 합니다.
 5. domain·task별 adapter/checkpoint를 clean validation으로 고른 뒤 merge하는 방법은 재현 가치가 큽니다.
 6. 2,500억 토큰 multilingual CPT 사례는 존재하지만 Sionic의 1.05 NDCG point 차이를 넘기 위한 첫 실험으로는 과합니다.
+
+2026-07-12 최신 원문 재검색에서 text-only 주 recipe의 우선순위를 바꿀 새 대규모
+학습법은 확인되지 않았다. 대신 Qwen3의 **대화형 구조 노이즈 취약성**과 query prompt의
+완화 효과가 보고돼 clean robustness 보드에 prompt on/off와 dialogue artifact paired
+slice를 추가했다. KV state re-routing은 frozen LLM용 training-free architecture,
+LEAF는 teacher-compatible 소형 학생을 만드는 압축법, Qwen3-VL은 multimodal 계열이므로
+현재 8B Korean contrastive tuning과 분리해 후속 ablation으로 둔다. 구체적 원문과 채택
+판정은 [상세 후속 연구 보고서](../qwen3_embedding_followup_papers_2026.md)에 있다.

@@ -46,6 +46,15 @@ Qwen3, E5, F2LLM, Nemotron, KaLM의 첫 대규모 단계가 논문에서 `pre-tr
 | [Gecko](https://arxiv.org/abs/2403.20327) | 비공개 1.2B pretrained transformer, mean pooling, 256/768-d MRL, task feature | community QA + web title/body pre-finetune. FRet 6.6M: real web passage에서 LLM이 task/query 생성 → embedder candidate retrieval → 같은 LLM이 positive/HN 재라벨. NQ/HotpotQA/FEVER/MedMCQA/NLI/classification/MIRACL 혼합 | pre-stage in-batch NCE; fine-stage explicit HN, in-batch document와 same-tower query negatives; LLM query-likelihood + relevance classification을 RRF | model/data/backbone과 전체 규모가 비공개인 폐쇄 recipe. FRet에서 최초 source가 positive가 아닌 비율 약 15%라는 분석은 공개 | source-as-positive를 검증 없이 쓰지 않는 원칙을 data factory와 `020`에 채택. 폐쇄 데이터 자체는 사용 불가 |
 | [Gemini Embedding](https://arxiv.org/abs/2503.07891) | Gemini 초기화 bidirectional transformer, mean pool + projection, 3072-d 계열, MRL 768/1536 | billion-scale title/passage pre-finetuning; task/language/code fine-tune mixtures; Gemini synthetic retrieval/classification, filtering, HN grading | in-batch NCE, explicit HN optional, classification FN mask; same-tower negatives는 오히려 제외; 한 source/dataset homogeneous batch; 여러 run parameter average/model soup | API/가중치와 data count·source 세부는 비공개. 논문이 recipe 개념과 ablation만 공개 | synthetic 생성→grader filtering, homogeneous batch, soup을 채택. closed teacher 의존은 기본 경로에서 제외; `020`, `050` |
 
+### 1.1 2026-07 최신 인접 연구와 적용 경계
+
+| 연구 | 방법·데이터 공개 범위 | 직접 적용 여부 |
+|---|---|---|
+| [Robustness Risk of Conversational Retrieval](https://arxiv.org/abs/2604.06176) | Qwen3-Embedding의 prompt 없는 대화 검색에서 filler/system artifact 침투를 분석한 평가 연구. 구조 노이즈 비율별 NDCG@5와 최고 noise rank를 보고하고 query prompt 완화 효과를 보임 | 학습 recipe가 아니므로 data mix 근거로 쓰지 않는다. clean 보드의 prompt on/off·noise 0/1/5% paired test로 채택 |
+| [KV-Embedding](https://aclanthology.org/2026.acl-long.540/) | frozen decoder LLM의 마지막-token layer별 KV를 prefix로 re-route하는 training-free 방식. Qwen/Mistral/Llama, 최대 4,096 tokens | 현재 SentenceTransformer/Qwen3-Embedding weight contract와 다르므로 `060` frozen architecture ablation에만 보류 |
+| [LEAF](https://aclanthology.org/2026.acl-long.2008/) | judgment/HN 없이 teacher vector space에 학생을 정렬해 asymmetric query-student/corpus-teacher 검색과 MRL·quantization 특성 상속 | 8B 최고 교사가 확정된 뒤 `120_compression`에서 사용. 현재 Sionic 추월 8B 학습에는 미적용 |
+| [Qwen3-VL-Embedding](https://arxiv.org/abs/2601.04720) | 2B/8B multimodal 계열; contrastive pre-training→reranker distillation→MRL, 32K, 텍스트·이미지·문서 이미지·비디오 | text-only 보드의 비교 모델은 아님. OCR 이미지용 별도 multimodal track에만 참고 |
+
 ### 모델·코드·데이터 공개성과 권리 상태
 
 아래 상태는 조사일의 공식 card/repository 기준이다. 논문 PDF의 CC 표기는 논문 본문의 재사용 조건일 뿐 model/data에 전이되지 않는다. `unknown` asset은 public release 학습에서 기본 제외한다.
