@@ -96,6 +96,12 @@ negative/positive similarity는 `0.19648507/0.74495077`이다. negative separati
 continual promotion gate는 열리지 않았다. 후반 checkpoint가 이 기준을 실제로 넘는
 경우에만 200K가 50K에서 이어 학습한다.
 
+현재 200-step best는 trainer의 rolling `save_total_limit=3` 삭제 범위 밖에 필수
+adapter/config/state/log만 hard-link snapshot으로 보존했다. active-run watcher가 매
+15초마다 더 낮은 validation loss를 확인해 새 best를 교체 보존한다. 후속 run은
+`load_best_model_at_end=true`, `metric_for_best_model=eval_loss`를 명시해 Trainer 자체가
+최선 checkpoint를 유지·복원한다. optimizer state를 보존 snapshot에 중복 저장하지 않는다.
+
 `performance_1m` 1,000,000-row base mix와 999,936-row/62,496-batch homogeneous 파생
 파일은 build를 마쳤다. 50K/200K/1M 원본 dataset과 법률 250K는 Hugging Face에
 공개됐고, GPU campaign은 완료된 manifest를 자동 감지해 scale run에 사용한다.
