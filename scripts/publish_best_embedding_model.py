@@ -460,6 +460,9 @@ def main() -> None:
     }
     if args.clean_summary:
         evidence_files["legal_source_heldout_summary.json"] = args.clean_summary.resolve()
+        clean_ranks = args.clean_summary.resolve().parent / "ranks.jsonl"
+        if clean_ranks.is_file():
+            evidence_files["legal_source_heldout_ranks.jsonl"] = clean_ranks
     for name, source in evidence_files.items():
         shutil.copy2(source, evidence_dir / name)
     raw_evidence = {
