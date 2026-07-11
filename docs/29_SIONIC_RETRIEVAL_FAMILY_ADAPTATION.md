@@ -11,7 +11,7 @@ MLDR `0.0147`이다. 그런데 decontaminated 1M curriculum의 해당 train-fami
 
 ## Source artifact
 
-[`korean-embedding-performance-v1-sionic-retrieval-train-family-4146@c847cbc`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146/tree/c847cbcbf8a72a69b6c817bd448c42ede8aa76d9)은
+[`korean-embedding-performance-v1-sionic-retrieval-train-family-4146@c9513a6`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146/tree/c9513a66ad64e5eab586969f6fdde7f9c8abd922)은
 decontaminated 1M의 aligned train/provenance에서 다음 `source_id`만 parent order 그대로
 추출한다.
 
@@ -63,8 +63,8 @@ train/provenance/quality/overlap/mining audit은
 | Tuner | LoRA r64/alpha128/all-linear |
 | Loss | InfoNCE tau .02, in-batch + explicit HN7, false-negative mask |
 | Max length | **2,048** |
-| Primary batch | 2 × accumulation 32 = effective 64 |
-| OOM fallback | 1 × accumulation 64 |
+| Primary batch | 4 × accumulation 16 = effective 64 |
+| OOM fallback | 2 × accumulation 32 |
 | LR | 5e-6, cosine, warmup 5% |
 | Steps | final rows / 64, 약 129 |
 | Selection | exact-overlap-zero 512-row HN validation loss |
