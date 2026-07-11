@@ -32,9 +32,15 @@ Qwen3-Embedding-8B를 한국어 retrieval에 적응시킬 때 LoRA의 낮은 메
 
 ## 사전 판단
 
-표준 mixed-precision AdamW full FT는 weights, gradients, FP32 optimizer state와 구현에 따른 master weights 때문에 8B 단일 H100 80GB에서 여유가 거의 없거나 OOM일 가능성이 높다. 따라서 1-step 안전 probe로 사실을 확인하고, 바로 긴 학습을 걸지 않는다.
+현재 PyTorch 2.13 fused AdamW가 이 환경에서 BF16 moment를 만드는 것을 확인했다. 따라서 FP32 master/moment를 가정한 120GB 추정보다 작지만, encoder weight·gradient·BF16 moments만 약 56.4GiB이고 activation/temporary/allocator가 추가된다. 표준 full FT는 8B 단일 H100 80GB에서 여유가 작으므로 1-step 안전 probe로 확인하고 바로 긴 학습을 걸지 않는다.
 
-첫 실전 후보는 LoRA r64와 top-layer partial tuning이다. 충분히 어려운 hard negatives에서 이 둘이 Comsat 격차를 닫지 못할 때 memory-efficient full FT를 승격한다. F2LLM의 full FT 결과만 보고 우리 데이터 규모에서도 full FT가 자동으로 낫다고 가정하지 않는다.
+Qwen3-Embedding checkpoint에는 `lm_head.weight`가 없지만 ms-swift loader는 약 621M parameter의 임의 BF16 head를 만든 뒤 embedding forward에서 사용하지 않는다. full/partial/GaLore에서는 이 미사용 head를 반드시 `--freeze_parameters lm_head`로 동결한다.
+
+현재 환경에는 FlashAttention, bitsandbytes, Q-GaLore, DeepSpeed가 없으므로 SDPA를 사용한다. 비양자 GaLore는 ms-swift 내부 구현으로 별도 package 없이 쓸 수 있다. 단일 GPU에서는 ZeRO/FSDP 통신 이득도 없다.
+
+첫 실전 후보는 `LoRA r64 → DoRA r32 → 마지막 4층 partial FT → GaLore full` 순서다. 마지막 4층+final norm은 771.790M trainable parameters이고, all-linear LoRA r64는 174.588M이다. 충분히 어려운 hard negatives에서 앞 설정이 Comsat 격차를 닫지 못할 때 full update를 승격한다. F2LLM의 full FT 결과만 보고 우리 데이터 규모에서도 full FT가 자동으로 낫다고 가정하지 않는다.
+
+모든 1-step 명령은 [`probe_memory.sh`](probe_memory.sh)에 고정했다. `standard_full`은 OOM 가능성을 명시적으로 감수하는 마지막 probe이며 저장을 끄므로 15GB checkpoint를 만들지 않는다.
 
 ## 성공 기준
 

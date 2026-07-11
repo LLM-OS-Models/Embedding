@@ -1,0 +1,124 @@
+{
+  "protocol_id": "mteb-korean-v1-mteb-2.18.0",
+  "created_at": "2026-07-11",
+  "benchmark": "MTEB(kor, v1)",
+  "mteb_version": "2.18.0",
+  "mteb_git_revision": "193e3f66d2deac678065a43354c9c4efc57f507d",
+  "seed": 42,
+  "aggregate": {
+    "mean_task": "unweighted_macro_mean_over_6_tasks",
+    "mean_task_type": "unweighted_macro_mean_over_4_task_type_means",
+    "rank": "borda_rank_against_models_with_complete_6_task_results"
+  },
+  "comsat": {
+    "model": "sionic-ai/comsat-embed-ko-8b-preview",
+    "revision": "a5cc22b651c1b2e51cdd8bf671774ae93584f0ab",
+    "max_tokens": 8192,
+    "similarity": "cosine",
+    "effective_prompts": {
+      "query": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+      "document": "",
+      "symmetric": ""
+    },
+    "prompt_note": "MTEB's generic SentenceTransformer wrapper uses the model's built-in query/document prompts for asymmetric tasks. Classification and STS pass no prompt_type and therefore receive no prompt because default_prompt_name is null."
+  },
+  "tasks": [
+    {
+      "name": "KLUE-TC",
+      "type": "Classification",
+      "split": "validation",
+      "hf_subsets": ["default"],
+      "dataset": {
+        "path": "klue/klue",
+        "name": "ynat",
+        "revision": "349481ec73fff722f88e0453ca05c77a447d967c"
+      },
+      "main_score": "accuracy",
+      "task_prompt": null,
+      "instruction_fallback": "Classify user passages.",
+      "comsat_effective_prompt": "",
+      "evaluation": "LogisticRegression over 8 examples per label, averaged over 10 deterministic experiments"
+    },
+    {
+      "name": "MIRACLReranking",
+      "type": "Reranking",
+      "split": "dev",
+      "hf_subsets": ["ko"],
+      "dataset": {
+        "path": "mteb/MIRACLReranking",
+        "revision": "d11a14c74e8bd448cedab0c1d9a720040535f228"
+      },
+      "main_score": "ndcg_at_10",
+      "task_prompt": {
+        "query": "Given a question, retrieve Wikipedia passages that answer the question"
+      },
+      "instruction_fallback": "Retrieve text based on user query.",
+      "comsat_effective_prompt": "query"
+    },
+    {
+      "name": "MIRACLRetrieval",
+      "type": "Retrieval",
+      "split": "dev",
+      "hf_subsets": ["ko"],
+      "dataset": {
+        "path": "mteb/MIRACLRetrieval",
+        "revision": "9c09abc13478308c27598f350e31d8f06b9b5481"
+      },
+      "main_score": "ndcg_at_10",
+      "task_prompt": {
+        "query": "Given a question, retrieve Wikipedia passages that answer the question"
+      },
+      "instruction_fallback": "Retrieve text based on user query.",
+      "comsat_effective_prompt": "query"
+    },
+    {
+      "name": "Ko-StrategyQA",
+      "type": "Retrieval",
+      "split": "dev",
+      "hf_subsets": ["default"],
+      "dataset": {
+        "path": "taeminlee/Ko-StrategyQA",
+        "revision": "d243889a3eb6654029dbd7e7f9319ae31d58f97c"
+      },
+      "main_score": "ndcg_at_10",
+      "task_prompt": null,
+      "instruction_fallback": "Retrieve text based on user query.",
+      "comsat_effective_prompt": "query"
+    },
+    {
+      "name": "KLUE-STS",
+      "type": "STS",
+      "split": "validation",
+      "hf_subsets": ["default"],
+      "dataset": {
+        "path": "klue/klue",
+        "name": "sts",
+        "revision": "349481ec73fff722f88e0453ca05c77a447d967c"
+      },
+      "main_score": "cosine_spearman",
+      "task_prompt": null,
+      "instruction_fallback": "Retrieve semantically similar text.",
+      "comsat_effective_prompt": ""
+    },
+    {
+      "name": "KorSTS",
+      "type": "STS",
+      "split": "test",
+      "hf_subsets": ["default"],
+      "dataset": {
+        "path": "dkoterwa/kor-sts",
+        "revision": "016f35f9b961daaaa7a352e927084e3da662ac1f"
+      },
+      "main_score": "cosine_spearman",
+      "task_prompt": null,
+      "instruction_fallback": "Retrieve semantically similar text.",
+      "comsat_effective_prompt": ""
+    }
+  ],
+  "notes": [
+    "Use the benchmark object, not a language-wide task search; the benchmark object pins exactly these six tasks and Korean MIRACL subsets.",
+    "Do not replace KLUE-TC with KLUE-TC.v2 or MIRACLRetrieval with a hard-negative variant; those are different tasks and are not in Korean v1.",
+    "Task metadata prompts and model prompts are distinct. The effective Comsat prompt follows its published SentenceTransformer configuration.",
+    "A single model run can compute Mean(Task) and Mean(TaskType), but Borda rank is defined only relative to the complete leaderboard model set."
+  ]
+}
