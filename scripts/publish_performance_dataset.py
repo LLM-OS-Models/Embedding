@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--expected-phase", default="pilot_50k")
     parser.add_argument("--expected-rows", type=int, default=50_000)
+    parser.add_argument("--train-name", default="train.jsonl")
+    parser.add_argument("--provenance-name", default="provenance.jsonl")
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--upload", action="store_true")
     return parser.parse_args()
@@ -54,27 +56,32 @@ def line_count(path: Path) -> int:
 
 
 def validate(
-    data_dir: Path, card: Path, expected_phase: str, expected_rows: int
+    data_dir: Path,
+    card: Path,
+    expected_phase: str,
+    expected_rows: int,
+    train_name: str,
+    provenance_name: str,
 ) -> tuple[dict[str, Any], list[Path]]:
     manifest_path = data_dir / "manifest.json"
-    train_path = data_dir / "train.jsonl"
-    provenance_path = data_dir / "provenance.jsonl"
+    train_path = data_dir / train_name
+    provenance_path = data_dir / provenance_name
     required = [manifest_path, train_path, provenance_path, card]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise FileNotFoundError(f"Missing publication inputs: {missing}")
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if (
-        manifest.get("phase") != expected_phase
-        or manifest.get("built_rows") != expected_rows
+    actual_rows = manifest.get("built_rows", manifest.get("rows"))
+    if (expected_phase and manifest.get("phase") != expected_phase) or (
+        actual_rows != expected_rows
     ):
         raise ValueError(
             "Dataset does not match publication gate: "
             f"expected={expected_phase}:{expected_rows}, "
-            f"found={manifest.get('phase')}:{manifest.get('built_rows')}"
+            f"found={manifest.get('phase')}:{actual_rows}"
         )
-    for name, path in (("train.jsonl", train_path), ("provenance.jsonl", provenance_path)):
+    for name, path in ((train_name, train_path), (provenance_name, provenance_path)):
         expected = manifest["files"][name]
         actual_rows = line_count(path)
         actual_sha = sha256(path)
@@ -97,12 +104,14 @@ def main() -> None:
         args.card.resolve(),
         args.expected_phase,
         args.expected_rows,
+        args.train_name,
+        args.provenance_name,
     )
     report = {
         "repo_id": args.repo_id,
         "visibility": "public" if args.public else "private",
-        "phase": manifest["phase"],
-        "rows": manifest["built_rows"],
+        "phase": manifest.get("phase", manifest.get("use_policy")),
+        "rows": manifest.get("built_rows", manifest.get("rows")),
         "validated": True,
         "upload_requested": args.upload,
     }
