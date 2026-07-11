@@ -12,6 +12,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from merge_embedding_adapter import (
+        validate_sentence_transformers_contract,
+        write_sentence_transformers_contract,
+    )
+except ModuleNotFoundError:
+    from scripts.merge_embedding_adapter import (
+        validate_sentence_transformers_contract,
+        write_sentence_transformers_contract,
+    )
+
 
 BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
 BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
@@ -98,12 +109,19 @@ def verify(output: Path, args: argparse.Namespace) -> dict:
     import torch
     from sentence_transformers import SentenceTransformer
 
-    pooling = json.loads((output / "1_Pooling/config.json").read_text())
-    modules = json.loads((output / "modules.json").read_text())
-    last_token = pooling.get("pooling_mode_lasttoken") is True
-    normalize = any(str(module.get("type", "")).endswith(".Normalize") for module in modules)
-    if not last_token or not normalize:
-        raise ValueError("Checkpoint lost the last-token/L2 SentenceTransformers contract")
+    model_config = json.loads((output / "config.json").read_text(encoding="utf-8"))
+    hidden_size = model_config.get("hidden_size")
+    if not isinstance(hidden_size, int) or hidden_size <= 0:
+        raise ValueError(f"Invalid packaged hidden_size: {hidden_size!r}")
+    write_sentence_transformers_contract(output, hidden_size)
+    tokenizer_path = output / "tokenizer_config.json"
+    tokenizer_config = json.loads(tokenizer_path.read_text(encoding="utf-8"))
+    tokenizer_config["padding_side"] = "left"
+    tokenizer_path.write_text(
+        json.dumps(tokenizer_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    contract = validate_sentence_transformers_contract(output)
     dtype = getattr(torch, args.dtype)
     model = SentenceTransformer(
         str(output),
@@ -138,11 +156,7 @@ def verify(output: Path, args: argparse.Namespace) -> dict:
         "base_revision": BASE_REVISION,
         "source_checkpoint": str(args.checkpoint.resolve()),
         "model": {"weights_sha256": hash_model_files(output)},
-        "sentence_transformers_contract": {
-            "pooling": "last_token",
-            "normalize": True,
-            "embedding_dimension": 4096,
-        },
+        "sentence_transformers_contract": contract,
         "probe": {
             "metrics": {
                 "maximum_norm_error": max_norm_error,
