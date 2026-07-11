@@ -53,6 +53,10 @@ perf200_ready() {
 screen_lora_run() {
   local run_name="$1"
   local run_dir="$ROOT/outputs/$run_name"
+  if [[ -s "$run_dir/DISQUALIFIED.json" ]]; then
+    echo "[$(timestamp)] skip screening disqualified run: $run_name"
+    return 0
+  fi
   local checkpoint
   checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
     "$run_dir" --print-path 2>/dev/null)" || return 0
@@ -182,11 +186,15 @@ run_lora_training() {
     fi
   fi
   if [[ -n "$latest" && -s "$latest/adapter_model.safetensors" ]]; then
-    run_stage "$run_name-verify" \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
-      --adapter "$latest" --data "$PILOT_VAL" \
-      --output "$ROOT/outputs/$run_name/verification.json"
-    screen_lora_run "$run_name"
+    if [[ -s "$ROOT/outputs/$run_name/DISQUALIFIED.json" ]]; then
+      echo "[$(timestamp)] preserve diagnostic checkpoint without candidate verification: $run_name"
+    else
+      run_stage "$run_name-verify" \
+        "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+        --adapter "$latest" --data "$PILOT_VAL" \
+        --output "$ROOT/outputs/$run_name/verification.json"
+      screen_lora_run "$run_name"
+    fi
   fi
 }
 
