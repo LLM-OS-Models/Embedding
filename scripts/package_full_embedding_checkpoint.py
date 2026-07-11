@@ -41,6 +41,9 @@ def hash_model_files(root: Path) -> str:
 
 
 def link_or_copy(source: Path, destination: Path, copy_weights: bool) -> None:
+    # Hugging Face snapshots are relative symlinks into blobs. Hard-link the
+    # resolved blob, otherwise the staged relative symlink becomes broken.
+    source = source.resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         destination.unlink()
