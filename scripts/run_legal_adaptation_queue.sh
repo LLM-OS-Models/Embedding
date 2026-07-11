@@ -104,12 +104,14 @@ if [[ ! -s "$MINED_PROVENANCE" ]]; then
     --manifest-output "$DATA_DIR/provenance.faiss-r095-n7.manifest.json" || exit 4
 fi
 
-if [[ ! -s "$ORDERED_MANIFEST" ]]; then
+if [[ ! -s "$ORDERED_MANIFEST" \
+    || "$(jq -r '.length_bucketed // false' "$ORDERED_MANIFEST")" != true ]]; then
   run_stage order-legal-homogeneous-batches \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
     --train "$MINED" --provenance "$MINED_PROVENANCE" \
     --output "$ORDERED" --provenance-output "$ORDERED_PROVENANCE" \
-    --manifest-output "$ORDERED_MANIFEST" --batch-size 16 --seed 42 || exit 5
+    --manifest-output "$ORDERED_MANIFEST" --batch-size 16 --seed 42 \
+    --length-bucketed || exit 5
 fi
 
 if [[ ! -s "$CURRICULUM_MANIFEST" ]]; then

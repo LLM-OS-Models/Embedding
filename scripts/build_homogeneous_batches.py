@@ -23,6 +23,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--length-bucketed",
+        action="store_true",
+        help="Sort rows by a text-length proxy inside each source before batching",
+    )
     parser.add_argument("--benchmark-adaptation")
     return parser.parse_args()
 
@@ -50,8 +55,16 @@ def source_id(provenance: dict) -> str:
     return value
 
 
-def read_aligned(train: Path, provenance: Path) -> dict[str, list[tuple[str, str]]]:
-    groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
+def row_length_proxy(row: dict) -> int:
+    sequences = [row["messages"], *row["positive_messages"], *row["negative_messages"]]
+    return max(
+        sum(len(str(message.get("content", ""))) for message in sequence)
+        for sequence in sequences
+    )
+
+
+def read_aligned(train: Path, provenance: Path) -> dict[str, list[tuple[str, str, int]]]:
+    groups: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
     with train.open(encoding="utf-8") as train_handle, provenance.open(
         encoding="utf-8"
     ) as provenance_handle:
@@ -73,6 +86,7 @@ def read_aligned(train: Path, provenance: Path) -> dict[str, list[tuple[str, str
                 (
                     json.dumps(train_row, ensure_ascii=False, separators=(",", ":")),
                     json.dumps(provenance_row, ensure_ascii=False, separators=(",", ":")),
+                    row_length_proxy(train_row),
                 )
             )
     return groups
@@ -91,12 +105,16 @@ def main() -> None:
     train = args.train.resolve()
     provenance = args.provenance.resolve()
     groups = read_aligned(train, provenance)
-    batches: list[tuple[str, list[tuple[str, str]]]] = []
+    batches: list[tuple[str, list[tuple[str, str, int]]]] = []
     dropped: Counter[str] = Counter()
     input_counts: Counter[str] = Counter()
     for source, rows in sorted(groups.items()):
         input_counts[source] = len(rows)
         random.Random(stable_seed(args.seed, "within", source)).shuffle(rows)
+        if args.length_bucketed:
+            # The stable shuffle supplies a deterministic tie break. Global
+            # batch shuffling below prevents a short-to-long curriculum.
+            rows.sort(key=lambda row: row[2])
         usable = len(rows) - len(rows) % args.batch_size
         dropped[source] = len(rows) - usable
         for start in range(0, usable, args.batch_size):
@@ -113,13 +131,18 @@ def main() -> None:
         for batch_index, (source, rows) in enumerate(batches):
             if len(rows) != args.batch_size:
                 raise AssertionError("Internal non-homogeneous batch")
-            for train_line, provenance_line in rows:
+            length_min = min(row[2] for row in rows)
+            length_max = max(row[2] for row in rows)
+            for train_line, provenance_line, length_proxy in rows:
                 audit = json.loads(provenance_line)
                 audit["homogeneous_batch"] = {
                     "batch_index": batch_index,
                     "batch_size": args.batch_size,
                     "source_id": source,
                     "output_row_index": output_index,
+                    "length_proxy": length_proxy,
+                    "batch_length_proxy_min": length_min,
+                    "batch_length_proxy_max": length_max,
                 }
                 train_handle.write(train_line + "\n")
                 provenance_handle.write(
@@ -149,13 +172,21 @@ def main() -> None:
         "seed": args.seed,
         "benchmark_adaptation": args.benchmark_adaptation,
         "batch_size": args.batch_size,
+        "length_bucketed": args.length_bucketed,
         "input_rows": sum(input_counts.values()),
         "output_rows": output_rows,
         "complete_batches": len(batches),
         "dropped_source_remainders": dict(dropped),
         "input_source_counts": dict(input_counts),
         "output_source_counts": dict(output_counts),
-        "order_contract": "shuffle within each source, split complete source-homogeneous batches, shuffle batches globally, trainer shuffle disabled",
+        "order_contract": (
+            "stable shuffle/tie-break within each source, sort by max text-character "
+            "length proxy, split complete source-homogeneous length buckets, shuffle "
+            "batches globally, trainer shuffle disabled"
+            if args.length_bucketed
+            else "shuffle within each source, split complete source-homogeneous batches, "
+            "shuffle batches globally, trainer shuffle disabled"
+        ),
         "inputs": {
             "train": {"path": str(train), "sha256": sha256(train)},
             "provenance": {"path": str(provenance), "sha256": sha256(provenance)},

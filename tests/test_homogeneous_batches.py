@@ -46,6 +46,7 @@ class HomogeneousBatchTests(unittest.TestCase):
                     str(manifest),
                     "--batch-size",
                     "2",
+                    "--length-bucketed",
                 ]
             )
             rows = [json.loads(line) for line in audit.read_text().splitlines()]
@@ -56,6 +57,13 @@ class HomogeneousBatchTests(unittest.TestCase):
             report = json.loads(manifest.read_text())
             self.assertEqual(report["output_rows"], 10)
             self.assertEqual(sum(report["dropped_source_remainders"].values()), 1)
+            self.assertTrue(report["length_bucketed"])
+            for start in range(0, len(rows), 2):
+                batch = rows[start : start + 2]
+                self.assertEqual(
+                    {row["homogeneous_batch"]["batch_length_proxy_min"] for row in batch},
+                    {batch[0]["homogeneous_batch"]["batch_length_proxy_min"]},
+                )
 
 
 if __name__ == "__main__":

@@ -83,14 +83,15 @@ if [[ "$CONTINUAL_BASE" == Qwen/Qwen3-Embedding-8B ]]; then
 fi
 
 TRAINING_MANIFEST="$DATA_MANIFEST"
-if [[ ! -s "$HOMOGENEOUS_MANIFEST" ]]; then
+if [[ ! -s "$HOMOGENEOUS_MANIFEST" \
+    || "$(jq -r '.length_bucketed // false' "$HOMOGENEOUS_MANIFEST")" != true ]]; then
   run_stage "build-homogeneous-1m-batches" \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
     --train "$TRAIN_FILE" --provenance "$DATA_DIR/provenance.jsonl" \
     --output "$HOMOGENEOUS_TRAIN" \
     --provenance-output "$HOMOGENEOUS_PROVENANCE" \
     --manifest-output "$HOMOGENEOUS_MANIFEST" \
-    --batch-size 16 --seed 42 || exit 2
+    --batch-size 16 --seed 42 --length-bucketed || exit 2
 fi
 TRAIN_FILE="$HOMOGENEOUS_TRAIN"
 TRAINING_MANIFEST="$HOMOGENEOUS_MANIFEST"
@@ -129,6 +130,7 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
       --output "$MINED_HOMOGENEOUS_TRAIN" \
       --provenance-output "$MINED_HOMOGENEOUS_PROVENANCE" \
       --manifest-output "$MINED_HOMOGENEOUS_MANIFEST" --batch-size 16 --seed 42 \
+      --length-bucketed \
       --benchmark-adaptation target-adapted-performance1m-current-student || true
   fi
   if [[ -s "$MINED_HOMOGENEOUS_MANIFEST" && -s "$MINED_HOMOGENEOUS_TRAIN" ]]; then
