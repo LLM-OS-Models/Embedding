@@ -98,7 +98,11 @@ class ExactNpyCache:
             array = np.load(array_path, allow_pickle=False)
         except (OSError, ValueError, json.JSONDecodeError):
             return None
-        if array.dtype != np.float32 or array.ndim != 2 or array.shape[0] != expected_rows:
+        if (
+            array.dtype != np.float32
+            or array.ndim != 2
+            or array.shape[0] != expected_rows
+        ):
             return None
         return array
 
@@ -183,3 +187,48 @@ class ResumableSentenceTransformer(SentenceTransformer):
             self._exact_embedding_cache.store(key, array)
             self.embedding_cache_misses += 1
         return result
+
+
+def install_exact_encode_cache(
+    target: Any,
+    *,
+    embedding_cache_dir: Path,
+    embedding_cache_namespace: str,
+    counter_target: Any | None = None,
+) -> None:
+    """Attach the exact cache to an already-constructed encoder."""
+
+    original = target.encode
+    cache = ExactNpyCache(embedding_cache_dir)
+    counters = counter_target if counter_target is not None else target
+    counters.embedding_cache_hits = 0
+    counters.embedding_cache_misses = 0
+
+    def cached_encode(inputs: Any, *args: Any, **kwargs: Any) -> Any:
+        if (
+            args
+            or isinstance(inputs, str)
+            or not isinstance(inputs, (list, tuple))
+            or not inputs
+        ):
+            return original(inputs, *args, **kwargs)
+        options = _canonical_cache_options(kwargs)
+        if options is None or not all(isinstance(item, str) for item in inputs):
+            return original(inputs, *args, **kwargs)
+        key = embedding_cache_key(
+            namespace=embedding_cache_namespace,
+            sentences=inputs,
+            options=options,
+        )
+        value = cache.load(key, len(inputs))
+        if value is not None:
+            counters.embedding_cache_hits += 1
+            return value
+        result = original(inputs, *args, **kwargs)
+        array = np.asarray(result)
+        if array.dtype == np.float32 and array.ndim == 2:
+            cache.store(key, array)
+            counters.embedding_cache_misses += 1
+        return result
+
+    target.encode = cached_encode

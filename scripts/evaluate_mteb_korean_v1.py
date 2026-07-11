@@ -27,9 +27,7 @@ DEFAULT_PROTOCOL = ROOT / "configs/mteb_korean_v1_protocol.json"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model", default="sionic-ai/comsat-embed-ko-8b-preview"
-    )
+    parser.add_argument("--model", default="sionic-ai/comsat-embed-ko-8b-preview")
     parser.add_argument("--revision")
     parser.add_argument("--protocol", type=Path, default=DEFAULT_PROTOCOL)
     parser.add_argument(
@@ -42,6 +40,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--save-predictions", action="store_true")
     parser.add_argument("--trust-remote-code", action="store_true")
+    parser.add_argument(
+        "--registered-loader",
+        action="store_true",
+        help="Use the pinned MTEB registry wrapper and task-specific instructions",
+    )
     parser.add_argument(
         "--embedding-cache-dir",
         type=Path,
@@ -174,7 +177,9 @@ def validate_mteb_checkout(protocol: dict[str, Any]) -> None:
             ["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True
         ).strip()
     except (FileNotFoundError, subprocess.CalledProcessError) as error:
-        raise RuntimeError(f"Cannot inspect pinned MTEB checkout at {checkout}") from error
+        raise RuntimeError(
+            f"Cannot inspect pinned MTEB checkout at {checkout}"
+        ) from error
     if revision != protocol["mteb_git_revision"]:
         raise RuntimeError(
             f"MTEB git mismatch: expected {protocol['mteb_git_revision']}, "
@@ -211,7 +216,9 @@ def main() -> None:
 
     evaluation_dtype = local_merge_dtype(args.model)
     torch_dtype = torch.float32 if evaluation_dtype == "float32" else torch.bfloat16
-    effective_batch_size = min(args.batch_size, 96) if evaluation_dtype == "float32" else args.batch_size
+    effective_batch_size = (
+        min(args.batch_size, 96) if evaluation_dtype == "float32" else args.batch_size
+    )
 
     revision = args.revision
     max_length = args.max_length
@@ -220,41 +227,74 @@ def main() -> None:
         max_length = max_length or protocol["comsat"]["max_tokens"]
     revision = canonical_local_revision(args.model, revision)
     if not revision:
-        raise ValueError("--revision is required for models not pinned by this protocol")
+        raise ValueError(
+            "--revision is required for models not pinned by this protocol"
+        )
     if not max_length:
-        raise ValueError("--max-length is required for models not pinned by this protocol")
+        raise ValueError(
+            "--max-length is required for models not pinned by this protocol"
+        )
 
-    model_class = SentenceTransformer
-    model_extra: dict[str, Any] = {}
-    if args.embedding_cache_dir is not None:
-        try:
-            from resumable_sentence_transformer import ResumableSentenceTransformer
-        except ModuleNotFoundError:
-            from scripts.resumable_sentence_transformer import ResumableSentenceTransformer
-        model_class = ResumableSentenceTransformer
-        model_extra = {
-            "embedding_cache_dir": args.embedding_cache_dir,
-            "embedding_cache_namespace": (
-                f"{args.model}@{revision}|protocol={protocol['protocol_id']}|"
-                f"max={max_length}|attn={args.attn_implementation}|"
-                f"dtype={evaluation_dtype}|"
-                f"prompts={json.dumps(protocol['comsat']['effective_prompts'], sort_keys=True)}"
-            ),
-        }
-
-    model = model_class(
-        args.model,
-        revision=revision,
-        device=args.device,
-        trust_remote_code=args.trust_remote_code,
-        model_kwargs={
-            "attn_implementation": args.attn_implementation,
-            "torch_dtype": torch_dtype,
-        },
-        tokenizer_kwargs={"padding_side": "left"},
-        **model_extra,
+    cache_namespace = (
+        f"{args.model}@{revision}|protocol={protocol['protocol_id']}|"
+        f"max={max_length}|attn={args.attn_implementation}|dtype={evaluation_dtype}|"
+        f"loader={'registered-task-instruction' if args.registered_loader else 'sentence-transformer'}"
     )
-    model.max_seq_length = max_length
+    if args.registered_loader:
+        model = mteb.get_model(
+            args.model,
+            revision=revision,
+            device=args.device,
+            model_kwargs={
+                "attn_implementation": args.attn_implementation,
+                "torch_dtype": torch_dtype,
+            },
+            tokenizer_kwargs={"padding_side": "left"},
+        )
+        if not hasattr(model, "model"):
+            raise TypeError("Registered model wrapper has no inner SentenceTransformer")
+        model.model.max_seq_length = max_length
+        if args.embedding_cache_dir is not None:
+            try:
+                from resumable_sentence_transformer import install_exact_encode_cache
+            except ModuleNotFoundError:
+                from scripts.resumable_sentence_transformer import (
+                    install_exact_encode_cache,
+                )
+            install_exact_encode_cache(
+                model.model,
+                embedding_cache_dir=args.embedding_cache_dir,
+                embedding_cache_namespace=cache_namespace,
+                counter_target=model,
+            )
+    else:
+        model_class = SentenceTransformer
+        model_extra: dict[str, Any] = {}
+        if args.embedding_cache_dir is not None:
+            try:
+                from resumable_sentence_transformer import ResumableSentenceTransformer
+            except ModuleNotFoundError:
+                from scripts.resumable_sentence_transformer import (
+                    ResumableSentenceTransformer,
+                )
+            model_class = ResumableSentenceTransformer
+            model_extra = {
+                "embedding_cache_dir": args.embedding_cache_dir,
+                "embedding_cache_namespace": cache_namespace,
+            }
+        model = model_class(
+            args.model,
+            revision=revision,
+            device=args.device,
+            trust_remote_code=args.trust_remote_code,
+            model_kwargs={
+                "attn_implementation": args.attn_implementation,
+                "torch_dtype": torch_dtype,
+            },
+            tokenizer_kwargs={"padding_side": "left"},
+            **model_extra,
+        )
+        model.max_seq_length = max_length
 
     if args.model == protocol["comsat"]["model"]:
         expected_prompts = {
@@ -294,9 +334,7 @@ def main() -> None:
     for spec in protocol["tasks"]:
         if spec["name"] not in result_by_name:
             continue
-        score = float(
-            result_by_name[spec["name"]].get_score(splits=[spec["split"]])
-        )
+        score = float(result_by_name[spec["name"]].get_score(splits=[spec["split"]]))
         score_rows[spec["name"]] = {
             "task_type": spec["type"],
             "metric": spec["main_score"],
@@ -340,6 +378,7 @@ def main() -> None:
             "max_length": max_length,
             "attention": args.attn_implementation,
             "torch_dtype": evaluation_dtype,
+            "registered_loader": args.registered_loader,
             "embedding_cache_dir": (
                 str(args.embedding_cache_dir.resolve())
                 if args.embedding_cache_dir is not None

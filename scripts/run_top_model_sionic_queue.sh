@@ -6,8 +6,9 @@ cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 CONFIG="${CONFIG:-$ROOT/configs/models_to_evaluate.json}"
 OUT="${OUT:-$ROOT/outputs/evaluation/sionic9-top-models}"
+OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-qwen-base"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/top-model-eval-20260711}"
-mkdir -p "$OUT" "$LOG_DIR"
+mkdir -p "$OUT" "$OFFICIAL_OUT" "$LOG_DIR"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
 if [[ -f "$ROOT/.env" ]]; then
@@ -23,6 +24,33 @@ timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 if [[ -n "$WAIT_PID" ]]; then
   echo "[$(timestamp)] waiting for post-training queue pid=$WAIT_PID"
   while kill -0 "$WAIT_PID" 2>/dev/null; do sleep 20; done
+fi
+
+# Qwen has no live Korean-v1 row. Use its pinned MTEB registry wrapper so each
+# task receives the official model-specific instruction contract.
+QWEN_REVISION="4e423935c619ae4df87b646a3ce949610c66241c"
+QWEN_OFFICIAL_SUMMARY="$OFFICIAL_OUT/Qwen__Qwen3-Embedding-8B/$QWEN_REVISION/summary.json"
+if [[ ! -s "$QWEN_OFFICIAL_SUMMARY" ]]; then
+  for candidate_batch in 192 96 48; do
+    echo "[$(timestamp)] START Qwen official Korean v1 batch=$candidate_batch"
+    if "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
+        --model Qwen/Qwen3-Embedding-8B --revision "$QWEN_REVISION" \
+        --registered-loader --batch-size "$candidate_batch" --max-length 32768 \
+        --attn-implementation flash_attention_2 --output-dir "$OFFICIAL_OUT" \
+        --embedding-cache-dir "$ROOT/outputs/embedding-cache/official-qwen-base"; then
+      status=0
+    else
+      status=$?
+    fi
+    echo "[$(timestamp)] END Qwen official Korean v1 batch=$candidate_batch status=$status"
+    [[ -s "$QWEN_OFFICIAL_SUMMARY" ]] && break
+  done
+fi
+if [[ -s "$QWEN_OFFICIAL_SUMMARY" ]]; then
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/compare_local_mteb_korean.py" \
+    --summary "$QWEN_OFFICIAL_SUMMARY" \
+    --output "$OFFICIAL_OUT/qwen-live-comparison.json" && \
+    "$ROOT/scripts/commit_qwen_official_result.sh" || true
 fi
 
 mapfile -t models < <(jq -r '.models | sort_by(.queue_order)[] | select(.execution.sionic9.supported == true) | .id' "$CONFIG")
