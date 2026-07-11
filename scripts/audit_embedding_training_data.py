@@ -21,7 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train", type=Path, required=True)
     parser.add_argument("--provenance", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--expected-batch-size", type=int, default=16)
+    parser.add_argument(
+        "--expected-batch-size",
+        type=int,
+        default=16,
+        help="Set to 0 for a pre-batching source-native curriculum",
+    )
     return parser.parse_args()
 
 
@@ -100,10 +105,20 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def provenance_source(value: dict[str, Any]) -> str:
+    source = value.get("source_id") or value.get("source")
+    nested = value.get("provenance")
+    if not source and isinstance(nested, dict):
+        source = nested.get("repository")
+    if not isinstance(source, str) or not source:
+        raise ValueError("Provenance row has no source identity")
+    return source
+
+
 def main() -> None:
     args = parse_args()
-    if args.expected_batch_size < 1:
-        raise ValueError("--expected-batch-size must be positive")
+    if args.expected_batch_size < 0:
+        raise ValueError("--expected-batch-size must be non-negative")
     expected_fields = {"messages", "positive_messages", "negative_messages"}
     source_counts: Counter[str] = Counter()
     negative_counts: Counter[int] = Counter()
@@ -118,7 +133,9 @@ def main() -> None:
     positive_hashes: set[bytes] = set()
     duplicate_queries = 0
     duplicate_positives = 0
+    row_hash_checked = 0
     row_hash_mismatches = 0
+    provenance_index_mismatches = 0
     batch_contract_violations = 0
     rows = 0
 
@@ -162,29 +179,34 @@ def main() -> None:
             positive_hashes.add(positive_digest)
 
             compact = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
+            declared_row_hash = provenance.get("row_sha256")
+            if declared_row_hash is not None:
+                row_hash_checked += 1
+                if declared_row_hash != hashlib.sha256(compact.encode()).hexdigest():
+                    row_hash_mismatches += 1
             if (
-                provenance.get("row_sha256")
-                != hashlib.sha256(compact.encode()).hexdigest()
+                provenance.get("row_index") is not None
+                and provenance.get("row_index") != rows - 1
             ):
-                row_hash_mismatches += 1
-            source = provenance.get("source_id")
-            if not isinstance(source, str) or not source:
-                raise ValueError(f"Missing source_id at row {rows}")
+                provenance_index_mismatches += 1
+            source = provenance_source(provenance)
             source_counts[source] += 1
             if len(body) < 4:
                 too_short_query_counts[source] += 1
             for task in provenance.get("trained_on_tasks") or []:
                 exposure_counts[str(task)] += 1
-            batch = provenance.get("homogeneous_batch")
-            if not isinstance(batch, dict):
-                batch_contract_violations += 1
-            elif (
-                batch.get("batch_size") != args.expected_batch_size
-                or batch.get("source_id") != source
-                or batch.get("output_row_index") != rows - 1
-                or batch.get("batch_index") != (rows - 1) // args.expected_batch_size
-            ):
-                batch_contract_violations += 1
+            if args.expected_batch_size:
+                batch = provenance.get("homogeneous_batch")
+                if not isinstance(batch, dict):
+                    batch_contract_violations += 1
+                elif (
+                    batch.get("batch_size") != args.expected_batch_size
+                    or batch.get("source_id") != source
+                    or batch.get("output_row_index") != rows - 1
+                    or batch.get("batch_index")
+                    != (rows - 1) // args.expected_batch_size
+                ):
+                    batch_contract_violations += 1
 
     report = {
         "schema_version": 1,
@@ -217,11 +239,16 @@ def main() -> None:
             "positive_beyond_first_occurrence": duplicate_positives,
         },
         "contract_checks": {
+            "row_sha256_checked": row_hash_checked,
             "row_sha256_mismatches": row_hash_mismatches,
+            "provenance_row_index_mismatches": provenance_index_mismatches,
+            "homogeneous_batch_checked": bool(args.expected_batch_size),
             "homogeneous_batch_violations": batch_contract_violations,
             "status": (
                 "pass"
-                if row_hash_mismatches == 0 and batch_contract_violations == 0
+                if row_hash_mismatches == 0
+                and provenance_index_mismatches == 0
+                and batch_contract_violations == 0
                 else "fail"
             ),
         },

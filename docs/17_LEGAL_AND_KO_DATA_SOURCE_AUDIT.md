@@ -42,6 +42,38 @@ Legalize-KR README는 파이프라인 변경 시 전체 history를 force-push할
 
 각 HEAD가 저장한 commit timestamp는 법령 `2026-07-02T12:00:00+09:00`, 행정규칙 `2026-07-10T12:00:00+09:00`, 판례 `1999-04-23T12:00:00+09:00`, 자치법규 `2026-07-09T12:00:00+09:00`, 카탈로그 `2026-01-20T23:14:28+09:00`다. 앞서 설명했듯 Legalize-KR은 법적 사건 날짜를 Git 날짜로 사용하므로 이 timestamp를 GitHub 갱신 시각으로 해석하면 안 된다.
 
+## 실제 250K curriculum 전수 감사
+
+공개한 source-native bootstrap 250,000 rows를 train/provenance line-aligned로 다시
+검사했다. 보고서는
+[`legal-250k-training-data-audit.json`](../reports/legal-250k-training-data-audit.json)이며
+[HF dataset revision `ec2f09a`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-retrieval-source-native-250k/tree/ec2f09a220dc5aa326c5d63b8e49adbf3a5524bc)의
+metadata와 card에도 같은 SHA로 공개했다.
+
+| 항목 | 실측 |
+|---|---:|
+| ordinance / precedent / law / administrative rule | 100K / 50K / 50K / 50K |
+| short search/title | 147,441 (58.98%) |
+| long statement/search | 92,965 (37.19%) |
+| comma keyword list | 8,455 (3.38%) |
+| natural-question heuristic | 1,139 (0.46%) |
+| query p50 / p95 chars | 38 / 195 |
+| positive p50 / p95 chars | 254 / 1,044 |
+| query exact 재등장(첫 발생 제외) | 382 (0.15%) |
+| positive exact 재등장(첫 발생 제외) | 19 (0.008%) |
+| provenance row-index mismatch | **0** |
+
+모든 row의 negative는 source-balanced bootstrap 한 개다. 따라서 이것을 최종 hard
+negative 품질로 해석하지 않으며 학습 전 current student FAISS pool24, exact score,
+positive-relative `.95`, quantile7로 전부 교체한다. 자연 질문이 0.46%뿐이라는 수치는
+source-native 법명/조문/판례 쟁점 pair만으로는 실제 대화형 검색 분포가 부족하다는
+근거다. grounded synthetic factory의 natural/scenario/citation shard를 별도 ablation으로
+추가하되, 원문 exact evidence와 teacher positive score gate를 통과한 row만 섞는다.
+
+이 bootstrap provenance에는 per-row SHA가 없으므로 report는 이를 0건 검사한 것으로
+명시한다. 대신 전체 train/provenance SHA, 250K line alignment와 row_index 0..249,999를
+검증한다. 검증하지 않은 신호를 pass로 위장하지 않는다.
+
 ## 1. 법령: `legalize-kr/legalize-kr`
 
 ### 형식

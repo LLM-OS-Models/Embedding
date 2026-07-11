@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-11T18:37:58.734270+00:00",
+  "inputs": {
+    "train": {
+      "path": "outputs/data/legal-performance-v1/train.bootstrap.jsonl",
+      "sha256": "1d81364bed3b4dab83a6979ef0874dd39bddb108830d35a43be7fd417d134c90"
+    },
+    "provenance": {
+      "path": "outputs/data/legal-performance-v1/provenance.jsonl",
+      "sha256": "a1b3cda735df2e112832ebfbd8e07f3ec7d889ba875f17ff2f51cb9133a9de3e"
+    }
+  },
+  "rows": 250000,
+  "source_counts": {
+    "legalize-kr/ordinance-kr": 100000,
+    "legalize-kr/precedent-kr": 50000,
+    "legalize-kr/legalize-kr": 50000,
+    "legalize-kr/admrule-kr": 50000
+  },
+  "negative_count_distribution": {
+    "1": 250000
+  },
+  "instruction_counts": {
+    "Instruct: Given a Korean legal or public-administration search query, retrieve the passage that provides the requested rule or holding": 250000
+  },
+  "query_style_heuristic": {
+    "short_search_or_title": 147441,
+    "long_statement_or_search": 92965,
+    "comma_keyword_list": 8455,
+    "natural_question": 1139
+  },
+  "benchmark_train_exposure_rows": {},
+  "query_body_below_4_chars_by_source": {},
+  "character_lengths": {
+    "query_body": {
+      "min": 4,
+      "mean": 59.388056,
+      "p50": 38,
+      "p95": 195,
+      "p99": 449,
+      "max": 2678
+    },
+    "positive": {
+      "min": 64,
+      "mean": 375.751416,
+      "p50": 254,
+      "p95": 1044,
+      "p99": 1914,
+      "max": 17497
+    },
+    "negative": {
+      "min": 64,
+      "mean": 375.429448,
+      "p50": 253,
+      "p95": 1038,
+      "p99": 1921,
+      "max": 17497
+    }
+  },
+  "exact_duplicates": {
+    "query_beyond_first_occurrence": 382,
+    "positive_beyond_first_occurrence": 19
+  },
+  "contract_checks": {
+    "row_sha256_checked": 0,
+    "row_sha256_mismatches": 0,
+    "provenance_row_index_mismatches": 0,
+    "homogeneous_batch_checked": false,
+    "homogeneous_batch_violations": 0,
+    "status": "pass"
+  },
+  "style_note": "Heuristic counts guide ablations; they are not human relevance labels."
+}
