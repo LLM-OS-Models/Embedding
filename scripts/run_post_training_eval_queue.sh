@@ -110,6 +110,8 @@ run_stage "select-best-sionic9" \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_sionic_model.py" \
   "$SIONIC_OUT" --output "$SELECTION"
 
+best_model=""
+local_revision=""
 if [[ -s "$SELECTION" ]]; then
   best_model="$(jq -r '.best.model' "$SELECTION")"
   best_abs="$ROOT/$best_model"
@@ -155,5 +157,35 @@ if [[ -s "$SELECTION" ]]; then
     fi
   fi
 fi
+
+# Third board: fixed 10K same-repository source-document-held-out legal set.
+# Run trusted baselines and the selected local candidate after the two primary
+# public boards, without feeding these scores back into checkpoint selection.
+CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
+clean_models=(
+  "Qwen/Qwen3-Embedding-8B|1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+  "sionic-ai/comsat-embed-ko-8b-preview|a5cc22b651c1b2e51cdd8bf671774ae93584f0ab"
+)
+if [[ -n "$best_model" && -n "$local_revision" ]]; then
+  clean_models+=("$best_model|$local_revision")
+fi
+for spec in "${clean_models[@]}"; do
+  model="${spec%%|*}"
+  revision="${spec#*|}"
+  success=0
+  for batch in 192 96 48; do
+    if run_stage "clean-legal-${model//\//__}-b$batch" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
+      --model "$model" --revision "$revision" --batch-size "$batch" \
+      --max-length 8192 --attn-implementation flash_attention_2 \
+      --output-dir "$CLEAN_OUT" \
+      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
+      success=1
+      break
+    fi
+  done
+  (( success == 1 )) || echo "[$(timestamp)] clean legal evaluation failed: $model"
+done
+run_stage "record-clean-legal-results" "$ROOT/scripts/commit_clean_legal_results.sh" || true
 
 echo "[$(timestamp)] post-training evaluation queue complete"
