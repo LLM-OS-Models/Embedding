@@ -46,6 +46,27 @@ GPU에서는 ZeRO/FSDP 통신 이득도 없다. memory probe는 더 이상 64-to
 
 모든 1-step 명령은 [`probe_memory.sh`](probe_memory.sh)에 고정했다. `standard_full`은 OOM 가능성을 명시적으로 감수하는 마지막 probe이며 저장을 끄므로 15GB checkpoint를 만들지 않는다.
 
+probe를 통과한 뒤 동일 200K homogeneous data에서 quality run은
+[`train_quality.sh`](train_quality.sh)로 실행한다.
+
+```bash
+experiments/070_tuning_strategy/train_quality.sh last4
+experiments/070_tuning_strategy/train_quality.sh galore
+experiments/070_tuning_strategy/train_quality.sh lisa8
+```
+
+기본 global batch는 4×accumulation16=64, steps 3,123, LR `6e-6`, FA2/max512다.
+모든 emitted microbatch는 단일 source이며 trainer shuffle을 끈다. standard full은
+memory probe가 실제로 통과한 경우에만 `ALLOW_STANDARD_FULL=1`로 명시 실행한다.
+
+```bash
+ALLOW_STANDARD_FULL=1 experiments/070_tuning_strategy/train_quality.sh standard_full
+```
+
+full/partial checkpoint는 LoRA adapter가 아니므로 `merge_embedding_adapter.py`에 넣지
+않는다. full model packaging/last-token+Normalize contract 복원이 검증된 뒤에만 MTEB
+평가·공개 대상으로 승격한다.
+
 ## 성공 기준
 
 - 같은 token budget에서 quality/VRAM/GPU-hour Pareto frontier를 작성한다.
