@@ -28,7 +28,7 @@
 | 공식 #2 | `codefuse-ai/F2LLM-v2-14B` | 2 | 74.85 | 72.43 | 72.33 | 66% | MTEB live |
 | 공식 #3 | `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | 3 | **77.01** | **75.92** | 72.15 | 16% | MTEB live |
 | 로컬 재현 | `sionic-ai/comsat-embed-ko-8b-preview` | **6 if inserted** | **73.32** | **70.06** | **76.77** | 별도 감사 | 동일 protocol, 6/6 완료 |
-| 비교 | `Qwen/Qwen3-Embedding-8B` | — | — | — | — | — | 공식 미제출 |
+| 로컬 측정 대기 | `Qwen/Qwen3-Embedding-8B` | — | — | — | — | registry 감사 | registered-loader 6-task 자동 queue |
 | 우리 모델 | smoke LoRA r32 | — | 미측정 | 미측정 | 미측정 | 100% | pipeline 검증 전용 |
 
 `F2LLM-v2-8B`는 Borda 1위지만 단순 평균 1위는 PwC입니다. PwC는 6개 중 5개 평가 계열을 학습한 in-domain specialist이므로 zero-shot 일반화와 구분합니다. 전체 task별 값과 방법론 감사는 [Korean leaderboard 문서](docs/08_KOREAN_LEADERBOARD_AND_F2LLM.md)에 있습니다.
@@ -97,11 +97,12 @@ row는 101개였다.
 | 평가 오염 방지 blocklist | Sionic 9 + 공식 Korean 6, 원문 없는 SHA-256 547MB | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
 | Clean 법률 retrieval 10K | training document overlap 0, benchmark exact overlap 0, 독립 verifier pass | [`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0) |
 | 대화형 noise robustness | prompt on/off × noise 0/1/5%, exact rank·cache·모델 카드 자동화; baseline 실행 대기 | [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md) |
+| 격리 FA2 학습 후보 | NVIDIA PyTorch 2.5 + flash-attn 2.4.2 import/CLI pass; 실제 8B backward 전에는 미승격 | [튜닝 전략](experiments/070_tuning_strategy/) |
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
 | 10K exhaustive HN + LoRA r64 | 160 steps 완료, best step 80; FP32 strict-parity 재병합 대기 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
-| 50K LoRA r64 | 240/800 검증 완료, H100 100%, trainer 59.30GiB/device 약 61.8GiB; best step 200 loss 0.00351495 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
+| 50K LoRA r64 | 280/800 검증 완료, H100 100%, trainer 59.30GiB/device 약 61.8GiB; best step 200 loss 0.00351495 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
 
 ## 문서 지도
 
