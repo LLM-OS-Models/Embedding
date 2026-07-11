@@ -132,21 +132,28 @@ PYTHONPATH=third_party/mteb .venv-mteb/bin/python scripts/evaluate_sionic9.py \
 
 ## 공식 MTEB Korean v1
 
-local directory에는 Hub commit이 없으므로 immutable run label을 `--revision`에 명시한다. 권장 label은 adapter weight SHA 앞 12자리다. 이 값은 `merge_report.json`의 `adapter.weights_sha256`에서 얻는다.
+local directory에는 Hub commit이 없으므로 immutable run label을 `--revision`에 명시한다.
+evaluator는 `merge_report.json`의 실제 model weight SHA-256 앞 12자리로 이 값을
+canonicalize한다. Qwen3 파생 모델은 generic `query` prompt가 아니라 pinned MTEB의
+Qwen3 task별 instruction을 적용해야 한다.
 
 ```bash
 MERGED=artifacts/models/qwen3-embedding-8b-ko-<run>-merged
-LOCAL_REVISION=adapter-<sha256-first-12>
+LOCAL_REVISION=model-<model-weights-sha256-first-12>
 
 PYTHONPATH=third_party/mteb .venv-mteb/bin/python scripts/evaluate_mteb_korean_v1.py \
   --model "$MERGED" \
   --revision "$LOCAL_REVISION" \
+  --qwen3-instruction-loader \
   --max-length 8192 \
   --batch-size 192 \
   --attn-implementation flash_attention_2
 ```
 
 공식 Korean v1은 6개 task와 task-type 평균을 함께 계산한다. Sionic 9종 평균과 공식 `Mean(Task)`/`Mean(TaskType)`를 한 숫자로 합치지 않는다.
+Sionic 9종은 모델 간 동일한 fixed web-search prompt를 쓰는 반면, 공식 Korean v1은
+MTEB가 허용하는 Qwen3의 task metadata/fallback instruction과 passage 무지시문 계약을
+쓴다. 두 결과는 각자의 protocol 안에서만 비교한다.
 
 ## 해석과 승격 조건
 

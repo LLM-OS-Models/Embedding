@@ -428,6 +428,8 @@ tags:
 - Mean(Task): **{float(official['mean_task_leaderboard_points']):.3f}**
 - Mean(Type): **{float(official['mean_task_type_leaderboard_points']):.3f}**
 - protocol: `{official['protocol_id']}`
+- instruction contract: `qwen3-task-instruction` (pinned MTEB task metadata/fallback,
+  query에만 Qwen3 template 적용, passage 무지시문)
 
 이 결과는 pinned MTEB protocol의 로컬 실행이며 MTEB leaderboard 제출 행 자체는
 아니다. task별 MTEB raw result JSON은 이 model repository의 `evaluation/raw/`에,
