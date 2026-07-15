@@ -25,10 +25,7 @@ for path in "$TRAIN_FILE" "$VAL_FILE"; do
   [[ -s "$path" ]] || { echo "missing dataset: $path" >&2; exit 4; }
 done
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
-fi
+embedding_configure_hf_access
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export INFONCE_TEMPERATURE="${INFONCE_TEMPERATURE:-0.02}"

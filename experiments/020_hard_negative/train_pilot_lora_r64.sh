@@ -72,10 +72,7 @@ if [[ "$RUN_NAME" == *performance200k* ]]; then
   LEARNING_RATE="${LEARNING_RATE:-1e-5}"
 fi
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
-fi
+embedding_configure_hf_access
 
 for path in "$TRAIN_FILE" "$VAL_FILE"; do
   if [[ ! -f "$path" ]]; then

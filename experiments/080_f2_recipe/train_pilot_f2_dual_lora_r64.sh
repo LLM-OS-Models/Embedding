@@ -17,10 +17,7 @@ PLUGIN="$ROOT/experiments/080_f2_recipe/f2_dual_loss_plugin.py"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
 BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
-fi
+embedding_configure_hf_access
 
 for path in "$TRAIN_FILE" "$VAL_FILE" "$PLUGIN"; do
   if [[ ! -f "$path" ]]; then

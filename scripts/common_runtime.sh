@@ -67,3 +67,19 @@ embedding_enable_torch25_swift_compat() {
     *) export PYTHONPATH="$compat${PYTHONPATH:+:$PYTHONPATH}" ;;
   esac
 }
+
+embedding_configure_hf_access() {
+  if [[ "${EMBEDDING_OFFLINE:-0}" == 1 ]]; then
+    # Long-running jobs on the shared machine must not retain Hub credentials
+    # when every pinned input is already present in the repository-local cache.
+    unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    export HF_DATASETS_OFFLINE=1
+    return 0
+  fi
+  if [[ -z "${HF_TOKEN:-}" && -f "$EMBEDDING_RUNTIME_ROOT/.env" ]]; then
+    HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$EMBEDDING_RUNTIME_ROOT/.env" | tail -n 1)"
+    export HF_TOKEN
+  fi
+}
