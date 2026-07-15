@@ -375,14 +375,20 @@ def sanitize_adapter_config(
         raise WatcherError("invalid_config", "LoRA target_modules is missing or invalid")
 
     sanitized = {
-        key: sanitize_json_value(source[key], key=key)
+        # The top-level key is already selected by the exact PEFT schema
+        # allowlist.  Sanitize its value directly so legitimate field names
+        # such as ``trainable_token_indices`` are not mistaken for credentials.
+        # Any keys nested inside a mapping are still checked by
+        # ``sanitize_json_value``.
+        key: sanitize_json_value(source[key])
         for key in sorted(source.keys() & ADAPTER_CONFIG_ALLOWLIST)
         if key not in {"base_model_name_or_path", "revision"}
     }
-    sanitized["base_model_name_or_path"] = base_model
-    sanitized["revision"] = base_revision
-    # Validate caller-controlled lineage identifiers too.
-    return sanitize_json_value(sanitized)
+    # Validate caller-controlled lineage identifiers too.  The output key set
+    # remains the exact allowlist plus these two fixed lineage keys.
+    sanitized["base_model_name_or_path"] = sanitize_json_value(base_model)
+    sanitized["revision"] = sanitize_json_value(base_revision)
+    return sanitized
 
 
 def _regular_signature(path: Path) -> tuple[int, int, int, int] | None:

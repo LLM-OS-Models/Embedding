@@ -47,6 +47,11 @@ def make_checkpoint(root: Path, step: int = 250) -> Path:
                 "r": 64,
                 "target_modules": ["q_proj"],
                 "task_type": "FEATURE_EXTRACTION",
+                # Modern PEFT emits these legitimate schema fields even for a
+                # standard LoRA adapter.  Their names must not be confused with
+                # credential-bearing arbitrary keys.
+                "alora_invocation_tokens": None,
+                "trainable_token_indices": None,
                 "unknown_local_path": "/must/not/leak",
             }
         ),
@@ -151,6 +156,30 @@ class FakeOperationAdd:
 
 
 class PrivateCheckpointWatcherTests(unittest.TestCase):
+    def test_nested_sensitive_config_key_still_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkpoint = make_checkpoint(root)
+            config_path = checkpoint / watcher.CONFIG_NAME
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["auto_mapping"] = {"token": TOKEN_CANARY}
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            args = make_args(root, upload=False)
+            with self.assertRaises(watcher.WatcherError) as caught:
+                watcher.validate_checkpoint(
+                    checkpoint,
+                    base_model=args.base_model,
+                    base_revision=args.base_revision,
+                    run_id=args.run_id,
+                    training_data_sha256=args.training_data_sha256,
+                    training_manifest_sha256=args.training_manifest_sha256,
+                    admission_report_sha256=args.admission_report_sha256,
+                    settle_seconds=0,
+                    sleep=lambda _seconds: None,
+                )
+            self.assertEqual(caught.exception.code, "unsafe_config")
+            self.assertNotIn(TOKEN_CANARY, str(caught.exception))
+
     def test_real_bfloat16_safetensors_payload_is_fully_validated(self) -> None:
         import torch
         from safetensors.torch import save_file as save_torch_file
