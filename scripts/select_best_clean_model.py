@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--print-model", action="store_true")
     parser.add_argument("--disqualification-root", type=Path)
+    parser.add_argument(
+        "--candidate-model",
+        action="append",
+        help="Exact local model path eligible for this campaign; repeat as needed.",
+    )
     parser.add_argument("--clean-epsilon", type=float, default=0.002)
     parser.add_argument("--robustness-epsilon", type=float, default=0.002)
     parser.add_argument("--intrusion-epsilon", type=float, default=0.001)
@@ -278,6 +283,7 @@ def select_candidates(
     robustness_root: Path,
     workspace_root: Path,
     disqualification_root: Path | None,
+    candidate_models: set[str] | None,
     clean_epsilon: float,
     robustness_epsilon: float,
     intrusion_epsilon: float,
@@ -290,11 +296,15 @@ def select_candidates(
         if not math.isfinite(value) or value < 0.0 or value > 1.0:
             raise ValueError(f"{label} must be finite and within [0, 1]")
 
+    if candidate_models is not None and not candidate_models:
+        raise ValueError("candidate_models cannot be an empty set")
     clean: dict[tuple[str, str], dict[str, Any]] = {}
     excluded: list[dict[str, Any]] = []
     for path in summary_paths(clean_root):
         try:
             row = load_clean_candidate(path, workspace_root)
+            if candidate_models is not None and row["model"] not in candidate_models:
+                raise ValueError("model is not in the explicit campaign candidate allowlist")
             key = (row["model"], row["revision"])
             if key in clean:
                 raise ValueError("duplicate clean summary for model/revision")
@@ -432,6 +442,7 @@ def select_candidates(
             "robustness_floor_ndcg_at_10": robustness_epsilon,
             "max_noise_intrusion_at_10": intrusion_epsilon,
         },
+        "candidate_allowlist": sorted(candidate_models) if candidate_models else None,
         "best": best,
         "ranking": ranking,
         "excluded": excluded,
@@ -465,6 +476,7 @@ def main() -> None:
         robustness_root=args.robustness_root,
         workspace_root=args.workspace_root,
         disqualification_root=args.disqualification_root,
+        candidate_models=set(args.candidate_model) if args.candidate_model else None,
         clean_epsilon=args.clean_epsilon,
         robustness_epsilon=args.robustness_epsilon,
         intrusion_epsilon=args.intrusion_epsilon,

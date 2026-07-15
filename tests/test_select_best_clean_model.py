@@ -109,6 +109,7 @@ def select(root: Path) -> dict:
         robustness_root=root / "robust",
         workspace_root=root,
         disqualification_root=root / "outputs",
+        candidate_models=None,
         clean_epsilon=0.002,
         robustness_epsilon=0.002,
         intrusion_epsilon=0.001,
@@ -176,3 +177,23 @@ def test_atomic_output(tmp_path: Path) -> None:
     atomic_write_json(output, {"ok": True})
     assert json.loads(output.read_text()) == {"ok": True}
     assert not list(output.parent.glob("*.tmp"))
+
+
+def test_explicit_candidate_allowlist_excludes_stale_models(tmp_path: Path) -> None:
+    expected, _ = make_candidate(
+        tmp_path, "current", clean_ndcg=0.80, robust_floor=0.80, intrusion=0.01
+    )
+    make_candidate(tmp_path, "stale", clean_ndcg=0.99, robust_floor=0.99, intrusion=0.0)
+    report = select_candidates(
+        clean_root=tmp_path / "clean",
+        robustness_root=tmp_path / "robust",
+        workspace_root=tmp_path,
+        disqualification_root=tmp_path / "outputs",
+        candidate_models={expected},
+        clean_epsilon=0.002,
+        robustness_epsilon=0.002,
+        intrusion_epsilon=0.001,
+    )
+    assert report["best"]["model"] == expected
+    assert report["candidate_allowlist"] == [expected]
+    assert any("allowlist" in row["reason"] for row in report["excluded"])

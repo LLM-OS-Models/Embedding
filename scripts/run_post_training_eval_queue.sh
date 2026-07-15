@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# After the training queue exits, merge every completed experiment, run the
-# complete Sionic 9 suite, select by its exact primary metric, then evaluate the
-# winner on official Korean MTEB v1. Failures are isolated per candidate.
+# After training exits, merge each internally selected checkpoint and evaluate
+# every local candidate on the Grade-I legal holdout plus its noise robustness
+# companion.  Select within a clean-score near-tie without public benchmark
+# input.  Only then run Sionic9 and official Korean MTEB once on the winner.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
-SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain"
-OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain"
+SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain-contract-v1"
+OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain-contract-v1"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
 MODEL_ROOT="$ROOT/artifacts/models"
@@ -34,10 +35,25 @@ FULL_RUNS=(
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$CLEAN_OUT" "$ROBUST_OUT" "$MODEL_ROOT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
+PUBLISH_HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-}}"
+if [[ -z "$PUBLISH_HF_TOKEN" && -f "$ROOT/.env" ]]; then
+  PUBLISH_HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
 fi
+unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
+read -r -a EVAL_BATCHES <<< "${CAMPAIGN_EVAL_BATCH_SIZES:-8 4 2}"
+for batch in "${EVAL_BATCHES[@]}"; do
+  [[ "$batch" =~ ^[1-9][0-9]*$ ]] || {
+    echo "Invalid evaluation batch size: $batch" >&2
+    exit 2
+  }
+done
+OFFLINE_ENV=(
+  env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN
+  EMBEDDING_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
+)
+candidate_args=()
+LAST_SIONIC_SUMMARY=""
+LAST_OFFICIAL_SUMMARY=""
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 
@@ -64,13 +80,16 @@ retry_stage() {
 
 run_sionic_with_fallback() {
   local label="$1" model="$2" revision="$3" cache="$4"
-  local batch
-  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
+  local batch output
+  for batch in "${EVAL_BATCHES[@]}"; do
+    output="$SIONIC_OUT/b$batch"
     if run_stage "sionic9-$label-b$batch" \
+      "${OFFLINE_ENV[@]}" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" --max-length 8192 \
-      --attn-implementation flash_attention_2 --output-dir "$SIONIC_OUT" \
+      --attn-implementation flash_attention_2 --output-dir "$output" \
       --embedding-cache-dir "$cache"; then
+      LAST_SIONIC_SUMMARY="$output/${model//\//__}/summary.json"
       return 0
     fi
   done
@@ -79,14 +98,51 @@ run_sionic_with_fallback() {
 
 run_official_with_fallback() {
   local label="$1" model="$2" revision="$3" cache="$4"
-  local batch
-  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
+  local batch output
+  for batch in "${EVAL_BATCHES[@]}"; do
+    output="$OFFICIAL_OUT/b$batch"
     if run_stage "official-korean-$label-b$batch" \
+      "${OFFLINE_ENV[@]}" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
       --model "$model" --revision "$revision" --max-length 8192 \
       --qwen3-instruction-loader --batch-size "$batch" \
-      --attn-implementation flash_attention_2 --output-dir "$OFFICIAL_OUT" \
+      --attn-implementation flash_attention_2 --output-dir "$output" \
       --embedding-cache-dir "$cache"; then
+      LAST_OFFICIAL_SUMMARY="$output/${model//\//__}/$revision/summary.json"
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_clean_with_fallback() {
+  local label="$1" model="$2" revision="$3"
+  local batch
+  for batch in "${EVAL_BATCHES[@]}"; do
+    if run_stage "clean-legal-$label-b$batch" \
+      "${OFFLINE_ENV[@]}" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
+      --model "$model" --revision "$revision" --batch-size "$batch" \
+      --max-length 8192 --attn-implementation flash_attention_2 \
+      --output-dir "$CLEAN_OUT" \
+      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_robustness_with_fallback() {
+  local label="$1" model="$2" revision="$3"
+  local batch
+  for batch in "${EVAL_BATCHES[@]}"; do
+    if run_stage "robustness-$label-b$batch" \
+      "${OFFLINE_ENV[@]}" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
+      --model "$model" --revision "$revision" --batch-size "$batch" \
+      --max-length 8192 --attn-implementation flash_attention_2 \
+      --output-dir "$ROBUST_OUT" \
+      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
       return 0
     fi
   done
@@ -116,14 +172,17 @@ for run_name in "${RUNS[@]}"; do
   merged="$ROOT/$merged_rel"
   if [[ ! -s "$merged/merge_report.json" ]]; then
     run_stage "merge-$run_name" \
+      "${OFFLINE_ENV[@]}" \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
       --adapter "$checkpoint" --output-dir "$merged" \
       --device cuda --dtype bfloat16 --local-files-only || continue
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
   revision="model-${weights_sha:0:12}"
-  run_sionic_with_fallback "$run_name" "$merged_rel" "$revision" \
-    "$ROOT/outputs/embedding-cache/sionic9/$run_name" || true
+  candidate_args+=(--candidate-model "$merged_rel")
+  if run_clean_with_fallback "$run_name" "$merged_rel" "$revision"; then
+    run_robustness_with_fallback "$run_name" "$merged_rel" "$revision" || true
+  fi
 done
 
 for run_name in "${FULL_RUNS[@]}"; do
@@ -140,20 +199,31 @@ for run_name in "${FULL_RUNS[@]}"; do
   packaged="$ROOT/$packaged_rel"
   if [[ ! -s "$packaged/full_tuning_report.json" ]]; then
     run_stage "package-$run_name" \
+      "${OFFLINE_ENV[@]}" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/package_full_embedding_checkpoint.py" \
       --checkpoint "$checkpoint" --output-dir "$packaged" \
       --device cuda --dtype bfloat16 --attn-implementation flash_attention_2 || continue
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$packaged/full_tuning_report.json")"
   revision="model-${weights_sha:0:12}"
-  run_sionic_with_fallback "$run_name" "$packaged_rel" "$revision" \
-    "$ROOT/outputs/embedding-cache/sionic9/$run_name" || true
+  candidate_args+=(--candidate-model "$packaged_rel")
+  if run_clean_with_fallback "$run_name" "$packaged_rel" "$revision"; then
+    run_robustness_with_fallback "$run_name" "$packaged_rel" "$revision" || true
+  fi
 done
 
-SELECTION="$LOG_DIR/sionic9-selection.json"
-run_stage "select-best-sionic9" \
-  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_sionic_model.py" \
-  "$SIONIC_OUT" --output "$SELECTION" --disqualification-root "$ROOT/outputs"
+SELECTION="$LOG_DIR/clean-first-selection.json"
+rm -f "$SELECTION"
+if (( ${#candidate_args[@]} > 0 )); then
+  run_stage "select-best-clean-near-tie-robustness" \
+    "${OFFLINE_ENV[@]}" \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_clean_model.py" \
+    "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
+    --output "$SELECTION" --disqualification-root "$ROOT/outputs" \
+    "${candidate_args[@]}" || true
+else
+  echo "[$(timestamp)] no packaged candidates are eligible for clean selection"
+fi
 
 best_model=""
 local_revision=""
@@ -167,40 +237,22 @@ if [[ -s "$SELECTION" ]]; then
     weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/full_tuning_report.json")"
     local_revision="model-${weights_sha:0:12}"
   fi
-  run_official_with_fallback "v1-best" "$best_model" "$local_revision" \
-    "$ROOT/outputs/embedding-cache/official-best" || true
-
-  safe_model_name="${best_model//\//__}"
-  official_summary="$OFFICIAL_OUT/$safe_model_name/$local_revision/summary.json"
-  sionic_summary="$(jq -r '.best.summary' "$SELECTION")"
-  clean_summary="$CLEAN_OUT/$safe_model_name/$local_revision/summary.json"
-  clean_success=0
-  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
-    if run_stage "clean-legal-selected-before-publish-b$batch" \
-      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
-      --model "$best_model" --revision "$local_revision" --batch-size "$batch" \
-      --max-length 8192 --attn-implementation flash_attention_2 \
-      --output-dir "$CLEAN_OUT" \
-      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
-      clean_success=1
-      break
-    fi
-  done
-  (( clean_success == 1 )) || echo "[$(timestamp)] selected-model clean legal evaluation failed"
-  robustness_summary="$ROBUST_OUT/$safe_model_name/$local_revision/summary.json"
-  robustness_success=0
-  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
-    if run_stage "robustness-selected-before-publish-b$batch" \
-      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
-      --model "$best_model" --revision "$local_revision" --batch-size "$batch" \
-      --max-length 8192 --attn-implementation flash_attention_2 \
-      --output-dir "$ROBUST_OUT" \
-      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
-      robustness_success=1
-      break
-    fi
-  done
-  (( robustness_success == 1 )) || echo "[$(timestamp)] selected-model robustness evaluation failed"
+  clean_summary="$(jq -r '.best.clean_summary' "$SELECTION")"
+  robustness_summary="$(jq -r '.best.robustness_summary' "$SELECTION")"
+  sionic_summary=""
+  official_summary=""
+  if run_sionic_with_fallback "final-selected" "$best_model" "$local_revision" \
+    "$ROOT/outputs/embedding-cache/sionic9-final-selected"; then
+    sionic_summary="$LAST_SIONIC_SUMMARY"
+  else
+    echo "[$(timestamp)] final selected model Sionic9 evaluation failed"
+  fi
+  if run_official_with_fallback "v1-final-selected" "$best_model" "$local_revision" \
+    "$ROOT/outputs/embedding-cache/official-final-selected"; then
+    official_summary="$LAST_OFFICIAL_SUMMARY"
+  else
+    echo "[$(timestamp)] final selected model official evaluation failed"
+  fi
   if [[ "$best_model" == *performance200k* ]]; then
     training_manifest="$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json"
   elif [[ "$best_model" == *performance50k* ]]; then
@@ -215,7 +267,9 @@ if [[ -s "$SELECTION" ]]; then
     robustness_args=()
     [[ -s "$robustness_summary" ]] && \
       robustness_args+=(--robustness-summary "$robustness_summary")
-    if retry_stage "publish-best-private-candidate" 3 env HF_TOKEN="${HF_TOKEN:-}" \
+    if [[ -z "$PUBLISH_HF_TOKEN" ]]; then
+      echo "[$(timestamp)] no Hugging Face token available; skip private publication"
+    elif retry_stage "publish-best-private-candidate" 3 env HF_TOKEN="$PUBLISH_HF_TOKEN" \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
       --model-dir "$best_abs" \
       --sionic-summary "$sionic_summary" \
@@ -234,9 +288,8 @@ if [[ -s "$SELECTION" ]]; then
   fi
 fi
 
-# Third board: fixed 10K same-repository source-document-held-out legal set.
-# Run trusted baselines and the selected local candidate after the two primary
-# public boards, without feeding these scores back into checkpoint selection.
+# Add trusted baselines to the same disclosed Grade-I comparison after local
+# selection.  These baseline results do not retroactively change the winner.
 clean_models=(
   "Qwen/Qwen3-Embedding-8B|1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
   "sionic-ai/comsat-embed-ko-8b-preview|a5cc22b651c1b2e51cdd8bf671774ae93584f0ab"
@@ -248,19 +301,8 @@ fi
 for spec in "${clean_models[@]}"; do
   model="${spec%%|*}"
   revision="${spec#*|}"
-  success=0
-  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
-    if run_stage "clean-legal-${model//\//__}-b$batch" \
-      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
-      --model "$model" --revision "$revision" --batch-size "$batch" \
-      --max-length 8192 --attn-implementation flash_attention_2 \
-      --output-dir "$CLEAN_OUT" \
-      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
-      success=1
-      break
-    fi
-  done
-  (( success == 1 )) || echo "[$(timestamp)] clean legal evaluation failed: $model"
+  run_clean_with_fallback "${model//\//__}" "$model" "$revision" || \
+    echo "[$(timestamp)] clean legal evaluation failed: $model"
 done
 
 robustness_models=(
@@ -274,19 +316,8 @@ fi
 for spec in "${robustness_models[@]}"; do
   model="${spec%%|*}"
   revision="${spec#*|}"
-  success=0
-  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
-    if run_stage "robustness-${model//\//__}-b$batch" \
-      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
-      --model "$model" --revision "$revision" --batch-size "$batch" \
-      --max-length 8192 --attn-implementation flash_attention_2 \
-      --output-dir "$ROBUST_OUT" \
-      --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
-      success=1
-      break
-    fi
-  done
-  (( success == 1 )) || echo "[$(timestamp)] robustness evaluation failed: $model"
+  run_robustness_with_fallback "${model//\//__}" "$model" "$revision" || \
+    echo "[$(timestamp)] robustness evaluation failed: $model"
 done
 run_stage "record-clean-legal-results" "$ROOT/scripts/commit_clean_legal_results.sh" || true
 
