@@ -13,6 +13,7 @@ WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain-contract-v1"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain-contract-v1"
+COMPREHENSIVE_OUT="$ROOT/outputs/evaluation/comprehensive-text-v1-posttrain"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
 MODEL_ROOT="$ROOT/artifacts/models"
@@ -32,14 +33,13 @@ FULL_RUNS=(
   qwen3-embedding-8b-ko-performance200k-last4
 )
 
-mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$CLEAN_OUT" "$ROBUST_OUT" "$MODEL_ROOT"
+mkdir -p \
+  "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$COMPREHENSIVE_OUT" \
+  "$CLEAN_OUT" "$ROBUST_OUT" "$MODEL_ROOT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
-PUBLISH_HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-}}"
-if [[ -z "$PUBLISH_HF_TOKEN" && -f "$ROOT/.env" ]]; then
-  PUBLISH_HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-fi
 unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
+PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
 read -r -a EVAL_BATCHES <<< "${CAMPAIGN_EVAL_BATCH_SIZES:-8 4 2}"
 for batch in "${EVAL_BATCHES[@]}"; do
   [[ "$batch" =~ ^[1-9][0-9]*$ ]] || {
@@ -54,6 +54,7 @@ OFFLINE_ENV=(
 candidate_args=()
 LAST_SIONIC_SUMMARY=""
 LAST_OFFICIAL_SUMMARY=""
+LAST_COMPREHENSIVE_SUMMARY=""
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 
@@ -109,6 +110,26 @@ run_official_with_fallback() {
       --attn-implementation flash_attention_2 --output-dir "$output" \
       --embedding-cache-dir "$cache"; then
       LAST_OFFICIAL_SUMMARY="$output/${model//\//__}/$revision/summary.json"
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_comprehensive_with_fallback() {
+  local label="$1" model="$2" revision="$3" cache="$4"
+  local batch output safe_name
+  safe_name="${model##*/}"
+  for batch in "${EVAL_BATCHES[@]}"; do
+    output="$COMPREHENSIVE_OUT/b$batch"
+    if run_stage "comprehensive-text-$label-b$batch" \
+      "${OFFLINE_ENV[@]}" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_comprehensive_text_v1.py" \
+      --model "$model" --revision "$revision" --max-length 8192 \
+      --qwen3-instruction-loader --batch-size "$batch" \
+      --attn-implementation flash_attention_2 --output-dir "$output" \
+      --embedding-cache-dir "$cache"; then
+      LAST_COMPREHENSIVE_SUMMARY="$output/$safe_name/$revision/summary.json"
       return 0
     fi
   done
@@ -241,6 +262,7 @@ if [[ -s "$SELECTION" ]]; then
   robustness_summary="$(jq -r '.best.robustness_summary' "$SELECTION")"
   sionic_summary=""
   official_summary=""
+  comprehensive_summary=""
   if run_sionic_with_fallback "final-selected" "$best_model" "$local_revision" \
     "$ROOT/outputs/embedding-cache/sionic9-final-selected"; then
     sionic_summary="$LAST_SIONIC_SUMMARY"
@@ -253,6 +275,13 @@ if [[ -s "$SELECTION" ]]; then
   else
     echo "[$(timestamp)] final selected model official evaluation failed"
   fi
+  if run_comprehensive_with_fallback \
+    "v1-final-selected" "$best_model" "$local_revision" \
+    "$ROOT/outputs/embedding-cache/comprehensive-text-final-selected"; then
+    comprehensive_summary="$LAST_COMPREHENSIVE_SUMMARY"
+  else
+    echo "[$(timestamp)] final selected model comprehensive text evaluation failed"
+  fi
   if [[ "$best_model" == *performance200k* ]]; then
     training_manifest="$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json"
   elif [[ "$best_model" == *performance50k* ]]; then
@@ -261,24 +290,26 @@ if [[ -s "$SELECTION" ]]; then
     training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/train.hn-qwen3-r095-n4.jsonl.manifest.json"
     [[ -s "$training_manifest" ]] || training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/manifest.json"
   fi
-  if [[ -s "$official_summary" && -s "$sionic_summary" && -s "$training_manifest" ]]; then
+  if [[ -s "$official_summary" && -s "$sionic_summary" \
+      && -s "$comprehensive_summary" && -s "$training_manifest" ]]; then
     clean_args=()
     [[ -s "$clean_summary" ]] && clean_args+=(--clean-summary "$clean_summary")
     robustness_args=()
     [[ -s "$robustness_summary" ]] && \
       robustness_args+=(--robustness-summary "$robustness_summary")
-    if [[ -z "$PUBLISH_HF_TOKEN" ]]; then
-      echo "[$(timestamp)] no Hugging Face token available; skip private publication"
-    elif retry_stage "publish-best-private-candidate" 3 env HF_TOKEN="$PUBLISH_HF_TOKEN" \
+    if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+      echo "[$(timestamp)] no Hugging Face token file available; skip private publication"
+    elif retry_stage "publish-best-private-candidate" 3 \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
       --model-dir "$best_abs" \
       --sionic-summary "$sionic_summary" \
       --official-summary "$official_summary" \
+      --comprehensive-summary "$comprehensive_summary" \
       --training-manifest "$training_manifest" \
       "${clean_args[@]}" \
       "${robustness_args[@]}" \
       --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1-private-candidate \
-      --upload; then
+      --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
       run_stage "record-pilot-best-result" \
         "$ROOT/scripts/commit_campaign_result.sh" \
         --stage pilot-best --model "$best_model" \
