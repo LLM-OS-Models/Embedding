@@ -9,14 +9,46 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from scripts.publish_best_embedding_model import (
+    COMPREHENSIVE_TEXT_PROTOCOL_ID,
+    COMPREHENSIVE_TEXT_TASK_SUBSETS,
+    load_hf_token,
     require_remote_visibility,
     training_dataset_repos,
     upload_model_folder,
+    validate_comprehensive_summary,
     validate_public_release_approval,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def comprehensive_payload(model: Path, weights_sha256: str) -> dict:
+    return {
+        "schema_version": "1.0.0",
+        "protocol_id": COMPREHENSIVE_TEXT_PROTOCOL_ID,
+        "complete": True,
+        "completed_tasks": 7,
+        "total_tasks": 7,
+        "completed_subsets": 414,
+        "expected_subsets": 414,
+        "model": {
+            "name_or_path": f"local:{model.name}",
+            "revision": f"model-{weights_sha256[:12]}",
+            "evidence": {"weights_sha256": weights_sha256},
+        },
+        "aggregate": {"mean_task": 0.71, "mean_task_type": 0.70},
+        "tasks": [
+            {"task_name": name, "subset_count": subset_count, "task_score": 0.71}
+            for name, subset_count in COMPREHENSIVE_TEXT_TASK_SUBSETS.items()
+        ],
+        "claim_status": {
+            "diagnostic_only": True,
+            "clean_claim_allowed": False,
+            "visual_document_ready": False,
+            "k_haters_ready": False,
+        },
+    }
 
 
 class PublishBestModelTests(unittest.TestCase):
@@ -31,6 +63,7 @@ class PublishBestModelTests(unittest.TestCase):
                 "use_policy": "research-noncommercial",
                 "visibility": "private",
             },
+            comprehensive=None,
             clean=None,
             robustness=None,
         )
@@ -45,6 +78,7 @@ class PublishBestModelTests(unittest.TestCase):
                 "training": root / "training.json",
                 "sionic9": root / "sionic.json",
                 "official_korean_v1": root / "official.json",
+                "comprehensive_text_v1": root / "comprehensive.json",
                 "clean": root / "clean.json",
                 "robustness": root / "robustness.json",
                 "approval": root / "approval.json",
@@ -59,6 +93,9 @@ class PublishBestModelTests(unittest.TestCase):
                 "sionic9": {"protocol_id": "sionic9-fixed-prompt-v1"},
                 "official_korean_v1": {
                     "protocol_id": "mteb-korean-v1-mteb-2.18.0"
+                },
+                "comprehensive_text_v1": {
+                    "protocol_id": COMPREHENSIVE_TEXT_PROTOCOL_ID
                 },
                 "clean": {
                     "protocol_id": "legal-source-document-heldout-i-v1"
@@ -107,6 +144,7 @@ class PublishBestModelTests(unittest.TestCase):
                 public=True,
                 clean_summary=paths["clean"],
                 robustness_summary=paths["robustness"],
+                comprehensive_summary=paths["comprehensive_text_v1"],
                 release_approval=paths["approval"],
                 training_manifest=paths["training"],
                 sionic_summary=paths["sionic9"],
@@ -117,6 +155,7 @@ class PublishBestModelTests(unittest.TestCase):
                 args=args,
                 model_evidence={"model": {"weights_sha256": model_sha}},
                 training=training,
+                comprehensive=summaries["comprehensive_text_v1"],
                 clean=summaries["clean"],
                 robustness=summaries["robustness"],
             )
@@ -134,6 +173,7 @@ class PublishBestModelTests(unittest.TestCase):
                     args=args,
                     model_evidence={"model": {"weights_sha256": model_sha}},
                     training=performance_training,
+                    comprehensive=summaries["comprehensive_text_v1"],
                     clean=summaries["clean"],
                     robustness=summaries["robustness"],
                 )
@@ -143,6 +183,38 @@ class PublishBestModelTests(unittest.TestCase):
                     args=args,
                     model_evidence={"model": {"weights_sha256": model_sha}},
                     training={**training, "release_blockers": ["pending review"]},
+                    comprehensive=summaries["comprehensive_text_v1"],
+                    clean=summaries["clean"],
+                    robustness=summaries["robustness"],
+                )
+
+            original_comprehensive = paths["comprehensive_text_v1"].read_text()
+            paths["comprehensive_text_v1"].write_text('{"tampered":true}')
+            with self.assertRaisesRegex(
+                ValueError, "does not match comprehensive_text_v1 summary"
+            ):
+                validate_public_release_approval(
+                    args=args,
+                    model_evidence={"model": {"weights_sha256": model_sha}},
+                    training=training,
+                    comprehensive=summaries["comprehensive_text_v1"],
+                    clean=summaries["clean"],
+                    robustness=summaries["robustness"],
+                )
+            paths["comprehensive_text_v1"].write_text(original_comprehensive)
+
+            missing_comprehensive_args = SimpleNamespace(
+                **{
+                    **vars(args),
+                    "comprehensive_summary": None,
+                }
+            )
+            with self.assertRaisesRegex(ValueError, "--comprehensive-summary"):
+                validate_public_release_approval(
+                    args=missing_comprehensive_args,
+                    model_evidence={"model": {"weights_sha256": model_sha}},
+                    training=training,
+                    comprehensive=None,
                     clean=summaries["clean"],
                     robustness=summaries["robustness"],
                 )
@@ -153,9 +225,100 @@ class PublishBestModelTests(unittest.TestCase):
                     args=args,
                     model_evidence={"model": {"weights_sha256": model_sha}},
                     training=training,
+                    comprehensive=summaries["comprehensive_text_v1"],
                     clean=summaries["clean"],
                     robustness=summaries["robustness"],
                 )
+
+    def test_comprehensive_summary_is_exact_model_and_claim_bound(self) -> None:
+        weights_sha = "a" * 64
+        summary = comprehensive_payload(Path("fixture-model"), weights_sha)
+        validate_comprehensive_summary(
+            summary,
+            expected_revision="model-" + weights_sha[:12],
+            expected_weights_sha256=weights_sha,
+        )
+
+        invalid_claim = json.loads(json.dumps(summary))
+        invalid_claim["claim_status"]["clean_claim_allowed"] = True
+        with self.assertRaisesRegex(ValueError, "diagnostic claim contract"):
+            validate_comprehensive_summary(
+                invalid_claim,
+                expected_revision="model-" + weights_sha[:12],
+                expected_weights_sha256=weights_sha,
+            )
+
+        invalid_subsets = json.loads(json.dumps(summary))
+        invalid_subsets["completed_subsets"] = 413
+        with self.assertRaisesRegex(ValueError, "414 subsets"):
+            validate_comprehensive_summary(
+                invalid_subsets,
+                expected_revision="model-" + weights_sha[:12],
+                expected_weights_sha256=weights_sha,
+            )
+
+        wrong_weights = json.loads(json.dumps(summary))
+        wrong_weights["model"]["evidence"]["weights_sha256"] = "b" * 64
+        with self.assertRaisesRegex(ValueError, "weights do not match"):
+            validate_comprehensive_summary(
+                wrong_weights,
+                expected_revision="model-" + weights_sha[:12],
+                expected_weights_sha256=weights_sha,
+            )
+
+    def test_hf_token_file_is_permission_checked_and_unambiguous(self) -> None:
+        self.assertEqual(
+            load_hf_token(None, environ={"HF_TOKEN": "environment-fixture"}),
+            "environment-fixture",
+        )
+        with self.assertRaisesRegex(RuntimeError, "unavailable"):
+            load_hf_token(None, environ={})
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            token_file = root / "credentials.env"
+            token_file.write_text(
+                "GITHUB=ignored-fixture\nHF_TOKEN=file-fixture\n",
+                encoding="utf-8",
+            )
+            token_file.chmod(0o600)
+            self.assertEqual(
+                load_hf_token(token_file, environ={}),
+                "file-fixture",
+            )
+            with self.assertRaisesRegex(RuntimeError, "ambiguous"):
+                load_hf_token(
+                    token_file,
+                    environ={"HF_TOKEN": "environment-fixture"},
+                )
+
+            token_file.chmod(0o640)
+            with self.assertRaises(RuntimeError) as insecure:
+                load_hf_token(token_file, environ={})
+            self.assertNotIn(str(token_file), str(insecure.exception))
+            self.assertNotIn("file-fixture", str(insecure.exception))
+
+            token_file.chmod(0o600)
+            symlink = root / "token-link"
+            symlink.symlink_to(token_file)
+            with self.assertRaisesRegex(RuntimeError, "security validation") as linked:
+                load_hf_token(symlink, environ={})
+            self.assertNotIn(str(symlink), str(linked.exception))
+
+            with self.assertRaisesRegex(RuntimeError, "security validation") as directory:
+                load_hf_token(root, environ={})
+            self.assertNotIn(str(root), str(directory.exception))
+
+            duplicate = root / "duplicate.env"
+            duplicate.write_text(
+                "HF_TOKEN=first-fixture\nHF_TOKEN=second-fixture\n",
+                encoding="utf-8",
+            )
+            duplicate.chmod(0o600)
+            with self.assertRaises(RuntimeError) as duplicated:
+                load_hf_token(duplicate, environ={})
+            self.assertNotIn("first-fixture", str(duplicated.exception))
+            self.assertNotIn(str(duplicate), str(duplicated.exception))
 
     def test_remote_visibility_must_match_before_and_after_upload(self) -> None:
         class FakeApi:
@@ -423,6 +586,81 @@ class PublishBestModelTests(unittest.TestCase):
                 },
             )
 
+            comprehensive_dir = root / "comprehensive"
+            comprehensive_raw = (
+                comprehensive_dir / "mteb_cache" / "results" / "fixture-model"
+            )
+            comprehensive_raw.mkdir(parents=True)
+            (comprehensive_raw / "XPQARetrieval.json").write_text(
+                json.dumps({"task_name": "XPQARetrieval", "main_score": 0.71}),
+                encoding="utf-8",
+            )
+            comprehensive = comprehensive_dir / "summary.json"
+            comprehensive.write_text(
+                json.dumps(comprehensive_payload(model, model_sha)),
+                encoding="utf-8",
+            )
+            comprehensive_attempt = subprocess.run(
+                [
+                    "python",
+                    str(ROOT / "scripts/publish_best_embedding_model.py"),
+                    "--model-dir",
+                    str(model),
+                    "--sionic-summary",
+                    str(sionic),
+                    "--official-summary",
+                    str(official),
+                    "--comprehensive-summary",
+                    str(comprehensive),
+                    "--training-manifest",
+                    str(manifest),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            comprehensive_report = json.loads(comprehensive_attempt.stdout)
+            self.assertEqual(
+                comprehensive_report["comprehensive_text_v1"]["completed_subsets"],
+                414,
+            )
+            comprehensive_card = (model / "README.md").read_text()
+            self.assertIn("Comprehensive Korean text v1 진단", comprehensive_card)
+            self.assertIn("diagnostic-only", comprehensive_card)
+            comprehensive_publication = json.loads(
+                (model / "publication_manifest.json").read_text()
+            )
+            self.assertEqual(
+                comprehensive_publication["comprehensive_text_v1"]["status"],
+                "complete_diagnostic",
+            )
+            self.assertEqual(
+                comprehensive_publication["comprehensive_text_v1"]["summary_sha256"],
+                hashlib.sha256(comprehensive.read_bytes()).hexdigest(),
+            )
+            self.assertIn(
+                "comprehensive_text_v1_summary.json",
+                comprehensive_publication["evidence"],
+            )
+            self.assertEqual(
+                len(
+                    comprehensive_publication["raw_evaluation_json"][
+                        "comprehensive_text_v1"
+                    ]
+                ),
+                1,
+            )
+            copied_raw = (
+                model
+                / "evaluation"
+                / "raw"
+                / "comprehensive_text_v1"
+                / "results"
+                / "fixture-model"
+                / "XPQARetrieval.json"
+            )
+            self.assertTrue(copied_raw.is_file())
+
             clean_dir = root / "clean"
             clean_dir.mkdir()
             clean = clean_dir / "summary.json"
@@ -546,6 +784,11 @@ class PublishBestModelTests(unittest.TestCase):
                                 "protocol_id": "mteb-korean-v1-mteb-2.18.0",
                                 "summary_sha256": file_sha(official),
                             },
+                            "comprehensive_text_v1": {
+                                "status": "pass",
+                                "protocol_id": COMPREHENSIVE_TEXT_PROTOCOL_ID,
+                                "summary_sha256": file_sha(comprehensive),
+                            },
                             "clean": {
                                 "status": "pass",
                                 "protocol_id": "legal-source-document-heldout-i-v1",
@@ -570,6 +813,8 @@ class PublishBestModelTests(unittest.TestCase):
                     str(sionic),
                     "--official-summary",
                     str(official),
+                    "--comprehensive-summary",
+                    str(comprehensive),
                     "--clean-summary",
                     str(clean),
                     "--robustness-summary",
@@ -642,6 +887,16 @@ class PublishBestModelTests(unittest.TestCase):
             self.assertEqual(
                 full_publication["model_evidence"]["file"],
                 "full_tuning_report.json",
+            )
+            self.assertEqual(
+                full_publication["comprehensive_text_v1"]["status"],
+                "not_provided",
+            )
+            self.assertFalse(
+                (model / "evaluation" / "comprehensive_text_v1_summary.json").exists()
+            )
+            self.assertFalse(
+                (model / "evaluation" / "raw" / "comprehensive_text_v1").exists()
             )
 
 

@@ -6,16 +6,29 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import shutil
+import stat
 from statistics import fmean
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_RELEASE_APPROVAL_TYPE = "embedding-model-public-release-approval"
 RIGHTS_SAFE_TRAINING_TRACK = "rights-safe-release"
+COMPREHENSIVE_TEXT_PROTOCOL_ID = "comprehensive-korean-text-v1-mteb-2.18.0"
+COMPREHENSIVE_TEXT_TASK_SUBSETS = {
+    "XPQARetrieval": 3,
+    "FloresBitextMining": 406,
+    "KorSarcasmClassification.v2": 1,
+    "KorHateClassification.v2": 1,
+    "KorFin": 1,
+    "KorHateSpeechMLClassification": 1,
+    "KorNLI": 1,
+}
+COMPREHENSIVE_TEXT_SUBSETS = 414
 SIONIC_ORDER = [
     "MIRACL",
     "MrTidy",
@@ -34,6 +47,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--sionic-summary", type=Path, required=True)
     parser.add_argument("--official-summary", type=Path, required=True)
+    parser.add_argument(
+        "--comprehensive-summary",
+        type=Path,
+        help="Optional complete comprehensive Korean text diagnostic summary.",
+    )
     parser.add_argument("--clean-summary", type=Path)
     parser.add_argument("--robustness-summary", type=Path)
     parser.add_argument("--training-manifest", type=Path, required=True)
@@ -47,6 +65,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--upload", action="store_true")
+    parser.add_argument(
+        "--hf-token-file",
+        type=Path,
+        help="Secure file containing one HF_TOKEN= entry; only used with --upload.",
+    )
     return parser.parse_args()
 
 
@@ -107,11 +130,161 @@ def resolved_local_model(value: Any) -> Path:
     return path.resolve()
 
 
+def load_hf_token(
+    token_file: Path | None,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> str:
+    """Load one HF token without disclosing either the path or secret in errors.
+
+    Environment-based authentication remains supported. A token file is opened
+    without following its final symlink and accepted only when it is a regular
+    file owned by this uid with no group/other permission bits. Other dotenv
+    entries are ignored rather than evaluated.
+    """
+
+    environment = os.environ if environ is None else environ
+    environment_has_token = "HF_TOKEN" in environment
+    if token_file is not None and environment_has_token:
+        raise RuntimeError("Hugging Face token source is ambiguous")
+    if token_file is None:
+        token = environment.get("HF_TOKEN")
+        if not token:
+            raise RuntimeError("Hugging Face token is unavailable")
+        return token
+
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise RuntimeError("Hugging Face token file failed security validation")
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(
+            os.fspath(token_file),
+            os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+        )
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_mode & 0o077
+            or metadata.st_size > 1024 * 1024
+        ):
+            raise RuntimeError(
+                "Hugging Face token file failed security validation"
+            )
+        content = bytearray()
+        while True:
+            block = os.read(descriptor, 64 * 1024)
+            if not block:
+                break
+            content.extend(block)
+            if len(content) > 1024 * 1024:
+                raise RuntimeError(
+                    "Hugging Face token file failed security validation"
+                )
+        text = bytes(content).decode("utf-8")
+    except RuntimeError:
+        raise
+    except (OSError, UnicodeError):
+        raise RuntimeError(
+            "Hugging Face token file failed security validation"
+        ) from None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+    tokens = [
+        line.removeprefix("HF_TOKEN=")
+        for line in text.splitlines()
+        if line.startswith("HF_TOKEN=")
+    ]
+    if (
+        len(tokens) != 1
+        or not tokens[0]
+        or tokens[0] != tokens[0].strip()
+        or any(character.isspace() for character in tokens[0])
+    ):
+        raise RuntimeError("Hugging Face token file has no unique valid HF_TOKEN entry")
+    return tokens[0]
+
+
+def validate_comprehensive_summary(
+    summary: dict[str, Any],
+    *,
+    expected_revision: str,
+    expected_weights_sha256: str,
+) -> None:
+    """Validate the complete text-only diagnostic contract for publication."""
+
+    if summary.get("protocol_id") != COMPREHENSIVE_TEXT_PROTOCOL_ID:
+        raise ValueError("Unexpected comprehensive Korean text protocol")
+    if summary.get("complete") is not True:
+        raise ValueError("Comprehensive Korean text summary is incomplete")
+    tasks = summary.get("tasks")
+    if (
+        summary.get("completed_tasks") != len(COMPREHENSIVE_TEXT_TASK_SUBSETS)
+        or summary.get("total_tasks") != len(COMPREHENSIVE_TEXT_TASK_SUBSETS)
+        or not isinstance(tasks, list)
+        or len(tasks) != len(COMPREHENSIVE_TEXT_TASK_SUBSETS)
+    ):
+        raise ValueError("Comprehensive Korean text summary does not cover 7 tasks")
+    subset_counts: dict[str, int] = {}
+    for row in tasks:
+        if not isinstance(row, dict) or not isinstance(row.get("task_name"), str):
+            raise ValueError("Comprehensive Korean text task evidence is malformed")
+        task_name = row["task_name"]
+        subset_count = row.get("subset_count")
+        if (
+            task_name in subset_counts
+            or isinstance(subset_count, bool)
+            or not isinstance(subset_count, int)
+        ):
+            raise ValueError("Comprehensive Korean text task evidence is malformed")
+        subset_counts[task_name] = subset_count
+    if subset_counts != COMPREHENSIVE_TEXT_TASK_SUBSETS:
+        raise ValueError("Comprehensive Korean text task/subset contract drifted")
+    if (
+        summary.get("completed_subsets") != COMPREHENSIVE_TEXT_SUBSETS
+        or summary.get("expected_subsets") != COMPREHENSIVE_TEXT_SUBSETS
+        or sum(subset_counts.values()) != COMPREHENSIVE_TEXT_SUBSETS
+    ):
+        raise ValueError("Comprehensive Korean text summary does not cover 414 subsets")
+
+    claim_status = summary.get("claim_status", {})
+    expected_claims = {
+        "diagnostic_only": True,
+        "clean_claim_allowed": False,
+        "visual_document_ready": False,
+        "k_haters_ready": False,
+    }
+    if not isinstance(claim_status, dict) or any(
+        claim_status.get(key) is not value for key, value in expected_claims.items()
+    ):
+        raise ValueError("Comprehensive Korean text diagnostic claim contract drifted")
+
+    model = summary.get("model", {})
+    if not isinstance(model, dict) or not isinstance(model.get("evidence"), dict):
+        raise ValueError("Comprehensive Korean text model evidence is malformed")
+    if model.get("revision") != expected_revision:
+        raise ValueError("Comprehensive summary revision does not match model evidence")
+    if model.get("evidence", {}).get("weights_sha256") != expected_weights_sha256:
+        raise ValueError("Comprehensive summary weights do not match model evidence")
+    aggregate = summary.get("aggregate", {})
+    if not isinstance(aggregate, dict):
+        raise ValueError("Comprehensive Korean text aggregate is malformed")
+    for key in ("mean_task", "mean_task_type"):
+        value = aggregate.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("Comprehensive Korean text aggregate is malformed")
+        if not math.isfinite(float(value)):
+            raise ValueError("Comprehensive Korean text aggregate is non-finite")
+
+
 def validate_public_release_approval(
     *,
     args: argparse.Namespace,
     model_evidence: dict[str, Any],
     training: dict[str, Any],
+    comprehensive: dict[str, Any] | None,
     clean: dict[str, Any] | None,
     robustness: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
@@ -129,6 +302,7 @@ def validate_public_release_approval(
     missing_flags = [
         flag
         for flag, value in (
+            ("--comprehensive-summary", args.comprehensive_summary),
             ("--clean-summary", args.clean_summary),
             ("--robustness-summary", args.robustness_summary),
             ("--release-approval", args.release_approval),
@@ -139,8 +313,10 @@ def validate_public_release_approval(
         raise ValueError(
             "Public release requires explicit evidence: " + ", ".join(missing_flags)
         )
-    if clean is None or robustness is None:
-        raise ValueError("Public release requires validated clean and robustness results")
+    if comprehensive is None or clean is None or robustness is None:
+        raise ValueError(
+            "Public release requires validated comprehensive, clean, and robustness results"
+        )
 
     training_track = training.get("training_track")
     if training_track != RIGHTS_SAFE_TRAINING_TRACK:
@@ -211,6 +387,10 @@ def validate_public_release_approval(
         "official_korean_v1": (
             "mteb-korean-v1-mteb-2.18.0",
             args.official_summary.resolve(),
+        ),
+        "comprehensive_text_v1": (
+            COMPREHENSIVE_TEXT_PROTOCOL_ID,
+            args.comprehensive_summary.resolve(),
         ),
         "clean": (
             "legal-source-document-heldout-i-v1",
@@ -289,6 +469,8 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         args.official_summary.resolve(),
         args.training_manifest.resolve(),
     ]
+    if args.comprehensive_summary:
+        required.append(args.comprehensive_summary.resolve())
     missing = [str(path) for path in required if not path.exists()]
     if missing:
         raise FileNotFoundError(f"Missing publication evidence: {missing}")
@@ -297,6 +479,11 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     model_evidence = read_json(model_evidence_path)
     sionic = read_json(args.sionic_summary.resolve())
     official = read_json(args.official_summary.resolve())
+    comprehensive = (
+        read_json(args.comprehensive_summary.resolve())
+        if args.comprehensive_summary
+        else None
+    )
     clean = read_json(args.clean_summary.resolve()) if args.clean_summary else None
     robustness = (
         read_json(args.robustness_summary.resolve())
@@ -335,6 +522,12 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     for label, summary in (("Sionic", sionic), ("official", official)):
         if summary.get("requested_revision") != expected_revision:
             raise ValueError(f"{label} summary revision does not match model evidence")
+    if comprehensive is not None:
+        validate_comprehensive_summary(
+            comprehensive,
+            expected_revision=expected_revision,
+            expected_weights_sha256=model_evidence["model"]["weights_sha256"],
+        )
     if clean is not None:
         if clean.get("protocol_id") != "legal-source-document-heldout-i-v1":
             raise ValueError("Unexpected clean legal protocol")
@@ -408,10 +601,20 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         args=args,
         model_evidence=model_evidence,
         training=training,
+        comprehensive=comprehensive,
         clean=clean,
         robustness=robustness,
     )
-    return model_evidence, sionic, official, training, clean, robustness, approval
+    return (
+        model_evidence,
+        sionic,
+        official,
+        comprehensive,
+        training,
+        clean,
+        robustness,
+        approval,
+    )
 
 
 def is_full_update(evidence: dict[str, Any]) -> bool:
@@ -515,6 +718,7 @@ def build_card(
     evidence: dict[str, Any],
     sionic: dict[str, Any],
     official: dict[str, Any],
+    comprehensive: dict[str, Any] | None,
     training: dict[str, Any],
     clean: dict[str, Any] | None,
     robustness: dict[str, Any] | None,
@@ -590,6 +794,21 @@ def build_card(
 고정된 filler/system/assistant artifact를 clean corpus의 5%만큼 추가한 paired test다.
 0/1/5% 전체 condition과 per-query rank는 `evaluation/`에 동봉한다.
 """
+    comprehensive_section = ""
+    if comprehensive is not None:
+        aggregate = comprehensive["aggregate"]
+        comprehensive_section = f"""
+### Comprehensive Korean text v1 진단
+
+- Mean(Task): **{100 * float(aggregate['mean_task']):.3f}**
+- Mean(Type): **{100 * float(aggregate['mean_task_type']):.3f}**
+- coverage: **{int(comprehensive['completed_tasks'])} tasks / {int(comprehensive['completed_subsets'])} subsets**
+- protocol: `{comprehensive['protocol_id']}`
+
+이 평가는 text-only **diagnostic-only** 결과다. clean 성능, visual-document
+retrieval, K-HATERS 지원 또는 해당 영역의 우위를 주장하는 근거가 아니다. 요약과
+원본 MTEB result JSON은 `evaluation/`에 동봉한다.
+"""
     if full_update:
         method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
 - method: partial full-parameter contrastive fine-tuning, InfoNCE/explicit negatives
@@ -660,6 +879,7 @@ tags:
 아니다. task별 MTEB raw result JSON은 이 model repository의 `evaluation/raw/`에,
 실행 코드는 프로젝트 repository에 보존한다.
 
+{comprehensive_section}
 {clean_section}
 {robustness_section}
 
@@ -755,20 +975,47 @@ benchmark한다.
 
 def main() -> None:
     args = parse_args()
-    evidence, sionic, official, training, clean, robustness, approval = validate(args)
+    (
+        evidence,
+        sionic,
+        official,
+        comprehensive,
+        training,
+        clean,
+        robustness,
+        approval,
+    ) = validate(args)
     model_dir = args.model_dir.resolve()
     card = build_card(
-        args.repo_id, evidence, sionic, official, training, clean, robustness
+        args.repo_id,
+        evidence,
+        sionic,
+        official,
+        comprehensive,
+        training,
+        clean,
+        robustness,
     )
     card_path = model_dir / "README.md"
     card_path.write_text(card, encoding="utf-8")
     evidence_dir = model_dir / "evaluation"
     evidence_dir.mkdir(exist_ok=True)
+    if not args.comprehensive_summary:
+        (evidence_dir / "comprehensive_text_v1_summary.json").unlink(
+            missing_ok=True
+        )
+        stale_comprehensive_raw = evidence_dir / "raw" / "comprehensive_text_v1"
+        if stale_comprehensive_raw.is_dir():
+            shutil.rmtree(stale_comprehensive_raw)
     evidence_files = {
         "sionic9_summary.json": args.sionic_summary.resolve(),
         "mteb_korean_v1_summary.json": args.official_summary.resolve(),
         "training_manifest.json": args.training_manifest.resolve(),
     }
+    if args.comprehensive_summary:
+        evidence_files["comprehensive_text_v1_summary.json"] = (
+            args.comprehensive_summary.resolve()
+        )
     if args.clean_summary:
         evidence_files["legal_source_heldout_summary.json"] = (
             args.clean_summary.resolve()
@@ -799,6 +1046,14 @@ def main() -> None:
             evidence_dir / "raw" / "mteb_korean_v1",
         ),
     }
+    if args.comprehensive_summary:
+        comprehensive_raw_root = evidence_dir / "raw" / "comprehensive_text_v1"
+        if comprehensive_raw_root.is_dir():
+            shutil.rmtree(comprehensive_raw_root)
+        raw_evidence["comprehensive_text_v1"] = copy_json_tree(
+            args.comprehensive_summary.resolve().parent / "mteb_cache",
+            comprehensive_raw_root,
+        )
     evidence_name = (
         "full_tuning_report.json" if is_full_update(evidence) else "merge_report.json"
     )
@@ -815,6 +1070,18 @@ def main() -> None:
             name: {"sha256": sha256(evidence_dir / name)} for name in evidence_files
         },
         "raw_evaluation_json": raw_evidence,
+        "comprehensive_text_v1": (
+            {
+                "status": "complete_diagnostic",
+                "protocol_id": comprehensive["protocol_id"],
+                "summary_sha256": sha256(args.comprehensive_summary.resolve()),
+                "completed_tasks": comprehensive["completed_tasks"],
+                "completed_subsets": comprehensive["completed_subsets"],
+                "claim_status": comprehensive["claim_status"],
+            }
+            if comprehensive is not None
+            else {"status": "not_provided"}
+        ),
         "model_weights_evidence_sha256": evidence["model"]["weights_sha256"],
         "public_release_gate": (
             {
@@ -842,11 +1109,20 @@ def main() -> None:
         "upload_requested": args.upload,
         "validated": True,
         "public_release_approved": approval is not None,
+        "comprehensive_text_v1": (
+            {
+                "protocol_id": comprehensive["protocol_id"],
+                "summary_sha256": sha256(args.comprehensive_summary.resolve()),
+                "completed_tasks": comprehensive["completed_tasks"],
+                "completed_subsets": comprehensive["completed_subsets"],
+                "diagnostic_only": True,
+            }
+            if comprehensive is not None
+            else None
+        ),
     }
     if args.upload:
-        token = os.environ.get("HF_TOKEN")
-        if not token:
-            raise RuntimeError("HF_TOKEN must be exported")
+        token = load_hf_token(args.hf_token_file)
         from huggingface_hub import HfApi
 
         api = HfApi(token=token)
