@@ -2,6 +2,25 @@
 
 이 파일에는 실제로 실행한 결과만 기록합니다. 모델 카드의 성능표는 여기의 raw result와 revision을 기준으로 생성합니다.
 
+## 2026-07-15 200K training backend admission
+
+같은 격리 NVIDIA PyTorch 2.5 / flash-attn 2.4.2 환경에서 Qwen3-Embedding-8B
+LoRA r64, batch 16, accumulation 4, max length 512를 SDPA와 FA2로 각각 5
+optimizer-step 실행했다. 199,904행 원본을 source와 length strata별로 투영한 같은
+320행 subset을 사용했고, subset train SHA-256은
+`155ce90a20fb9f4dacce3244a43962bd9a96f8fc765365d54295d16f2cc503b9`다.
+
+| Backend | Seconds / optimizer-step | Peak VRAM | Process |
+|---|---:|---:|---|
+| SDPA | 29.30 | 63.44 GiB | pass |
+| FlashAttention 2 | **27.10** | **61.52 GiB** | pass |
+
+FA2 speedup은 **1.08118x**로 고정 입장 기준 1.05x를 통과했다. 원본 ordered train
+SHA-256은 `8e2731ab25299ff558af675f067b253a6ce4375a850aa925acfe3b3117505e3c`이며,
+양쪽 loss도 반올림 기준 각 step에서 일치했다. 따라서 200K r64 run은 FA2를 쓰고,
+이 admission의 backend·data lineage가 달라지면 재사용하지 않는다. 첫 실패 시도의
+report/log도 `attempts/20260715T082837Z/`에 보존했으며 성능 수치로 사용하지 않는다.
+
 ## 2026-07-11 training/adapter pipeline verification
 
 Run: `qwen3-embedding-8b-ko-smoke-r32/v1-20260711-210119`, checkpoint 20, Qwen base revision `1d8ad4ca`, H100 80GB, BF16 SDPA.
@@ -58,6 +77,8 @@ backend를 분리 재실행했다.
 | Comsat-embed-ko-8b-preview | BF16 / FA2 | 2 | **0.85222** | `1b5b371a5791fc6e32f99129696d782d22be3280f97682b7b56e3bc8d588a5ed` |
 | Qwen3-Embedding-8B | BF16 / FA2 | 192 | **0.82442** | `79a43fceba481cbf7067eed3c099cc019bf134cc67a5381fb876ae0edcef5681` |
 | Comsat-embed-ko-8b-preview | BF16 / FA2 | 192 | **0.85261** | `01a01b8c1cb263151f6fe01d309296b13eb3cc9be6ed90c61cc342182eac5c59` |
+| F2LLM-v2-8B | BF16 / FA2 | 192 | 0.76789 | `408a51894578c1ffca9a4d3bfc5ec9b791b6d246e901795b7a2f7587fb1bf1e4` |
+| PwC-Embedding_expr | BF16 / SDPA, max 512 | 192 | 0.78473 | `73b822eccf26b91a2f33f089abe1812ba290190ba3e899dbd73c86005bf83796` |
 
 Qwen의 batch 2와 192 차이는 `-0.00334`이므로 BF16 retrieval 결과에서 batch는
 단순 처리량 설정이 아니라 결과 계약의 일부다. 데이터 revision은 두 Qwen run 모두
@@ -74,6 +95,12 @@ dataset/prompt parity는 복구됐지만, campaign 승패는 아래 고정 profi
 않는다. evaluator는 runtime contract와 profile hash를 기록하며, 완료 task가 있는
 output directory에 다른 batch/backend가 들어오면 fail-closed한다. FP32 safe merge
 후보는 FA2가 지원하지 않으므로 evaluator가 SDPA로 전환하고 별도 profile로 기록한다.
+
+F2는 campaign profile을 그대로 적용했다. PwC는 XLM-R position table의 native limit가
+512이므로 max 8192/FA2 강제 run은 position-index device assertion으로 실패했고 점수에
+사용하지 않았다. 성공 행은 current Hub revision `6c5196980c685db45b58f67bd3be2f79d794351e`,
+max 512, SDPA를 사용했다. 서로 다른 architecture에는 각 모델의 지원 범위를 적용하되,
+그 runtime 차이를 숨기지 않는다.
 
 ## 2026-07-12 Comsat 공식 MTEB Korean v1 로컬 재현
 

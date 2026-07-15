@@ -29,6 +29,10 @@ if [[ "$RUN_NAME" == *performance200k* \
   fi
 fi
 
+if [[ "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
+  embedding_enable_torch25_swift_compat
+fi
+
 # Promote the 50K model into the 200K curriculum only when its held-out loss
 # actually beats the 10K hard-negative pilot. Dataset scale alone is not a
 # sufficient promotion signal.
@@ -112,6 +116,7 @@ fi
   --dataset "$TRAIN_FILE" \
   --val_dataset "$VAL_FILE" \
   --load_from_cache_file false \
+  --lazy_tokenize true \
   --attn_impl "${ATTN_IMPL:-sdpa}" \
   --torch_dtype bfloat16 \
   --gradient_checkpointing true \

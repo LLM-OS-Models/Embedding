@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 TRAIN_ENV="${TRAIN_ENV:-$ROOT/.venv-train}"
+
+if [[ "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
+  embedding_enable_torch25_swift_compat
+fi
 DATA_DIR="${DATA_DIR:-$ROOT/data/processed/ko_triplet_pilot_10k}"
 TRAIN_FILE="${TRAIN_FILE:-$DATA_DIR/train.hn-qwen3-r095-n4.jsonl}"
 VAL_FILE="${VAL_FILE:-$DATA_DIR/validation.hn-qwen3-r095-n4.jsonl}"
@@ -59,6 +63,7 @@ fi
   --dataset "$TRAIN_FILE" \
   --val_dataset "$VAL_FILE" \
   --load_from_cache_file false \
+  --lazy_tokenize true \
   --attn_impl "${ATTN_IMPL:-sdpa}" \
   --torch_dtype bfloat16 \
   --gradient_checkpointing true \

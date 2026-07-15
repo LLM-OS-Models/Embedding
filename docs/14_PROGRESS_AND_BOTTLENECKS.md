@@ -220,10 +220,13 @@ F2는 45M example full FT 선례지만 우리 budget과 base는 다르다. stand
 결정 gate는 동일 hard-negative data와 token budget에서 clean 품질/회귀/VRAM/GPU-hour Pareto다. 현재 기본 선택은 LoRA r64이며, 성능이 막힐 때 partial/GaLore/full 순으로 승격한다.
 
 200K LoRA 시작 직전 `admit_fa2_lora_backend.sh`가 동일 8B/r64/batch16/512 설정으로
-5 optimizer-step 실제 backward를 수행한다. 현재 SDPA 장기 실측 `23.2 s/step` 대비
-최소 1.05배 빠른 `<=22.095 s/step`이고 process가 정상 종료된 경우에만 격리
-`.venv-train-fa2`와 `flash_attention_2`를 채택한다. import 성공만으로 승격하지 않으며,
-OOM·API 오류·속도 역전·로그 파싱 실패는 모두 `.venv-train + sdpa`로 자동 fallback한다.
+SDPA와 FA2를 같은 격리 환경·같은 320행 subset에서 각각 5 optimizer-step 실제
+backward했다. 2026-07-15 실측은 SDPA `29.30 s/step`, FA2 `27.10 s/step`으로
+**1.08118배**였고, peak도 `63.44 GiB`에서 `61.52 GiB`로 줄어 1.05배 입장 기준을
+통과했다. subset train SHA-256은 `155ce90a20fb9f4dacce3244a43962bd9a96f8fc765365d54295d16f2cc503b9`다.
+이제 `.venv-train-fa2`와 `flash_attention_2`를 채택한다. import 성공만으로 승격하지
+않으며, data/backend 계약 변경·OOM·API 오류·속도 역전·로그 파싱 실패는 모두
+`.venv-train + sdpa`로 자동 fallback한다.
 1M, SQuAD/health/AutoRAG, legal, combined 장기 queue도 이 동일 admission JSON을
 재사용해 import-only 1-step probe를 반복하지 않는다.
 

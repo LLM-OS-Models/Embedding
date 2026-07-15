@@ -8,6 +8,10 @@ SWIFT="${TRAIN_ENV:-$ROOT/.venv-train}/bin/swift"
 DATA="${DATA:-$ROOT/data/processed/ko_triplet_smoke/train.jsonl}"
 REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
 
+if [[ "${TRAIN_ENV:-$ROOT/.venv-train}" == "$ROOT/.venv-train-fa2" ]]; then
+  embedding_enable_torch25_swift_compat
+fi
+
 if [[ -z "$MODE" ]]; then
   echo "usage: $0 {lora_r64|dora_r32|last4|galore|standard_full}" >&2
   exit 2

@@ -12,7 +12,11 @@ export HF_HOME="${HF_HOME:-$EMBEDDING_RUNTIME_ROOT/.cache/huggingface}"
 export HF_HUB_CACHE="${HF_HUB_CACHE:-$HF_HOME/hub}"
 export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-$HF_HUB_CACHE}"
 export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
-mkdir -p "$HF_HUB_CACHE" "$HF_DATASETS_CACHE"
+# ms-swift passes ModelScope's cache root to datasets.load_dataset even when
+# --use_hf=true.  Pin it as well or map caches escape to a shared home cache and
+# cannot be reused reliably after a restart on this public machine.
+export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$EMBEDDING_RUNTIME_ROOT/.cache/modelscope}"
+mkdir -p "$HF_HUB_CACHE" "$HF_DATASETS_CACHE" "$MODELSCOPE_CACHE"
 
 embedding_effective_cpu_count() {
   local available quota period quota_cpus cgroup_path relative
@@ -55,3 +59,11 @@ if [[ ! "$EFFECTIVE_CPU_COUNT" =~ ^[1-9][0-9]*$ ]]; then
   return 2 2>/dev/null || exit 2
 fi
 export EFFECTIVE_CPU_COUNT
+
+embedding_enable_torch25_swift_compat() {
+  local compat="$EMBEDDING_RUNTIME_ROOT/compat/torch25"
+  case ":${PYTHONPATH:-}:" in
+    *":$compat:"*) ;;
+    *) export PYTHONPATH="$compat${PYTHONPATH:+:$PYTHONPATH}" ;;
+  esac
+}

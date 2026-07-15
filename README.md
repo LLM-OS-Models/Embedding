@@ -1,12 +1,14 @@
 # Korean Embedding Lab
 
-한국어 검색 임베딩 모델을 연구하고, `sionic-ai/comsat-embed-ko-8b-preview`를 **오염 없이 재현 가능하게** 넘어서는 것을 목표로 하는 작업 공간입니다.
+한국어 검색 임베딩 모델을 연구하고, `sionic-ai/comsat-embed-ko-8b-preview`를 넘는 데서
+멈추지 않고 **한국어 검색·의미·긴 문맥·강건성·다국어·효율을 함께 보는 종합 최고
+모델**을 오염 없이 재현 가능하게 만드는 작업 공간입니다.
 
-기준일: **2026-07-12 (Asia/Seoul)**
+기준일: **2026-07-15 (Asia/Seoul)**
 
 ## 한 줄 결론
 
-- 현재 최적화 우선순위는 **Sionic retrieval 9종 → 공식 MTEB Korean v1 → clean 종합 보드**이며, 첫 공개 후보는 성능 우선 비상업 모델입니다.
+- 현재 최적화 우선순위는 **clean 종합 보드 → Sionic retrieval 9종 → 공식 MTEB Korean v1**이며, 공개 후보는 성능뿐 아니라 데이터·가중치 권리와 배포 가능성까지 통과해야 합니다.
 - Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
 - Comsat의 `0.7930`은 일반 MTEB SOTA가 아니라, 자체 선택한 한국어 retrieval 9종의 macro `NDCG@10`입니다. Qwen3-Embedding-8B 대비 차이는 `+0.0105`입니다.
 - 가장 직접적인 학습법은 raw-text LM CPT가 아니라 `query / positive / hard negatives`를 이용한 **continued contrastive fine-tuning(InfoNCE)** 입니다.
@@ -45,8 +47,8 @@ row는 101개였다.
 |---|---:|---:|---|---:|
 | `sionic-ai/comsat-embed-ko-8b-preview` | **0.7930** | **0.85261** 실측 | 9개 카드 + 1개 canonical 재현 | 기준 |
 | `Qwen/Qwen3-Embedding-8B` | 0.7825 | 0.82442 실측 | 9개 카드 + 1개 canonical 재현 | -0.0105 |
-| `codefuse-ai/F2LLM-v2-8B` | 0.7621 | 0.76611 실측 | 9개 카드 + 1개 재현 | -0.0309 |
-| `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | — | 0.78329 실측 | AutoRAG만 측정 | — |
+| `codefuse-ai/F2LLM-v2-8B` | 0.7621 | 0.76789 실측 | 9개 카드 + 1개 canonical 재현 | -0.0309 |
+| `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | — | 0.78473 실측 | AutoRAG native max 512 | — |
 | 우리 smoke LoRA r32 | — | 미측정 | 성능 주장 금지 | — |
 | 우리 공개 후보 목표 | **> 0.7930** | 회귀 없음 | 9개 전부 직접 측정 | **> 0** |
 
@@ -85,6 +87,7 @@ row는 101개였다.
 |---|---|---|
 | Qwen3-Embedding 공식 저장소 | clone 완료 | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
 | 공식 후속학습 프레임워크 `ms-swift` | commit 고정, 격리 환경 설치 완료 | [`third_party/ms-swift/`](third_party/ms-swift/) |
+| 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B pinned revision 다운로드 완료; remote-code 모델은 정적 감사 전 실행 금지 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
 | Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
 | 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
 | 데이터 manifest / 오염 차단 | 15/15 task exact SHA-256 blocklist 빌드·공개 완료 | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
@@ -103,7 +106,7 @@ row는 101개였다.
 | 평가 오염 방지 blocklist | Sionic 9 + 공식 Korean 6, 원문 없는 SHA-256 547MB | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
 | Clean 법률 retrieval 10K | training document overlap 0, benchmark exact overlap 0, 독립 verifier pass | [`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0) |
 | 대화형 noise robustness | prompt on/off × noise 0/1/5%, exact rank·cache·모델 카드 자동화; baseline 실행 대기 | [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md) |
-| 격리 FA2 학습 후보 | NVIDIA PyTorch 2.5 + flash-attn 2.4.2; 200K 직전 실제 8B 5-step backward에서 SDPA 대비 1.05x를 넘어야 자동 승격 | [튜닝 전략](experiments/070_tuning_strategy/) |
+| 격리 FA2 학습 backend | **입장 통과**; 같은 320행·5-step에서 SDPA 29.30 → FA2 27.10 s/step(**1.081x**), peak 63.44 → 61.52 GiB | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
@@ -142,6 +145,7 @@ row는 101개였다.
 28. [Sionic AutoRAG finance/commerce/legal domain adaptation](docs/27_SIONIC_AUTORAG_DOMAIN_ADAPTATION.md)
 29. [Sionic 9 combined target-domain final candidate](docs/28_SIONIC_COMBINED_TARGET_MODEL.md)
 30. [MIRACL·MrTidy·MLDR train-family specialist](docs/29_SIONIC_RETRIEVAL_FAMILY_ADAPTATION.md)
+31. [상위 모델 공식 근거 종합과 1×H100 최단 승리 레시피](docs/30_TOP_MODEL_RECIPE_SYNTHESIS.md)
 
 ## 실험 지도
 

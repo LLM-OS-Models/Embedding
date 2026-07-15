@@ -1,0 +1,211 @@
+{
+  "schema_version": "1.0.0",
+  "manifest_id": "comprehensive-korean-embedding-eval-assets-v1",
+  "as_of": "2026-07-15",
+  "cache_relative_path": ".cache/huggingface/comprehensive-eval-assets",
+  "policy": {
+    "usage": "evaluation_only",
+    "training_use": "forbidden",
+    "checkpoint_selection_on_final_test": "forbidden",
+    "blocklist_before_training": true,
+    "revision_policy": "Every snapshot is pinned to a full 40-character Hugging Face commit SHA.",
+    "license_notice": "License identifiers reproduce the pinned repository card or MTEB task metadata. They do not replace source-level rights, attribution, privacy, or redistribution review."
+  },
+  "contamination_grades": {
+    "low": "Released after the principal comparison-model cutoff; source overlap and near-duplicate audits are still required.",
+    "medium": "Public benchmark or corpus that may have appeared in model pretraining; use only as a regression/coverage evaluation.",
+    "high": "Known benchmark-family, source-family, or current-project training overlap; diagnostic evaluation only and never a clean claim."
+  },
+  "download_tiers": {
+    "small": "Download the complete pinned snapshot with --small.",
+    "metadata_first": "Download only README, queries, qrels, and metadata with --metadata; --all is required for the complete corpus."
+  },
+  "assets": [
+    {
+      "key": "xpqa",
+      "repo_id": "mteb/XPQARetrieval",
+      "revision": "fc4624be978945a0ceebbc4b85737258fe26330b",
+      "license": "cdla-sharing-1.0",
+      "license_evidence": "Pinned Hugging Face dataset card",
+      "purpose": "Korean monolingual and Korean-English/English-Korean product-QA retrieval regression.",
+      "usage_policy": "evaluation_only",
+      "contamination_grade": "medium",
+      "contamination_notes": "Human-annotated public ACL 2023 benchmark; possible pretraining exposure. Add every query and corpus text to the benchmark blocklist.",
+      "download_tier": "small"
+    },
+    {
+      "key": "flores_bitext",
+      "repo_id": "mteb/FloresBitextMining",
+      "revision": "2144d16cc15edd22d4a9237d12bff5f31f5c07fc",
+      "license": "cc-by-sa-4.0",
+      "license_evidence": "MTEB task metadata and upstream FLORES terms",
+      "purpose": "Korean multilingual bitext-mining and cross-lingual embedding regression across FLORES languages.",
+      "usage_policy": "evaluation_only",
+      "contamination_grade": "medium",
+      "contamination_notes": "Widely published 2022 benchmark and likely pretraining-visible. Treat Korean and all paired-language rows as blocked evaluation text.",
+      "download_tier": "small"
+    },
+    {
+      "key": "kor_sarcasm",
+      "repo_id": "mteb/kor_sarcasm",
+      "revision": "0e5e17b4dba569776e445f5639ba13dc406b2b0e",
+      "license": "mit",
+      "license_evidence": "MTEB KorSarcasmClassification.v2 task metadata; the pinned materialized dataset card omits a license field",
+      "purpose": "Korean social-text sarcasm classification regression using frozen embeddings.",
+      "usage_policy": "evaluation_only",
+      "contamination_grade": "medium",
+      "contamination_notes": "Public 2018-2019 Twitter-derived benchmark; likely web/pretraining exposure and unsuitable for a clean claim.",
+      "download_tier": "small"
+    },
+    {
+      "key": "kor_hate",
+      "repo_id": "mteb/kor_hate",
+      "revision": "5d64e6dcbe9204c934e9a3852b1130a6f2d51ad4",
+      "license": "cc-by-sa-4.0",
+      "license_evidence": "MTEB KorHateClassification.v2 task metadata; the pinned materialized dataset card omits a license field",
+      "purpose": "Korean toxic-speech classification regression using frozen embeddings.",
+      "usage_policy": "evaluation_only",
+      "contamination_grade": "medium",
+      "contamination_notes": "Public BEEP benchmark from 2018-2020 Korean news comments; possible pretraining and benchmark exposure.",
+      "download_tier": "small"
+    },
+    {
+      "key": "korfin_asc",
+      "repo_id": "amphora/korfin-asc",
+      "revision": "07cc4a29341ef26e8614ae1139847f4d4888727d",
+      "license": "cc-by-sa-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card and MTEB task metadata",
+      "purpose": "Korean finance aspect-sentiment classification coverage regression.",
+      "usage_policy": "evaluation_only_diagnostic",
+      "contamination_grade": "high",
+      "contamination_notes": "MTEB evaluates the training split and the data includes KLUE-TC and Naver Finance sources; the project already uses related KLUE/performance families.",
+      "download_tier": "small"
+    },
+    {
+      "key": "kor_hate_speech_ml",
+      "repo_id": "mteb/KorHateSpeechMLClassification",
+      "revision": "47cd2e61b64f2f11ccb006a579cda71318c6de9b",
+      "license": "cc-by-sa-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card and MTEB task metadata",
+      "purpose": "Fine-grained Korean multilabel hate-speech classification regression.",
+      "usage_policy": "evaluation_only",
+      "contamination_grade": "medium",
+      "contamination_notes": "Public K-MHaS/COLING 2022 benchmark built from 2018-2020 online news comments; possible pretraining exposure.",
+      "download_tier": "small"
+    },
+    {
+      "key": "kor_nli",
+      "repo_id": "kakaobrain/kor_nli",
+      "revision": "3e0e4626f66911b344c490c26e3cc07e6c3bb0f9",
+      "license": "cc-by-sa-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card",
+      "purpose": "Korean semantic-pair and NLI embedding regression, including the XNLI-derived evaluation split.",
+      "usage_policy": "evaluation_only_diagnostic",
+      "contamination_grade": "high",
+      "contamination_notes": "Translated SNLI/MultiNLI training data and public XNLI validation/test data are widely exposed benchmark families. Never report as clean zero-shot evidence.",
+      "download_tier": "small"
+    },
+    {
+      "key": "k_haters",
+      "repo_id": "humane-lab/K-HATERS",
+      "revision": "67b979254f2f5874f3c0f649e0db8ab33d038e0d",
+      "license": "cc-by-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card",
+      "purpose": "Large Korean offensiveness, target, and rationale classification coverage probe using frozen embeddings.",
+      "usage_policy": "evaluation_only",
+      "contamination_grade": "medium",
+      "contamination_notes": "Public EMNLP 2023 dataset of 2021 Korean news comments; possible pretraining exposure despite being additional to the current protocol.",
+      "download_tier": "small"
+    },
+    {
+      "key": "sds_kopub_vdr_t2it",
+      "repo_id": "mteb/SDSKoPubVDRT2ITRetrieval",
+      "revision": "208fb1837d6be4178059af397e5e8497fe83d220",
+      "license": "cc-by-sa-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card; constituent KOGL Type 1 and official legal-portal attribution still requires source-level review",
+      "purpose": "Recent Korean public-document text retrieval, page retrieval, OCR robustness, and long structured-document evaluation.",
+      "usage_policy": "final_evaluation_only",
+      "contamination_grade": "low",
+      "contamination_notes": "Released with a November 2025 paper and human-verified generated queries. Audit exact and near overlap against current legal/public training before calling it clean.",
+      "download_tier": "metadata_first",
+      "metadata_allow_patterns": [
+        "README.md",
+        "queries/**",
+        "qrels/**",
+        "metadata/**"
+      ]
+    },
+    {
+      "key": "kovidore_v2_cybersecurity",
+      "repo_id": "whybe-choi/kovidore-v2-cybersecurity-mteb",
+      "revision": "577d7c45f79d8eb4e7584db3990f91daa7e47956",
+      "license": "cc-by-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card; each underlying public report still requires source-level attribution and rights review",
+      "purpose": "Recent Korean cybersecurity document retrieval, multi-page reasoning, and image-to-markdown OCR robustness evaluation.",
+      "usage_policy": "final_evaluation_only",
+      "contamination_grade": "low",
+      "contamination_notes": "Released in January 2026 with generated queries, false-negative filtering, and human quality control. Audit source-document overlap before a clean claim.",
+      "download_tier": "metadata_first",
+      "metadata_allow_patterns": [
+        "README.md",
+        "queries/**",
+        "qrels/**",
+        "metadata/**"
+      ]
+    },
+    {
+      "key": "kovidore_v2_economic",
+      "repo_id": "whybe-choi/kovidore-v2-economic-mteb",
+      "revision": "0189c26211290a902cd9d41a0db932808a54c0a8",
+      "license": "cc-by-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card; each underlying public report still requires source-level attribution and rights review",
+      "purpose": "Recent Korean economic document retrieval, multi-page reasoning, and image-to-markdown OCR robustness evaluation.",
+      "usage_policy": "final_evaluation_only",
+      "contamination_grade": "low",
+      "contamination_notes": "Released in January 2026 with generated queries, false-negative filtering, and human quality control. Audit source-document overlap before a clean claim.",
+      "download_tier": "metadata_first",
+      "metadata_allow_patterns": [
+        "README.md",
+        "queries/**",
+        "qrels/**",
+        "metadata/**"
+      ]
+    },
+    {
+      "key": "kovidore_v2_energy",
+      "repo_id": "whybe-choi/kovidore-v2-energy-mteb",
+      "revision": "8c09a3d22b1fa3a7f5e815e9521da9b048754211",
+      "license": "cc-by-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card; each underlying public report still requires source-level attribution and rights review",
+      "purpose": "Recent Korean energy document retrieval, multi-page reasoning, and image-to-markdown OCR robustness evaluation.",
+      "usage_policy": "final_evaluation_only",
+      "contamination_grade": "low",
+      "contamination_notes": "Released in January 2026 with generated queries, false-negative filtering, and human quality control. Audit source-document overlap before a clean claim.",
+      "download_tier": "metadata_first",
+      "metadata_allow_patterns": [
+        "README.md",
+        "queries/**",
+        "qrels/**",
+        "metadata/**"
+      ]
+    },
+    {
+      "key": "kovidore_v2_hr",
+      "repo_id": "whybe-choi/kovidore-v2-hr-mteb",
+      "revision": "d9432c782a9a3e2eed064f6fac08b4c967d92b99",
+      "license": "cc-by-4.0",
+      "license_evidence": "Pinned Hugging Face dataset card; each underlying public report still requires source-level attribution and rights review",
+      "purpose": "Recent Korean human-resources document retrieval, multi-page reasoning, and image-to-markdown OCR robustness evaluation.",
+      "usage_policy": "final_evaluation_only",
+      "contamination_grade": "low",
+      "contamination_notes": "Released in January 2026 with generated queries, false-negative filtering, and human quality control. Audit source-document overlap before a clean claim.",
+      "download_tier": "metadata_first",
+      "metadata_allow_patterns": [
+        "README.md",
+        "queries/**",
+        "qrels/**",
+        "metadata/**"
+      ]
+    }
+  ]
+}
