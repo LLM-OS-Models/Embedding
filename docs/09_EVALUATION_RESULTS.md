@@ -55,6 +55,7 @@ backend를 분리 재실행했다.
 |---|---|---:|---:|---|
 | Qwen3-Embedding-8B | BF16 / SDPA | 2 | 0.82804 | `b0d48954263f14ae01658654a52d41984518f1f8908112b0d382905c65a0ef2c` |
 | Qwen3-Embedding-8B | BF16 / FA2 | 2 | 0.82776 | `9c46313e98222dfb4b550d56c8f9a9e3923f42496fed161f7f1e7016d69fb2d2` |
+| Comsat-embed-ko-8b-preview | BF16 / FA2 | 2 | **0.85222** | `1b5b371a5791fc6e32f99129696d782d22be3280f97682b7b56e3bc8d588a5ed` |
 | Qwen3-Embedding-8B | BF16 / FA2 | 192 | **0.82442** | `79a43fceba481cbf7067eed3c099cc019bf134cc67a5381fb876ae0edcef5681` |
 | Comsat-embed-ko-8b-preview | BF16 / FA2 | 192 | **0.85261** | `01a01b8c1cb263151f6fe01d309296b13eb3cc9be6ed90c61cc342182eac5c59` |
 
@@ -63,6 +64,10 @@ Qwen의 batch 2와 192 차이는 `-0.00334`이므로 BF16 retrieval 결과에서
 AutoRAG `fd7df84ac089bbec763b1c6bb1b56e985df5cc5c`, model revision은
 `1d8ad4ca9b3dd8059ad90a75d4983776a23d44af`로 동일하다. prompt도 최초 고정
 protocol의 `Query:` 뒤에 공백을 추가하지 않았다.
+
+Comsat batch-2 재실행은 과거 문서값 `0.85222`를 정확히 복구했다. Qwen batch-2
+FA2의 `+0.00011` 차이는 실질 차이로 취급하지 않는다. 이 결과로 legacy 수치의
+dataset/prompt parity는 복구됐지만, campaign 승패는 아래 고정 profile끼리만 정한다.
 
 이후 campaign 선택은 **BF16 + FA2 + batch 192 + max length 8192**끼리만 비교한다.
 과거 `0.82765`/`0.85222`는 legacy batch-2 parity로 보존하고 새 후보 선택에 사용하지
