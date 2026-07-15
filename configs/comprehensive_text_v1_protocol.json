@@ -1,0 +1,289 @@
+{
+  "schema_version": "1.0.0",
+  "protocol_id": "comprehensive-korean-text-v1-mteb-2.18.0",
+  "created_at": "2026-07-15",
+  "scope": "offline_text_only_diagnostic_evaluation",
+  "mteb_version": "2.18.0",
+  "mteb_git_revision": "193e3f66d2deac678065a43354c9c4efc57f507d",
+  "mteb_module_relative_path": "third_party/mteb/mteb/__init__.py",
+  "seed": 42,
+  "asset_manifest": {
+    "path": "configs/comprehensive_eval_assets.json",
+    "sha256": "197780353f54439f23f8cc070212267dbf9045389ea64ed8dd98e22a3e45d220",
+    "cache_relative_path": ".cache/huggingface/hub"
+  },
+  "offline_contract": {
+    "local_files_only": true,
+    "repository_local_hf_home": ".cache/huggingface",
+    "environment": {
+      "HF_HUB_OFFLINE": "1",
+      "HF_DATASETS_OFFLINE": "1",
+      "TRANSFORMERS_OFFLINE": "1",
+      "HF_HUB_DISABLE_TELEMETRY": "1"
+    }
+  },
+  "loader_contract": {
+    "allowed_modes": [
+      "sentence-transformer",
+      "registered-task-instruction",
+      "qwen3-task-instruction"
+    ],
+    "padding_side": "left",
+    "normalize_embeddings": true,
+    "similarity": "model_declared_cosine_compatible",
+    "resume": "mteb_result_cache_only_missing_with_optional_exact_embedding_cache"
+  },
+  "aggregate": {
+    "task_score": "unweighted_mean_of_selected_subset_main_scores",
+    "mean_task": "unweighted_mean_over_completed_task_scores",
+    "mean_task_type": "unweighted_mean_over_completed_task_type_means",
+    "claim_policy": "diagnostic_only_not_a_clean_or_visual_document_claim"
+  },
+  "explicit_exclusions": [
+    {
+      "asset_key": "k_haters",
+      "reason": "No supported registered MTEB 2.18.0 task; a separately reviewed custom protocol is required."
+    },
+    {
+      "asset_key": "sds_kopub_vdr_t2it",
+      "reason": "Visual-document/image retrieval is outside this text-only runner."
+    },
+    {
+      "asset_key": "kovidore_v2_cybersecurity",
+      "reason": "Visual-document/image retrieval is outside this text-only runner."
+    },
+    {
+      "asset_key": "kovidore_v2_economic",
+      "reason": "Visual-document/image retrieval is outside this text-only runner."
+    },
+    {
+      "asset_key": "kovidore_v2_energy",
+      "reason": "Visual-document/image retrieval is outside this text-only runner."
+    },
+    {
+      "asset_key": "kovidore_v2_hr",
+      "reason": "Visual-document/image retrieval is outside this text-only runner."
+    }
+  ],
+  "tasks": [
+    {
+      "asset_key": "xpqa",
+      "name": "XPQARetrieval",
+      "task_class": "mteb.tasks.retrieval.multilingual.xpqa_retrieval.XPQARetrieval",
+      "type": "Retrieval",
+      "split": "test",
+      "available_splits": ["test"],
+      "dataset": {
+        "path": "mteb/XPQARetrieval",
+        "revision": "fc4624be978945a0ceebbc4b85737258fe26330b"
+      },
+      "modalities": ["text"],
+      "category": "t2t",
+      "main_score": "ndcg_at_10",
+      "license": "cdla-sharing-1.0",
+      "task_prompt": null,
+      "instruction_fallback": "Retrieve text based on user query.",
+      "metadata_sha256": "bae2dc97ebe9f95b3d7040a12fac9e5770c436a3d191f090d3c576ea202dc059",
+      "registry_hf_subsets": {
+        "count": 36,
+        "ordered_sha256": "6bb7717fd09a2f1a83b1713a7eaaee335da7d35f39cb009afcae1996cfff5464"
+      },
+      "hf_subset_selection": {
+        "mode": "exact",
+        "values": ["kor-kor", "eng-kor", "kor-eng"],
+        "count": 3,
+        "ordered_sha256": "e0b76c82226b6e6c59a0d2d3f5f2de0ff0da3858c432e2aa4c61ccaffc51f8f9"
+      },
+      "contamination_grade": "medium",
+      "claim_policy": "diagnostic_regression_only"
+    },
+    {
+      "asset_key": "flores_bitext",
+      "name": "FloresBitextMining",
+      "task_class": "mteb.tasks.bitext_mining.multilingual.flores_bitext_mining.FloresBitextMining",
+      "type": "BitextMining",
+      "split": "devtest",
+      "available_splits": ["devtest"],
+      "dataset": {
+        "path": "mteb/FloresBitextMining",
+        "revision": "2144d16cc15edd22d4a9237d12bff5f31f5c07fc"
+      },
+      "modalities": ["text"],
+      "category": "t2t",
+      "main_score": "f1",
+      "license": "cc-by-sa-4.0",
+      "task_prompt": null,
+      "instruction_fallback": "Retrieve parallel sentences.",
+      "metadata_sha256": "1e78e46d71aecd8a546bbfcdca649f53c497f48b6ad2cf0c24afef1c3da6b170",
+      "registry_hf_subsets": {
+        "count": 41412,
+        "ordered_sha256": "a241d821cb27bea267dee8f77d70423f4d57bd05845865996026abf2e8a76d14"
+      },
+      "hf_subset_selection": {
+        "mode": "exact_component",
+        "separator": "-",
+        "component": "kor_Hang",
+        "count": 406,
+        "ordered_sha256": "88672edae582973cb0fbce70e8a277027d36ea00b083fa3bdba01d3188a9730b"
+      },
+      "contamination_grade": "medium",
+      "claim_policy": "diagnostic_regression_only"
+    },
+    {
+      "asset_key": "kor_sarcasm",
+      "name": "KorSarcasmClassification.v2",
+      "task_class": "mteb.tasks.classification.kor.kor_sarcasm_classification.KorSarcasmClassificationV2",
+      "type": "Classification",
+      "split": "test",
+      "available_splits": ["test"],
+      "dataset": {
+        "path": "mteb/kor_sarcasm",
+        "revision": "0e5e17b4dba569776e445f5639ba13dc406b2b0e"
+      },
+      "modalities": ["text"],
+      "category": "t2c",
+      "main_score": "accuracy",
+      "license": "mit",
+      "task_prompt": null,
+      "instruction_fallback": "Classify user passages.",
+      "metadata_sha256": "80f13a09acca174ce7091ea4b1d1cff31a811d4fd55c99923cc43c37fd888348",
+      "registry_hf_subsets": {
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "hf_subset_selection": {
+        "mode": "exact",
+        "values": ["default"],
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "contamination_grade": "medium",
+      "claim_policy": "diagnostic_regression_only"
+    },
+    {
+      "asset_key": "kor_hate",
+      "name": "KorHateClassification.v2",
+      "task_class": "mteb.tasks.classification.kor.kor_hate_classification.KorHateClassificationV2",
+      "type": "Classification",
+      "split": "test",
+      "available_splits": ["test"],
+      "dataset": {
+        "path": "mteb/kor_hate",
+        "revision": "5d64e6dcbe9204c934e9a3852b1130a6f2d51ad4"
+      },
+      "modalities": ["text"],
+      "category": "t2c",
+      "main_score": "accuracy",
+      "license": "cc-by-sa-4.0",
+      "task_prompt": null,
+      "instruction_fallback": "Classify user passages.",
+      "metadata_sha256": "5032051add54bba5853672e2b832350401d9bf9bf1cf542c695b5d820e584377",
+      "registry_hf_subsets": {
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "hf_subset_selection": {
+        "mode": "exact",
+        "values": ["default"],
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "contamination_grade": "medium",
+      "claim_policy": "diagnostic_regression_only"
+    },
+    {
+      "asset_key": "korfin_asc",
+      "name": "KorFin",
+      "task_class": "mteb.tasks.classification.kor.kor_fin.KorFin",
+      "type": "Classification",
+      "split": "train",
+      "available_splits": ["train"],
+      "dataset": {
+        "path": "amphora/korfin-asc",
+        "revision": "07cc4a29341ef26e8614ae1139847f4d4888727d"
+      },
+      "modalities": ["text"],
+      "category": "t2c",
+      "main_score": "accuracy",
+      "license": "cc-by-sa-4.0",
+      "task_prompt": null,
+      "instruction_fallback": "Classify user passages.",
+      "metadata_sha256": "a61a94e4a918e028c2ca4e4722ceb470313002e65ba1e4aa781e4842bb349396",
+      "registry_hf_subsets": {
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "hf_subset_selection": {
+        "mode": "exact",
+        "values": ["default"],
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "contamination_grade": "high",
+      "claim_policy": "diagnostic_only_training_split_evaluation"
+    },
+    {
+      "asset_key": "kor_hate_speech_ml",
+      "name": "KorHateSpeechMLClassification",
+      "task_class": "mteb.tasks.multilabel_classification.kor.kor_hate_speech_ml_classification.KorHateSpeechMLClassification",
+      "type": "MultilabelClassification",
+      "split": "test",
+      "available_splits": ["test"],
+      "dataset": {
+        "path": "mteb/KorHateSpeechMLClassification",
+        "revision": "47cd2e61b64f2f11ccb006a579cda71318c6de9b"
+      },
+      "modalities": ["text"],
+      "category": "t2c",
+      "main_score": "accuracy",
+      "license": "cc-by-sa-4.0",
+      "task_prompt": null,
+      "instruction_fallback": "Classify user passages.",
+      "metadata_sha256": "ee41f719a8090c16635583f3373601829cfe5d9f603f40b55657e31ffb830314",
+      "registry_hf_subsets": {
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "hf_subset_selection": {
+        "mode": "exact",
+        "values": ["default"],
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "contamination_grade": "medium",
+      "claim_policy": "diagnostic_regression_only"
+    },
+    {
+      "asset_key": "kor_nli",
+      "name": "KorNLI",
+      "task_class": "mteb.tasks.pair_classification.kor.kor_nli.KorNLI",
+      "type": "PairClassification",
+      "split": "test",
+      "available_splits": ["test"],
+      "dataset": {
+        "path": "kakaobrain/kor_nli",
+        "name": "xnli",
+        "revision": "3e0e4626f66911b344c490c26e3cc07e6c3bb0f9"
+      },
+      "modalities": ["text"],
+      "category": "t2t",
+      "main_score": "max_ap",
+      "license": "cc-by-sa-4.0",
+      "task_prompt": null,
+      "instruction_fallback": "Retrieve text that are semantically similar to the given text.",
+      "metadata_sha256": "3d9b44b911195b8fa58251c0f9dafca5c8e2c2c69f739bd32a8094e993d4720e",
+      "registry_hf_subsets": {
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "hf_subset_selection": {
+        "mode": "exact",
+        "values": ["default"],
+        "count": 1,
+        "ordered_sha256": "ed954e41fa3f395cec1efad3a62700fe6cef1c2e7f39e9ac3f32207ee2542fb2"
+      },
+      "contamination_grade": "high",
+      "claim_policy": "diagnostic_only_public_benchmark_family"
+    }
+  ]
+}
