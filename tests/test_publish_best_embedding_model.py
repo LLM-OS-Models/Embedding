@@ -6,14 +6,232 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
-from scripts.publish_best_embedding_model import training_dataset_repos
+from scripts.publish_best_embedding_model import (
+    require_remote_visibility,
+    training_dataset_repos,
+    upload_model_folder,
+    validate_public_release_approval,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublishBestModelTests(unittest.TestCase):
+    def test_private_candidate_does_not_require_release_approval(self) -> None:
+        args = SimpleNamespace(public=False)
+        result = validate_public_release_approval(
+            args=args,
+            model_evidence={"model": {"weights_sha256": "a" * 64}},
+            training={
+                "training_track": "performance-research",
+                "release_eligible": False,
+                "use_policy": "research-noncommercial",
+                "visibility": "private",
+            },
+            clean=None,
+            robustness=None,
+        )
+        self.assertIsNone(result)
+
+    def test_public_release_approval_is_rights_and_hash_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model_sha = "a" * 64
+            repo_id = "LLM-OS-Models/release-fixture"
+            paths = {
+                "training": root / "training.json",
+                "sionic9": root / "sionic.json",
+                "official_korean_v1": root / "official.json",
+                "clean": root / "clean.json",
+                "robustness": root / "robustness.json",
+                "approval": root / "approval.json",
+            }
+            training = {
+                "training_track": "rights-safe-release",
+                "release_eligible": True,
+                "use_policy": "public-release",
+                "visibility": "public",
+            }
+            summaries = {
+                "sionic9": {"protocol_id": "sionic9-fixed-prompt-v1"},
+                "official_korean_v1": {
+                    "protocol_id": "mteb-korean-v1-mteb-2.18.0"
+                },
+                "clean": {
+                    "protocol_id": "legal-source-document-heldout-i-v1"
+                },
+                "robustness": {
+                    "protocol_id": "legal-conversational-noise-i-v1"
+                },
+            }
+            paths["training"].write_text(json.dumps(training))
+            for label, payload in summaries.items():
+                paths[label].write_text(json.dumps(payload))
+
+            def file_sha(path: Path) -> str:
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+
+            approval = {
+                "schema_version": 1,
+                "artifact_type": "embedding-model-public-release-approval",
+                "approval_id": "release-fixture-v1",
+                "decision": "approved",
+                "approved_by": "release-reviewer",
+                "approved_at_utc": "2026-07-15T00:00:00+00:00",
+                "target": {"repo_id": repo_id, "visibility": "public"},
+                "model": {"weights_sha256": model_sha},
+                "training": {
+                    "track": "rights-safe-release",
+                    "manifest_sha256": file_sha(paths["training"]),
+                },
+                "rights_review": {
+                    "status": "approved",
+                    "release_eligible": True,
+                    "public_redistribution": True,
+                    "unresolved_blockers": [],
+                },
+                "evaluations": {
+                    label: {
+                        "status": "pass",
+                        "protocol_id": payload["protocol_id"],
+                        "summary_sha256": file_sha(paths[label]),
+                    }
+                    for label, payload in summaries.items()
+                },
+            }
+            paths["approval"].write_text(json.dumps(approval))
+            args = SimpleNamespace(
+                public=True,
+                clean_summary=paths["clean"],
+                robustness_summary=paths["robustness"],
+                release_approval=paths["approval"],
+                training_manifest=paths["training"],
+                sionic_summary=paths["sionic9"],
+                official_summary=paths["official_korean_v1"],
+                repo_id=repo_id,
+            )
+            validated = validate_public_release_approval(
+                args=args,
+                model_evidence={"model": {"weights_sha256": model_sha}},
+                training=training,
+                clean=summaries["clean"],
+                robustness=summaries["robustness"],
+            )
+            self.assertEqual(validated["approval_id"], "release-fixture-v1")
+
+            performance_training = {
+                **training,
+                "training_track": "performance-research",
+                "release_eligible": False,
+                "use_policy": "research-noncommercial",
+                "visibility": "private",
+            }
+            with self.assertRaisesRegex(ValueError, "training_manifest.training_track"):
+                validate_public_release_approval(
+                    args=args,
+                    model_evidence={"model": {"weights_sha256": model_sha}},
+                    training=performance_training,
+                    clean=summaries["clean"],
+                    robustness=summaries["robustness"],
+                )
+
+            with self.assertRaisesRegex(ValueError, "unresolved public release blockers"):
+                validate_public_release_approval(
+                    args=args,
+                    model_evidence={"model": {"weights_sha256": model_sha}},
+                    training={**training, "release_blockers": ["pending review"]},
+                    clean=summaries["clean"],
+                    robustness=summaries["robustness"],
+                )
+
+            paths["clean"].write_text('{"tampered":true}')
+            with self.assertRaisesRegex(ValueError, "does not match clean summary"):
+                validate_public_release_approval(
+                    args=args,
+                    model_evidence={"model": {"weights_sha256": model_sha}},
+                    training=training,
+                    clean=summaries["clean"],
+                    robustness=summaries["robustness"],
+                )
+
+    def test_remote_visibility_must_match_before_and_after_upload(self) -> None:
+        class FakeApi:
+            def __init__(self, visibility: list[object]):
+                self.visibility = iter(visibility)
+                self.upload_calls = 0
+
+            def create_repo(self, **_kwargs: object) -> None:
+                return None
+
+            def model_info(self, **_kwargs: object) -> SimpleNamespace:
+                return SimpleNamespace(private=next(self.visibility))
+
+            def upload_large_folder(self, **_kwargs: object) -> None:
+                self.upload_calls += 1
+
+        require_remote_visibility(FakeApi([True]), "org/private", public=False)
+        require_remote_visibility(FakeApi([False]), "org/public", public=True)
+        with self.assertRaisesRegex(RuntimeError, "not confirmed private"):
+            require_remote_visibility(FakeApi([False]), "org/public", public=False)
+        with self.assertRaisesRegex(RuntimeError, "not confirmed public"):
+            require_remote_visibility(FakeApi([True]), "org/private", public=True)
+        with self.assertRaisesRegex(RuntimeError, "not confirmed private"):
+            require_remote_visibility(FakeApi([None]), "org/unknown", public=False)
+
+        private_api = FakeApi([True, True])
+        upload_model_folder(
+            private_api,
+            repo_id="org/private",
+            model_dir=Path("fixture"),
+            public=False,
+        )
+        self.assertEqual(private_api.upload_calls, 1)
+
+        public_before_upload = FakeApi([False])
+        with self.assertRaisesRegex(RuntimeError, "not confirmed private"):
+            upload_model_folder(
+                public_before_upload,
+                repo_id="org/existing-public",
+                model_dir=Path("fixture"),
+                public=False,
+            )
+        self.assertEqual(public_before_upload.upload_calls, 0)
+
+        visibility_drift = FakeApi([True, False])
+        with self.assertRaisesRegex(RuntimeError, "not confirmed private"):
+            upload_model_folder(
+                visibility_drift,
+                repo_id="org/drifted",
+                model_dir=Path("fixture"),
+                public=False,
+            )
+        self.assertEqual(visibility_drift.upload_calls, 1)
+
+    def test_performance_queues_use_private_candidate_model_repositories(self) -> None:
+        queue_paths = [
+            ROOT / "scripts/run_post_training_eval_queue.sh",
+            ROOT / "scripts/run_scale_1m_queue.sh",
+            ROOT / "scripts/run_legal_adaptation_queue.sh",
+            ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+            ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ]
+        for path in queue_paths:
+            lines = path.read_text().splitlines()
+            publish_indexes = [
+                index
+                for index, line in enumerate(lines)
+                if "publish_best_embedding_model.py" in line
+            ]
+            self.assertTrue(publish_indexes, path)
+            for index in publish_indexes:
+                invocation = "\n".join(lines[index : index + 16])
+                self.assertIn("--upload", invocation, path)
+                self.assertNotIn("--public", invocation, path)
+            self.assertIn("private-candidate", "\n".join(lines), path)
+
     def test_pilot_card_links_published_hard_negative_dataset(self) -> None:
         self.assertEqual(
             training_dataset_repos(
@@ -157,6 +375,26 @@ class PublishBestModelTests(unittest.TestCase):
             )
             manifest = root / "manifest.json"
             manifest.write_text(json.dumps({"phase": "fixture", "built_rows": 10}))
+            public_attempt = subprocess.run(
+                [
+                    "python",
+                    str(ROOT / "scripts/publish_best_embedding_model.py"),
+                    "--model-dir",
+                    str(model),
+                    "--sionic-summary",
+                    str(sionic),
+                    "--official-summary",
+                    str(official),
+                    "--training-manifest",
+                    str(manifest),
+                    "--public",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(public_attempt.returncode, 0)
+            self.assertIn("Public release requires explicit evidence", public_attempt.stderr)
             subprocess.check_call(
                 [
                     "python",
@@ -253,6 +491,104 @@ class PublishBestModelTests(unittest.TestCase):
             )
             self.assertIn(
                 "conversational_noise_ranks.jsonl", robust_publication["evidence"]
+            )
+
+            release_repo = "LLM-OS-Models/release-fixture"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "phase": "fixture",
+                        "built_rows": 10,
+                        "training_track": "rights-safe-release",
+                        "release_eligible": True,
+                        "use_policy": "public-release",
+                        "visibility": "public",
+                    }
+                )
+            )
+
+            def file_sha(path: Path) -> str:
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+
+            release_approval = root / "release-approval.json"
+            release_approval.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "artifact_type": "embedding-model-public-release-approval",
+                        "approval_id": "release-fixture-v1",
+                        "decision": "approved",
+                        "approved_by": "release-reviewer",
+                        "approved_at_utc": "2026-07-15T00:00:00+00:00",
+                        "target": {
+                            "repo_id": release_repo,
+                            "visibility": "public",
+                        },
+                        "model": {"weights_sha256": model_sha},
+                        "training": {
+                            "track": "rights-safe-release",
+                            "manifest_sha256": file_sha(manifest),
+                        },
+                        "rights_review": {
+                            "status": "approved",
+                            "release_eligible": True,
+                            "public_redistribution": True,
+                            "unresolved_blockers": [],
+                        },
+                        "evaluations": {
+                            "sionic9": {
+                                "status": "pass",
+                                "protocol_id": "sionic9-fixed-prompt-v1",
+                                "summary_sha256": file_sha(sionic),
+                            },
+                            "official_korean_v1": {
+                                "status": "pass",
+                                "protocol_id": "mteb-korean-v1-mteb-2.18.0",
+                                "summary_sha256": file_sha(official),
+                            },
+                            "clean": {
+                                "status": "pass",
+                                "protocol_id": "legal-source-document-heldout-i-v1",
+                                "summary_sha256": file_sha(clean),
+                            },
+                            "robustness": {
+                                "status": "pass",
+                                "protocol_id": "legal-conversational-noise-i-v1",
+                                "summary_sha256": file_sha(robustness),
+                            },
+                        },
+                    }
+                )
+            )
+            subprocess.check_call(
+                [
+                    "python",
+                    str(ROOT / "scripts/publish_best_embedding_model.py"),
+                    "--model-dir",
+                    str(model),
+                    "--sionic-summary",
+                    str(sionic),
+                    "--official-summary",
+                    str(official),
+                    "--clean-summary",
+                    str(clean),
+                    "--robustness-summary",
+                    str(robustness),
+                    "--training-manifest",
+                    str(manifest),
+                    "--release-approval",
+                    str(release_approval),
+                    "--repo-id",
+                    release_repo,
+                    "--public",
+                ]
+            )
+            public_manifest = json.loads(
+                (model / "publication_manifest.json").read_text()
+            )
+            self.assertEqual(public_manifest["public_release_gate"]["status"], "pass")
+            self.assertIn(
+                "public_release_approval.json", public_manifest["evidence"]
             )
 
             (model / "merge_report.json").unlink()

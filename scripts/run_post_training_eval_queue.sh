@@ -215,7 +215,7 @@ if [[ -s "$SELECTION" ]]; then
     robustness_args=()
     [[ -s "$robustness_summary" ]] && \
       robustness_args+=(--robustness-summary "$robustness_summary")
-    if retry_stage "publish-best-public-model" 3 env HF_TOKEN="${HF_TOKEN:-}" \
+    if retry_stage "publish-best-private-candidate" 3 env HF_TOKEN="${HF_TOKEN:-}" \
       "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
       --model-dir "$best_abs" \
       --sionic-summary "$sionic_summary" \
@@ -223,12 +223,12 @@ if [[ -s "$SELECTION" ]]; then
       --training-manifest "$training_manifest" \
       "${clean_args[@]}" \
       "${robustness_args[@]}" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
-      --upload --public; then
+      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1-private-candidate \
+      --upload; then
       run_stage "record-pilot-best-result" \
         "$ROOT/scripts/commit_campaign_result.sh" \
         --stage pilot-best --model "$best_model" \
-        --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1 \
+        --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1-private-candidate \
         --sionic-summary "$sionic_summary" --official-summary "$official_summary"
     fi
   fi

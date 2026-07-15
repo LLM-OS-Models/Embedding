@@ -14,6 +14,8 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PUBLIC_RELEASE_APPROVAL_TYPE = "embedding-model-public-release-approval"
+RIGHTS_SAFE_TRAINING_TRACK = "rights-safe-release"
 SIONIC_ORDER = [
     "MIRACL",
     "MrTidy",
@@ -35,6 +37,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clean-summary", type=Path)
     parser.add_argument("--robustness-summary", type=Path)
     parser.add_argument("--training-manifest", type=Path, required=True)
+    parser.add_argument(
+        "--release-approval",
+        type=Path,
+        help="Machine-readable approval required for every public release.",
+    )
     parser.add_argument(
         "--repo-id", default="LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1"
     )
@@ -98,6 +105,173 @@ def resolved_local_model(value: Any) -> Path:
     if not path.exists():
         raise ValueError(f"Evaluation summary model is not a local artifact: {value}")
     return path.resolve()
+
+
+def validate_public_release_approval(
+    *,
+    args: argparse.Namespace,
+    model_evidence: dict[str, Any],
+    training: dict[str, Any],
+    clean: dict[str, Any] | None,
+    robustness: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Fail closed unless a public release is explicitly rights-approved.
+
+    Private candidate publication intentionally keeps the previous evidence
+    contract. Public visibility additionally requires a rights-safe training
+    manifest, complete clean/robustness results, and an approval artifact bound
+    to the exact model, target repo, manifest, and evaluation summaries.
+    """
+
+    if not args.public:
+        return None
+
+    missing_flags = [
+        flag
+        for flag, value in (
+            ("--clean-summary", args.clean_summary),
+            ("--robustness-summary", args.robustness_summary),
+            ("--release-approval", args.release_approval),
+        )
+        if value is None
+    ]
+    if missing_flags:
+        raise ValueError(
+            "Public release requires explicit evidence: " + ", ".join(missing_flags)
+        )
+    if clean is None or robustness is None:
+        raise ValueError("Public release requires validated clean and robustness results")
+
+    training_track = training.get("training_track")
+    if training_track != RIGHTS_SAFE_TRAINING_TRACK:
+        raise ValueError(
+            "Public release requires training_manifest.training_track="
+            f"{RIGHTS_SAFE_TRAINING_TRACK!r}"
+        )
+    if training.get("release_eligible") is not True:
+        raise ValueError(
+            "Public release requires training_manifest.release_eligible=true"
+        )
+    if training.get("release_blockers"):
+        raise ValueError("Training manifest has unresolved public release blockers")
+    if training.get("use_policy") in {
+        "research-noncommercial",
+        "noncommercial",
+        "research-only",
+    }:
+        raise ValueError("Non-commercial/research-only training manifests cannot be public")
+    if training.get("visibility") in {
+        "private",
+        "private-noncommercial-performance-track",
+    }:
+        raise ValueError("Private training manifests cannot be promoted to public")
+
+    approval_path = args.release_approval.resolve()
+    approval = read_json(approval_path)
+    if approval.get("schema_version") != 1:
+        raise ValueError("Unsupported public release approval schema")
+    if approval.get("artifact_type") != PUBLIC_RELEASE_APPROVAL_TYPE:
+        raise ValueError("Unexpected public release approval artifact type")
+    if approval.get("decision") != "approved":
+        raise ValueError("Public release approval decision is not approved")
+    for key in ("approval_id", "approved_by", "approved_at_utc"):
+        if not isinstance(approval.get(key), str) or not approval[key].strip():
+            raise ValueError(f"Public release approval has no non-empty {key}")
+
+    target = approval.get("target", {})
+    if target.get("repo_id") != args.repo_id or target.get("visibility") != "public":
+        raise ValueError("Public release approval target does not match the public repo")
+    model = approval.get("model", {})
+    if model.get("weights_sha256") != model_evidence.get("model", {}).get(
+        "weights_sha256"
+    ):
+        raise ValueError("Public release approval does not match model weights")
+    approved_training = approval.get("training", {})
+    if approved_training.get("track") != RIGHTS_SAFE_TRAINING_TRACK:
+        raise ValueError("Public release approval does not approve the rights-safe track")
+    if approved_training.get("manifest_sha256") != sha256(
+        args.training_manifest.resolve()
+    ):
+        raise ValueError("Public release approval does not match training manifest")
+    rights = approval.get("rights_review", {})
+    if (
+        rights.get("status") != "approved"
+        or rights.get("release_eligible") is not True
+        or rights.get("public_redistribution") is not True
+        or rights.get("unresolved_blockers") != []
+    ):
+        raise ValueError("Public release rights review did not approve redistribution")
+
+    evaluations = approval.get("evaluations", {})
+    expected_evaluations = {
+        "sionic9": (
+            "sionic9-fixed-prompt-v1",
+            args.sionic_summary.resolve(),
+        ),
+        "official_korean_v1": (
+            "mteb-korean-v1-mteb-2.18.0",
+            args.official_summary.resolve(),
+        ),
+        "clean": (
+            "legal-source-document-heldout-i-v1",
+            args.clean_summary.resolve(),
+        ),
+        "robustness": (
+            "legal-conversational-noise-i-v1",
+            args.robustness_summary.resolve(),
+        ),
+    }
+    for label, (protocol_id, summary_path) in expected_evaluations.items():
+        item = evaluations.get(label, {})
+        if item.get("status") != "pass":
+            raise ValueError(f"Public release approval has no passing {label} result")
+        if item.get("protocol_id") != protocol_id:
+            raise ValueError(f"Public release approval has unexpected {label} protocol")
+        if item.get("summary_sha256") != sha256(summary_path):
+            raise ValueError(
+                f"Public release approval does not match {label} summary"
+            )
+    return approval
+
+
+def require_remote_visibility(api: Any, repo_id: str, *, public: bool) -> None:
+    """Refuse uploads when the existing HF repository visibility drifts."""
+
+    try:
+        info = api.model_info(repo_id=repo_id)
+    except Exception as error:
+        raise RuntimeError(
+            f"Could not verify Hugging Face repository visibility ({type(error).__name__})"
+        ) from None
+    expected_private = not public
+    if getattr(info, "private", None) is not expected_private:
+        expected = "public" if public else "private"
+        raise RuntimeError(
+            f"Refusing upload because {repo_id} is not confirmed {expected}"
+        )
+
+
+def upload_model_folder(
+    api: Any, *, repo_id: str, model_dir: Path, public: bool
+) -> None:
+    """Create and upload only while the requested visibility is observed."""
+
+    api.create_repo(
+        repo_id=repo_id,
+        repo_type="model",
+        private=not public,
+        exist_ok=True,
+    )
+    require_remote_visibility(api, repo_id, public=public)
+    api.upload_large_folder(
+        repo_id=repo_id,
+        repo_type="model",
+        folder_path=model_dir,
+        private=not public,
+        num_workers=4,
+        print_report_every=60,
+    )
+    require_remote_visibility(api, repo_id, public=public)
 
 
 def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
@@ -230,7 +404,14 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     actual_model_sha = model_weights_sha256(model_dir)
     if model_evidence.get("model", {}).get("weights_sha256") != actual_model_sha:
         raise ValueError("Published model shards do not match model evidence")
-    return model_evidence, sionic, official, training, clean, robustness
+    approval = validate_public_release_approval(
+        args=args,
+        model_evidence=model_evidence,
+        training=training,
+        clean=clean,
+        robustness=robustness,
+    )
+    return model_evidence, sionic, official, training, clean, robustness, approval
 
 
 def is_full_update(evidence: dict[str, Any]) -> bool:
@@ -574,7 +755,7 @@ benchmark한다.
 
 def main() -> None:
     args = parse_args()
-    evidence, sionic, official, training, clean, robustness = validate(args)
+    evidence, sionic, official, training, clean, robustness, approval = validate(args)
     model_dir = args.model_dir.resolve()
     card = build_card(
         args.repo_id, evidence, sionic, official, training, clean, robustness
@@ -602,6 +783,10 @@ def main() -> None:
         robustness_ranks = args.robustness_summary.resolve().parent / "ranks.jsonl"
         if robustness_ranks.is_file():
             evidence_files["conversational_noise_ranks.jsonl"] = robustness_ranks
+    if approval is not None:
+        evidence_files["public_release_approval.json"] = (
+            args.release_approval.resolve()
+        )
     for name, source in evidence_files.items():
         shutil.copy2(source, evidence_dir / name)
     raw_evidence = {
@@ -631,6 +816,16 @@ def main() -> None:
         },
         "raw_evaluation_json": raw_evidence,
         "model_weights_evidence_sha256": evidence["model"]["weights_sha256"],
+        "public_release_gate": (
+            {
+                "status": "pass",
+                "approval_id": approval["approval_id"],
+                "training_track": RIGHTS_SAFE_TRAINING_TRACK,
+                "approval_sha256": sha256(args.release_approval.resolve()),
+            }
+            if approval is not None
+            else {"status": "not_requested", "visibility": "private"}
+        ),
     }
     (model_dir / "publication_manifest.json").write_text(
         json.dumps(publication_manifest, ensure_ascii=False, indent=2) + "\n",
@@ -646,6 +841,7 @@ def main() -> None:
         "visibility": "public" if args.public else "private",
         "upload_requested": args.upload,
         "validated": True,
+        "public_release_approved": approval is not None,
     }
     if args.upload:
         token = os.environ.get("HF_TOKEN")
@@ -654,19 +850,8 @@ def main() -> None:
         from huggingface_hub import HfApi
 
         api = HfApi(token=token)
-        api.create_repo(
-            repo_id=args.repo_id,
-            repo_type="model",
-            private=not args.public,
-            exist_ok=True,
-        )
-        api.upload_large_folder(
-            repo_id=args.repo_id,
-            repo_type="model",
-            folder_path=model_dir,
-            private=not args.public,
-            num_workers=4,
-            print_report_every=60,
+        upload_model_folder(
+            api, repo_id=args.repo_id, model_dir=model_dir, public=args.public
         )
         report["url"] = f"https://huggingface.co/{args.repo_id}"
     print(json.dumps(report, ensure_ascii=False, indent=2))

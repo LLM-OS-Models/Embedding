@@ -242,11 +242,11 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
     --training-manifest "$MANIFEST" \
-    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-sionic-combined-v1 \
-    --upload --public; then
+    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
+    --upload; then
     run_stage record-combined-result "$ROOT/scripts/commit_campaign_result.sh" \
       --stage sionic-combined --model "$MODEL_REL" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-sionic-combined-v1 \
+      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi

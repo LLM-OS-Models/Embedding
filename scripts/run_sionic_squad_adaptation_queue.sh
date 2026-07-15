@@ -27,6 +27,7 @@ TARGET_SOURCE_DATASET="${TARGET_SOURCE_DATASET:-LLM-OS-Models/korean-embedding-p
 DERIVED_REPO="${DERIVED_REPO:-LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1}"
 DERIVED_TITLE="${DERIVED_TITLE:-Korean Sionic SQuAD Quantile HN7 with General Replay}"
 MODEL_REPO="${MODEL_REPO:-LLM-OS-Models/qwen3-embedding-8b-ko-sionic-squad-target-adapted-v1}"
+PRIVATE_MODEL_REPO="${PRIVATE_MODEL_REPO:-${MODEL_REPO}-private-candidate}"
 CAMPAIGN_STAGE="${CAMPAIGN_STAGE:-sionic-squad-target}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-${TARGET_KIND}-adaptation-20260712}"
 DATA_DIR="$ROOT/$TARGET_DATA_REL"
@@ -314,11 +315,11 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
     --training-manifest "$CURRICULUM_MANIFEST" \
-    --repo-id "$MODEL_REPO" \
-    --upload --public; then
+    --repo-id "$PRIVATE_MODEL_REPO" \
+    --upload; then
     run_stage "record-${TARGET_KIND}-target-result" "$ROOT/scripts/commit_campaign_result.sh" \
       --stage "$CAMPAIGN_STAGE" --model "$MODEL_REL" \
-      --repo-id "$MODEL_REPO" \
+      --repo-id "$PRIVATE_MODEL_REPO" \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi

@@ -301,12 +301,12 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
     "${clean_args[@]}" \
     "${robustness_args[@]}" \
-    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
-    --upload --public; then
+    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1-private-candidate \
+    --upload; then
     run_stage record-legal-replay-result \
       "$ROOT/scripts/commit_campaign_result.sh" \
       --stage legal-replay --model "$MODEL_REL" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1 \
+      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1-private-candidate \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi
