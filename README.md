@@ -1,14 +1,18 @@
 # Korean Embedding Lab
 
-한국어 검색 임베딩 모델을 연구하고, `sionic-ai/comsat-embed-ko-8b-preview`를 넘는 데서
-멈추지 않고 **한국어 검색·의미·긴 문맥·강건성·다국어·효율을 함께 보는 종합 최고
-모델**을 오염 없이 재현 가능하게 만드는 작업 공간입니다.
+한국어 검색 임베딩 모델을 연구하되 `sionic-ai/comsat-embed-ko-8b-preview`나 Sionic 한
+보드를 넘는 데서 멈추지 않고, **Korean retrieval·broad text·다국어·긴 문맥/context·
+noise 강건성·효율을 함께 보는 실용적 종합 최고 모델**을 재현 가능하게 만드는 작업
+공간입니다. 실질적으로 미미한 차이는 near-tie로 취급하고 실패 축과 오염을 숨기지
+않습니다.
 
 기준일: **2026-07-15 (Asia/Seoul)**
 
 ## 한 줄 결론
 
 - 현재 최적화 우선순위는 **clean 종합 보드 → Sionic retrieval 9종 → 공식 MTEB Korean v1**이며, 공개 후보는 성능뿐 아니라 데이터·가중치 권리와 배포 가능성까지 통과해야 합니다.
+- 현재 valid performance candidate는 **0개**입니다. 오염을 제거한 199,904-row 200K LoRA r64가 3,123-step production 학습 중이지만 아직 성능 후보나 우위 결과가 아닙니다.
+- checkpoint는 public score가 아니라 Grade-I clean retrieval에서 먼저 고르며 NDCG@10 차이 `0.002` 이하는 near-tie로 처리합니다. Sionic 9와 공식 Korean 6은 local winner에 final-once로 실행합니다.
 - Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
 - Comsat의 `0.7930`은 일반 MTEB SOTA가 아니라, 자체 선택한 한국어 retrieval 9종의 macro `NDCG@10`입니다. Qwen3-Embedding-8B 대비 차이는 `+0.0105`입니다.
 - 가장 직접적인 학습법은 raw-text LM CPT가 아니라 `query / positive / hard negatives`를 이용한 **continued contrastive fine-tuning(InfoNCE)** 입니다.
@@ -66,6 +70,8 @@ row는 101개였다.
 | 우리 release candidate | 예정 | 예정 | 예정 | 예정 | 예정 | 권리 확인 데이터로 학습 예정 |
 
 종합 보드는 clean retrieval, STS/분류, 긴 문맥의 evidence 위치, OCR·띄어쓰기·질의체 변화, 처리량·VRAM·차원/저장비용을 각각 보고합니다. 설계와 승격 기준은 [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md)에 고정합니다.
+현재 candidate 상태, Grade-I-not-Z 선택, public final-once와 7-task/414-subset diagnostic의
+정확한 역할은 [종합 최고 모델 선택·평가 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md)에 고정합니다.
 
 #### Clean 법률 source-held-out 10K 실측
 
@@ -107,7 +113,11 @@ row는 101개였다.
 | Clean 법률 retrieval 10K | training document overlap 0, benchmark exact overlap 0, 독립 verifier pass | [`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0) |
 | 대화형 noise robustness | prompt on/off × noise 0/1/5%, exact rank·cache·모델 카드 자동화; baseline 실행 대기 | [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md) |
 | 200K 학습 backend | exact homogeneous-order 5+5-step: SDPA 11.90, FA2 11.53 s/step(1.0321x); 미미한 차이라 FA2 탈락, exact 검증된 빠른 runtime+SDPA 선택 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
-| 200K LoRA r64 production | 2026-07-15 18:46 KST 시작; 199,904행·3,123 step, early loss/grad finite, H100 100%·약 72.4GiB 사용; step-250부터 private checkpoint 자동 검증·업로드 | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
+| 200K LoRA r64 production | 2026-07-15 18:46 KST 시작; train SHA `8e2731…5e3c`, actual microbatch 16·accumulation 4, BF16 SDPA, 199,904행·3,123 step; early loss/grad finite는 runtime 건강성일 뿐 성능 주장이 아님 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
+| private checkpoint watcher | step-250부터 same-step eval·전체 adapter finite gate를 통과한 allowlist 3파일만 private 증분 업로드; checkpoint 업로드는 성능 승격이 아님 | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
+| clean-first model selection | valid performance candidate 0; Grade-I-not-Z 법률 10K 우선, clean/robustness epsilon `0.002`, public Sionic/official score는 selector 입력에서 제외 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
+| text-only comprehensive diagnostic | 7 tasks·414 selected subsets; K-HATERS는 unsupported registered task, visual-document 5 assets는 modality 불일치로 명시 제외; public medium/high contamination diagnostic | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
+| Qwen3 reranker teacher scorer | `Qwen3-Reranker-8B@77d193c`; official yes/no logits, 실제 model microbatch 8, 5개 약 16GB LFS content SHA 전수 검증 후 local-only load; 아직 score/KD 성능 결과 없음 | [teacher scorer](experiments/030_teacher_distillation/) |
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |
@@ -149,6 +159,7 @@ row는 101개였다.
 31. [상위 모델 공식 근거 종합과 1×H100 최단 승리 레시피](docs/30_TOP_MODEL_RECIPE_SYNTHESIS.md)
 32. [200K private checkpoint 증분 업로드 watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md)
 33. [Qwen reranker teacher와 금융·시간성 추가 데이터](docs/32_NEXT_STAGE_TEACHER_AND_DATA.md)
+34. [종합 최고 모델 선택·평가 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md)
 
 ## 실험 지도
 
@@ -172,9 +183,10 @@ row는 101개였다.
 
 ## 원칙
 
-- 공개 test 점수를 반복해서 보고 checkpoint를 고르지 않습니다.
+- 공개 test 점수를 반복해서 보고 checkpoint를 고르지 않습니다. Grade-I clean/robustness로 먼저 고른 한 winner에 Sionic 9와 공식 Korean 6을 final-once 실행합니다.
+- 비교 가능한 clean NDCG@10 절대 차이 `0.002` 이하는 실질적 near-tie로 보고, 그 안에서는 worst-condition robustness와 noise intrusion을 우선합니다.
 - 모든 데이터 행에 `source`, `revision/date`, `license`, `sha256`, `generator`, `prompt_version`을 남깁니다.
-- 공개 9개 benchmark의 query, qrel, corpus 및 near-duplicate를 차단한 `clean-zero-shot` 결과를 주 결과로 냅니다.
+- 현재 자체 법률 holdout은 같은 repository 안에서 source document를 분리한 Grade I이며, Grade Z 또는 `clean-zero-shot`으로 부르지 않습니다. 공개 benchmark exact blocklist와 추가 near-duplicate 감사 결과는 분리해 보고합니다.
 - benchmark train split을 쓰는 별도 실험은 `supervised/in-domain`으로 명시합니다.
 - 평균 점수뿐 아니라 per-task 변화, bootstrap confidence interval, 원 Qwen 다국어 성능 회귀, 속도/메모리를 함께 봅니다.
 
