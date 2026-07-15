@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "manifest_id": "comprehensive-korean-embedding-eval-assets-v1",
   "as_of": "2026-07-15",
-  "cache_relative_path": ".cache/huggingface/comprehensive-eval-assets",
+  "cache_relative_path": ".cache/huggingface/hub",
   "policy": {
     "usage": "evaluation_only",
     "training_use": "forbidden",

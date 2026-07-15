@@ -43,12 +43,22 @@ train-family 노출이 있으므로 clean zero-shot이 아니라 `performance ta
 
 장기 200K run부터는 FA2를 무조건 사용하지 않는다. 동일 H100·격리 환경·320행
 subset에서 실제 8B LoRA forward/backward를 backend별 5-step 측정한 2026-07-15
-admission은 SDPA `29.30 s/step`, FA2 `27.10 s/step`(**1.08118x**)으로 1.05배
-기준을 통과했다. 이 고정 data/backend lineage에서만 FA2로 전환하고, 실패하거나
-느리거나 계약이 달라지면 SDPA로 즉시 fallback한다.
+기존 측정은 SDPA `29.30 s/step`, FA2 `27.10 s/step`(**1.08118x**)이었다. 그러나
+해당 probe는 ms-swift의 `dataset_shuffle=true` 기본값을 끄지 않아 source-homogeneous
+row order를 보존하지 못했고 workload/runtime schema도 없었다. 따라서 숫자는 진단
+기록으로만 남기며 production admission으로 재사용하지 않는다.
+
+새 admission은 `dataset_shuffle=false`, `train_dataloader_shuffle=false`,
+`strict=true`인 exact trainer input으로 다시 실행한다. report에는 train SHA,
+batch, accumulation, max length, LoRA rank/alpha/dropout, dtype, HN 수, base
+model/revision 또는 local artifact fingerprint, FA2 backend와 Python/Torch/CUDA/GPU/
+flash-attn/ms-swift/Transformers fingerprint를 기록한다. 현재 runtime에서 이 계약과
+두 SHA가 모두 일치할 때만 FA2로 전환하고, 실패하거나 계약이 달라지면 SDPA로 즉시
+fallback한다.
 vLLM pooling은 평가·서빙 backend이며 gradient 학습 가속 경로로 사용하지 않는다.
-1M queue는 동일 batch/length의 200K admission 결과를 재사용한다. 결과가 없을 때만
-1M exact trainer input으로 같은 5-step gate를 한 번 실행한다.
+1M, 법률, Sionic domain, combined queue는 200K report를 재사용하지 않는다. primary와
+OOM fallback도 batch/accumulation이 다르므로 각 base·data·길이·HN 조합의 맞춤
+5-step gate를 실행한다. 맞춤 probe가 없거나 실패하면 해당 attempt만 SDPA를 쓴다.
 
 ## 학습
 

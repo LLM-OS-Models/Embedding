@@ -3,6 +3,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+source "$ROOT/scripts/backend_admission.sh"
 cd "$ROOT"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-combined-adaptation-20260712}"
 OUT_DIR="$ROOT/outputs/data/sionic-combined-target-v1"
@@ -149,21 +150,24 @@ fi
 [[ -s "$BASE_MODEL/merge_report.json" && -s "$VAL_FILE" ]] || exit 4
 MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$MANIFEST")"
 
-TRAIN_ENV="$ROOT/.venv-train"
-TRAIN_ATTN=sdpa
-FA2_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
-if [[ -s "$FA2_ADMISSION" ]] && jq -e '.admitted == true' "$FA2_ADMISSION" >/dev/null; then
-  TRAIN_ENV="$ROOT/.venv-train-fa2"
-  TRAIN_ATTN=flash_attention_2
-fi
-echo "[$(timestamp)] combined training backend=$TRAIN_ATTN env=$TRAIN_ENV admission=$FA2_ADMISSION"
 train_combined() {
   local name="$1" batch="$2" accum="$3"
-  run_stage "train-$name" env TRAIN_ENV="$TRAIN_ENV" ATTN_IMPL="$TRAIN_ATTN" \
+  local train_env="$ROOT/.venv-train" train_attn=sdpa admission_report
+  local admission_key="sionic-combined-lora-r64-b${batch}-a${accum}-m512-hn7"
+  if embedding_select_fa2_backend "$CURRICULUM" "$admission_key" \
+      "$batch" "$accum" 512 64 128 bfloat16 "$BASE_MODEL" "" 7 .05; then
+    train_env="$BACKEND_ADMISSION_ENV"
+    train_attn="$BACKEND_ADMISSION_ATTN"
+  fi
+  admission_report="$BACKEND_ADMISSION_REPORT"
+  echo "[$(timestamp)] combined training backend=$train_attn env=$train_env admission=$admission_report"
+  run_stage "train-$name" env TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
-    TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=5e-6 WARMUP_RATIO=.05 \
+    MAX_LENGTH=512 LORA_RANK=64 LORA_ALPHA=128 LORA_DROPOUT=.05 \
+    DATASET_SHUFFLE=false TRAIN_DATALOADER_SHUFFLE=false \
+    LEARNING_RATE=5e-6 WARMUP_RATIO=.05 \
     INFONCE_HARD_NEGATIVES=7 BASE_MODEL="$BASE_MODEL" BASE_REVISION= \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }

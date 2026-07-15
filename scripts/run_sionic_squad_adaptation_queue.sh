@@ -7,6 +7,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+source "$ROOT/scripts/backend_admission.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 TARGET_KIND="${TARGET_KIND:-squad}"
@@ -211,24 +212,27 @@ run_stage "audit-${TARGET_KIND}50-general50-benchmark-overlap" \
 
 MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$CURRICULUM_MANIFEST")"
 (( MAX_STEPS > 0 )) || exit 6
-TRAIN_ENV="$ROOT/.venv-train"
-TRAIN_ATTN=sdpa
-FA2_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
-if [[ -s "$FA2_ADMISSION" ]] && jq -e '.admitted == true' "$FA2_ADMISSION" >/dev/null; then
-  TRAIN_ENV="$ROOT/.venv-train-fa2"
-  TRAIN_ATTN=flash_attention_2
-fi
-echo "[$(timestamp)] ${TARGET_KIND} training backend=$TRAIN_ATTN env=$TRAIN_ENV admission=$FA2_ADMISSION"
-
 train_target() {
   local output_name="$1" batch="$2" accum="$3"
-  run_stage "train-$output_name" env TRAIN_ENV="$TRAIN_ENV" ATTN_IMPL="$TRAIN_ATTN" \
+  local train_env="$ROOT/.venv-train" train_attn=sdpa admission_report
+  local admission_key="sionic-${TARGET_KIND}-lora-r64-b${batch}-a${accum}-m${TARGET_MAX_LENGTH}-hn7"
+  if embedding_select_fa2_backend "$CURRICULUM" "$admission_key" \
+      "$batch" "$accum" "$TARGET_MAX_LENGTH" 64 128 bfloat16 \
+      "$MINING_MODEL" "$MINING_REVISION" 7 .05; then
+    train_env="$BACKEND_ADMISSION_ENV"
+    train_attn="$BACKEND_ADMISSION_ATTN"
+  fi
+  admission_report="$BACKEND_ADMISSION_REPORT"
+  echo "[$(timestamp)] ${TARGET_KIND} training backend=$train_attn env=$train_env admission=$admission_report"
+  run_stage "train-$output_name" env TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$output_name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=125 SAVE_STEPS=125 SAVE_TOTAL_LIMIT=3 \
     MAX_LENGTH="$TARGET_MAX_LENGTH" \
     EVAL_BATCH_SIZE="$TARGET_EVAL_BATCH_SIZE" \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
-    TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=5e-6 WARMUP_RATIO=.05 \
+    LORA_RANK=64 LORA_ALPHA=128 LORA_DROPOUT=.05 \
+    DATASET_SHUFFLE=false TRAIN_DATALOADER_SHUFFLE=false \
+    LEARNING_RATE=5e-6 WARMUP_RATIO=.05 \
     INFONCE_HARD_NEGATIVES=7 BASE_MODEL="$MINING_MODEL" \
     BASE_REVISION="$MINING_REVISION" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"

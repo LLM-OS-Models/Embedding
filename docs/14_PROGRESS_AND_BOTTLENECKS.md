@@ -221,14 +221,25 @@ F2는 45M example full FT 선례지만 우리 budget과 base는 다르다. stand
 
 200K LoRA 시작 직전 `admit_fa2_lora_backend.sh`가 동일 8B/r64/batch16/512 설정으로
 SDPA와 FA2를 같은 격리 환경·같은 320행 subset에서 각각 5 optimizer-step 실제
-backward했다. 2026-07-15 실측은 SDPA `29.30 s/step`, FA2 `27.10 s/step`으로
-**1.08118배**였고, peak도 `63.44 GiB`에서 `61.52 GiB`로 줄어 1.05배 입장 기준을
-통과했다. subset train SHA-256은 `155ce90a20fb9f4dacce3244a43962bd9a96f8fc765365d54295d16f2cc503b9`다.
-이제 `.venv-train-fa2`와 `flash_attention_2`를 채택한다. import 성공만으로 승격하지
-않으며, data/backend 계약 변경·OOM·API 오류·속도 역전·로그 파싱 실패는 모두
-`.venv-train + sdpa`로 자동 fallback한다.
-1M, SQuAD/health/AutoRAG, legal, combined 장기 queue도 이 동일 admission JSON을
-재사용해 import-only 1-step probe를 반복하지 않는다.
+backward했다. 최초 실측은 SDPA `29.30 s/step`, FA2 `27.10 s/step`으로
+**1.08118배**였고 peak도 `63.44 GiB`에서 `61.52 GiB`로 줄었다. 그러나 이 실행은
+ms-swift의 별도 `dataset_shuffle=true` 기본값을 끄지 않아 source-homogeneous order를
+보존하지 못했다. 수치와 log는 진단 기록으로 남기되 report를 `admitted=false`로
+무효화했다.
+
+새 입장은 dataset·sampler shuffle=false, strict=true, exact train/base/batch/accum/
+length/LoRA/HN/runtime fingerprint가 모두 맞는 5+5-step 측정만 허용한다. import
+성공만으로 승격하지 않으며, 계약 변경·OOM·API 오류·속도 역전·로그 파싱 실패는
+`.venv-train + sdpa`로 자동 fallback한다. 1M, SQuAD/health/AutoRAG, legal,
+combined와 각 OOM fallback도 200K report를 재사용하지 않고 자기 exact workload로
+별도 probe한다.
+
+2026-07-15 첫 200K launch preflight는 optimizer step 0 전에 중단했다. ms-swift의
+`dataset_shuffle` 기본값이 `true`라 `train_dataloader_shuffle=false`만으로는 이미 만든
+source-homogeneous 16행 묶음이 보존되지 않는 것을 args log에서 확인했기 때문이다.
+production run은 두 shuffle을 모두 `false`로 고정하고 `strict=true`로 encode 오류 시
+임의 대체 대신 fail-closed한다. 이 설정을 포함하지 않은 backend probe도 승격 근거로
+재사용하지 않는다.
 
 10K FP32 safe-merge를 50K GPU 학습과 CPU에서 병렬 실행하는 시도는 중단했다. 35GB
 RSS와 약 9.7 CPU-core를 지속 사용하면서 step 760 validation이 평소 약 4 it/s에서

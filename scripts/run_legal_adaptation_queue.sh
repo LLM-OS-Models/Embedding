@@ -3,6 +3,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+source "$ROOT/scripts/backend_admission.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/legal-adaptation-20260711}"
@@ -40,11 +41,6 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
 FAISS_THREADS="${FAISS_THREADS:-$EFFECTIVE_CPU_COUNT}"
-if "$ROOT/.venv-train/bin/python" -c 'import flash_attn' >/dev/null 2>&1; then
-  export ATTN_IMPL=flash_attention_2
-else
-  export ATTN_IMPL=sdpa
-fi
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 run_stage() {
@@ -194,23 +190,25 @@ run_stage validate-legal-mined-data \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
   "$CURRICULUM" "$VAL_FILE" || exit 6
 
-LEGAL_TRAIN_ENV="$ROOT/.venv-train"
-LEGAL_TRAIN_ATTN=sdpa
-FA2_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
-if [[ -s "$FA2_ADMISSION" ]] && jq -e '.admitted == true' "$FA2_ADMISSION" >/dev/null; then
-  LEGAL_TRAIN_ENV="$ROOT/.venv-train-fa2"
-  LEGAL_TRAIN_ATTN=flash_attention_2
-fi
-echo "[$(timestamp)] legal training backend=$LEGAL_TRAIN_ATTN env=$LEGAL_TRAIN_ENV admission=$FA2_ADMISSION"
-
 train_legal() {
   local output_name="$1" batch="$2" accum="$3"
+  local train_env="$ROOT/.venv-train" train_attn=sdpa admission_report
+  local admission_key="legal-lora-r64-b${batch}-a${accum}-m512-hn7"
+  if embedding_select_fa2_backend "$CURRICULUM" "$admission_key" \
+      "$batch" "$accum" 512 64 128 bfloat16 \
+      "$MINING_MODEL" "$MINING_REVISION" 7 .05; then
+    train_env="$BACKEND_ADMISSION_ENV"
+    train_attn="$BACKEND_ADMISSION_ATTN"
+  fi
+  admission_report="$BACKEND_ADMISSION_REPORT"
+  echo "[$(timestamp)] legal training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$output_name" env \
-    TRAIN_ENV="$LEGAL_TRAIN_ENV" ATTN_IMPL="$LEGAL_TRAIN_ATTN" \
+    TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$output_name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
-    TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=1e-5 \
+    MAX_LENGTH=512 LORA_RANK=64 LORA_ALPHA=128 LORA_DROPOUT=.05 \
+    DATASET_SHUFFLE=false TRAIN_DATALOADER_SHUFFLE=false LEARNING_RATE=1e-5 \
     INFONCE_HARD_NEGATIVES=7 \
     BASE_MODEL="$MINING_MODEL" BASE_REVISION="$MINING_REVISION" \
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"

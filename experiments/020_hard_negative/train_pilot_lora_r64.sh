@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+source "$ROOT/scripts/backend_admission.sh"
 TRAIN_ENV="${TRAIN_ENV:-$ROOT/.venv-train}"
 DATA_DIR="${DATA_DIR:-$ROOT/data/processed/ko_triplet_pilot_10k}"
 TRAIN_FILE="${TRAIN_FILE:-$DATA_DIR/train.hn-qwen3-r095-n4.jsonl}"
@@ -11,27 +12,6 @@ RUN_NAME="${RUN_NAME:-qwen3-embedding-8b-ko-hn10k-lora-r64}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
 BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
-
-# A real 8B backward probe, not an import check, decides whether the long
-# 200K run may switch to the isolated FA2 environment. The short probe keeps
-# the known SDPA path as an automatic fallback when FA2 fails or is slower.
-if [[ "$RUN_NAME" == *performance200k* \
-    && "${AUTO_SELECT_FA2:-1}" == 1 \
-    && "${TRAIN_ENV}" == "$ROOT/.venv-train" ]]; then
-  if TRAIN_FILE="$TRAIN_FILE" \
-      "$ROOT/experiments/070_tuning_strategy/admit_fa2_lora_backend.sh"; then
-    TRAIN_ENV="$ROOT/.venv-train-fa2"
-    ATTN_IMPL=flash_attention_2
-    echo "FA2 backend admitted by real 8B backward throughput gate" >&2
-  else
-    ATTN_IMPL=sdpa
-    echo "FA2 backend rejected; using verified SDPA fallback" >&2
-  fi
-fi
-
-if [[ "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
-  embedding_enable_torch25_swift_compat
-fi
 
 # Promote the 50K model into the 200K curriculum only when its held-out loss
 # actually beats the 10K hard-negative pilot. Dataset scale alone is not a
@@ -91,6 +71,57 @@ export INFONCE_FAKE_NEG_MARGIN="${INFONCE_FAKE_NEG_MARGIN:-0.1}"
 export INFONCE_INCLUDE_QQ="${INFONCE_INCLUDE_QQ:-false}"
 export INFONCE_INCLUDE_DD="${INFONCE_INCLUDE_DD:-false}"
 
+# A real matched backward probe admits FA2 only for the exact base, data,
+# batch/accumulation, length, LoRA, dtype, and runtime contract.  Admission is
+# intentionally after continual-base selection so a Qwen-base probe cannot be
+# reused for a promoted local base.  Dataset and DataLoader shuffle must both
+# stay off or source-homogeneous microbatches are destroyed before training.
+if [[ "$RUN_NAME" == *performance200k* && "${AUTO_SELECT_FA2:-1}" == 1 ]]; then
+  if [[ "${DATASET_SHUFFLE:-${TRAIN_DATALOADER_SHUFFLE:-true}}" != false \
+      || "${TRAIN_DATALOADER_SHUFFLE:-true}" != false ]]; then
+    echo "performance200k requires dataset_shuffle=false and train_dataloader_shuffle=false" >&2
+    exit 2
+  fi
+  admission_key=performance200k-lora-r64
+  if [[ "${TRAIN_BATCH_SIZE:-16}:${GRAD_ACCUM_STEPS:-4}:${MAX_LENGTH:-512}" \
+      != "16:4:512" ]]; then
+    admission_key="performance200k-lora-r64-b${TRAIN_BATCH_SIZE:-16}-a${GRAD_ACCUM_STEPS:-4}-m${MAX_LENGTH:-512}"
+  fi
+  if embedding_select_fa2_backend "$TRAIN_FILE" "$admission_key" \
+      "${TRAIN_BATCH_SIZE:-16}" "${GRAD_ACCUM_STEPS:-4}" \
+      "${MAX_LENGTH:-512}" "${LORA_RANK:-64}" "${LORA_ALPHA:-128}" \
+      bfloat16 "$BASE_MODEL" "$BASE_REVISION" \
+      "$INFONCE_HARD_NEGATIVES" "${LORA_DROPOUT:-0.05}"; then
+    TRAIN_ENV="$BACKEND_ADMISSION_ENV"
+    ATTN_IMPL="$BACKEND_ADMISSION_ATTN"
+    echo "FA2 backend admitted for exact performance200k workload" >&2
+  else
+    TRAIN_ENV="$ROOT/.venv-train"
+    ATTN_IMPL=sdpa
+    echo "FA2 backend rejected; using SDPA fallback" >&2
+  fi
+fi
+
+if [[ "${ATTN_IMPL:-sdpa}" == flash_attention_2 \
+    || "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
+  if [[ "${DATASET_SHUFFLE:-${TRAIN_DATALOADER_SHUFFLE:-true}}" != false \
+      || "${TRAIN_DATALOADER_SHUFFLE:-true}" != false \
+      || -z "${BACKEND_ADMISSION_VERIFIED_REPORT:-}" ]] \
+      || ! embedding_check_fa2_admission "$BACKEND_ADMISSION_VERIFIED_REPORT" \
+        "$TRAIN_FILE" "${TRAIN_BATCH_SIZE:-16}" "${GRAD_ACCUM_STEPS:-4}" \
+        "${MAX_LENGTH:-512}" "${LORA_RANK:-64}" "${LORA_ALPHA:-128}" \
+        bfloat16 "$BASE_MODEL" "$BASE_REVISION" "$INFONCE_HARD_NEGATIVES" \
+        "${LORA_DROPOUT:-0.05}"; then
+    echo "unverified or contract-mismatched FA2 workload; falling back to SDPA" >&2
+    TRAIN_ENV="$ROOT/.venv-train"
+    ATTN_IMPL=sdpa
+    BACKEND_ADMISSION_VERIFIED_REPORT=
+    export BACKEND_ADMISSION_VERIFIED_REPORT
+  else
+    embedding_enable_torch25_swift_compat
+  fi
+fi
+
 mkdir -p "$OUTPUT_DIR"
 
 MODEL_ARGS=(--model "$BASE_MODEL" --use_hf true)
@@ -112,8 +143,11 @@ fi
   --target_modules all-linear \
   --dataset "$TRAIN_FILE" \
   --val_dataset "$VAL_FILE" \
+  --dataset_shuffle "${DATASET_SHUFFLE:-${TRAIN_DATALOADER_SHUFFLE:-true}}" \
+  --val_dataset_shuffle false \
   --load_from_cache_file false \
   --lazy_tokenize true \
+  --strict true \
   --attn_impl "${ATTN_IMPL:-sdpa}" \
   --torch_dtype bfloat16 \
   --gradient_checkpointing true \

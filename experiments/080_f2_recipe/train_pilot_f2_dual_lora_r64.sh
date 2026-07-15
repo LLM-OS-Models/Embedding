@@ -59,8 +59,11 @@ fi
   --target_modules all-linear \
   --dataset "$TRAIN_FILE" \
   --val_dataset "$VAL_FILE" \
+  --dataset_shuffle "${DATASET_SHUFFLE:-true}" \
+  --val_dataset_shuffle false \
   --load_from_cache_file false \
   --lazy_tokenize true \
+  --strict true \
   --attn_impl "${ATTN_IMPL:-sdpa}" \
   --torch_dtype bfloat16 \
   --gradient_checkpointing true \

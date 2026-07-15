@@ -49,7 +49,7 @@ class RestoreComprehensiveEvalAssetsTests(unittest.TestCase):
         self.assertEqual(len(self.assets), 13)
         self.assertEqual(
             MODULE.CACHE_DIR,
-            ROOT / ".cache" / "huggingface" / "comprehensive-eval-assets",
+            ROOT / ".cache" / "huggingface" / "hub",
         )
         for asset in self.assets:
             self.assertTrue(asset.license)

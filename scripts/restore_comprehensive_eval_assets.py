@@ -29,7 +29,7 @@ from typing import Callable, Iterable, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "configs" / "comprehensive_eval_assets.json"
-CACHE_DIR = ROOT / ".cache" / "huggingface" / "comprehensive-eval-assets"
+CACHE_DIR = ROOT / ".cache" / "huggingface" / "hub"
 DOTENV_PATH = ROOT / ".env"
 
 FULL_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")

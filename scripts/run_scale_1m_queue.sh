@@ -3,6 +3,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+source "$ROOT/scripts/backend_admission.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/scale-1m-20260711}"
@@ -42,11 +43,6 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
 FAISS_THREADS="${FAISS_THREADS:-$EFFECTIVE_CPU_COUNT}"
-if "$ROOT/.venv-train/bin/python" -c 'import flash_attn' >/dev/null 2>&1; then
-  export ATTN_IMPL=flash_attention_2
-else
-  export ATTN_IMPL=sdpa
-fi
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 run_stage() {
@@ -223,29 +219,25 @@ fi
 
 MAX_STEPS_1M="$(jq -r '.output_rows / 128 | floor' "$TRAINING_MANIFEST")"
 
-SCALE_TRAIN_ENV="$ROOT/.venv-train"
-SCALE_TRAIN_ATTN=sdpa
-FA2_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
-if [[ ! -s "$FA2_ADMISSION" ]]; then
-  run_stage probe-scale-fa2-throughput env \
-    TRAIN_FILE="$TRAIN_FILE" RUN_KEY=scale1m-lora-r64 \
-    "$ROOT/experiments/070_tuning_strategy/admit_fa2_lora_backend.sh" || true
-  FA2_ADMISSION="$ROOT/outputs/backend-probes/scale1m-lora-r64/admission.json"
-fi
-if [[ -s "$FA2_ADMISSION" ]] && jq -e '.admitted == true' "$FA2_ADMISSION" >/dev/null; then
-  SCALE_TRAIN_ENV="$ROOT/.venv-train-fa2"
-  SCALE_TRAIN_ATTN=flash_attention_2
-fi
-echo "[$(timestamp)] scale training backend=$SCALE_TRAIN_ATTN env=$SCALE_TRAIN_ENV admission=$FA2_ADMISSION"
-
 train_scale() {
   local output_name="$1" batch="$2" accum="$3"
+  local train_env="$ROOT/.venv-train" train_attn=sdpa admission_report
+  local admission_key="scale1m-lora-r64-b${batch}-a${accum}-m512-hn${TRAIN_HARD_NEGATIVES}"
+  if embedding_select_fa2_backend "$TRAIN_FILE" "$admission_key" \
+      "$batch" "$accum" 512 64 128 bfloat16 \
+      "$CONTINUAL_BASE" "$CONTINUAL_REVISION" "$TRAIN_HARD_NEGATIVES" .05; then
+    train_env="$BACKEND_ADMISSION_ENV"
+    train_attn="$BACKEND_ADMISSION_ATTN"
+  fi
+  admission_report="$BACKEND_ADMISSION_REPORT"
+  echo "[$(timestamp)] scale training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$output_name" env \
-    TRAIN_ENV="$SCALE_TRAIN_ENV" ATTN_IMPL="$SCALE_TRAIN_ATTN" \
+    TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$output_name" TRAIN_FILE="$TRAIN_FILE" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS_1M" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
-    TRAIN_DATALOADER_SHUFFLE=false \
+    MAX_LENGTH=512 LORA_RANK=64 LORA_ALPHA=128 LORA_DROPOUT=.05 \
+    DATASET_SHUFFLE=false TRAIN_DATALOADER_SHUFFLE=false \
     LEARNING_RATE=1e-5 WARMUP_RATIO=.05 \
     INFONCE_HARD_NEGATIVES="$TRAIN_HARD_NEGATIVES" \
     BASE_MODEL="$CONTINUAL_BASE" BASE_REVISION="$CONTINUAL_REVISION" \

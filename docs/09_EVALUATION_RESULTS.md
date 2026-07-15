@@ -2,7 +2,7 @@
 
 이 파일에는 실제로 실행한 결과만 기록합니다. 모델 카드의 성능표는 여기의 raw result와 revision을 기준으로 생성합니다.
 
-## 2026-07-15 200K training backend admission
+## 2026-07-15 invalidated 200K training backend probe
 
 같은 격리 NVIDIA PyTorch 2.5 / flash-attn 2.4.2 환경에서 Qwen3-Embedding-8B
 LoRA r64, batch 16, accumulation 4, max length 512를 SDPA와 FA2로 각각 5
@@ -15,11 +15,15 @@ optimizer-step 실행했다. 199,904행 원본을 source와 length strata별로 
 | SDPA | 29.30 | 63.44 GiB | pass |
 | FlashAttention 2 | **27.10** | **61.52 GiB** | pass |
 
-FA2 speedup은 **1.08118x**로 고정 입장 기준 1.05x를 통과했다. 원본 ordered train
+FA2 speedup은 **1.08118x**로 수치상 1.05x를 넘었다. 원본 ordered train
 SHA-256은 `8e2731ab25299ff558af675f067b253a6ce4375a850aa925acfe3b3117505e3c`이며,
-양쪽 loss도 반올림 기준 각 step에서 일치했다. 따라서 200K r64 run은 FA2를 쓰고,
-이 admission의 backend·data lineage가 달라지면 재사용하지 않는다. 첫 실패 시도의
-report/log도 `attempts/20260715T082837Z/`에 보존했으며 성능 수치로 사용하지 않는다.
+양쪽 loss도 반올림 기준 각 step에서 일치했다. 그러나 args 감사에서 ms-swift의 별도
+`dataset_shuffle=true` 기본값이 켜져 source-homogeneous 16행 order가 깨진 것을
+확인했다. 이 report는 `admitted=false`로 명시 무효화했고 production 승격에 쓰지
+않는다. `dataset_shuffle=false`, sampler shuffle=false, `strict=true`와 exact
+workload/runtime schema를 고정한 새 5+5-step 측정만 입장 근거로 쓴다. 첫 실패
+시도의 report/log도 `attempts/20260715T082837Z/`에 보존했으며 성능 수치로 사용하지
+않는다.
 
 ## 2026-07-11 training/adapter pipeline verification
 
