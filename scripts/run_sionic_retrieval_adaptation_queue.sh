@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 
 export TARGET_KIND=retrieval_family
 export TARGET_PHASE=sionic_retrieval_train_family_4146

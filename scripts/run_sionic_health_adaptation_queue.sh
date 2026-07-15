@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 
 export TARGET_KIND=health
 export TARGET_PHASE=sionic_health_multilingual_100k

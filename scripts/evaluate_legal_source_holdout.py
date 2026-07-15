@@ -21,6 +21,11 @@ try:
 except ModuleNotFoundError:
     from scripts.evaluate_sionic9 import canonical_local_revision, local_merge_dtype
 
+try:
+    from evaluation_runtime import effective_attention
+except ModuleNotFoundError:
+    from scripts.evaluation_runtime import effective_attention
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATASET = ROOT / "outputs/evaluation/legal-source-heldout-i-v1-shards12-15"
@@ -133,9 +138,10 @@ def main() -> None:
     evaluation_dtype = local_merge_dtype(args.model)
     torch_dtype = torch.float32 if evaluation_dtype == "float32" else torch.bfloat16
     effective_batch = min(args.batch_size, 96) if evaluation_dtype == "float32" else args.batch_size
+    attention = effective_attention(args.attn_implementation, evaluation_dtype)
     cache_namespace = (
         f"{args.model}@{revision}|legal-source-heldout-i-v1|manifest={sha256(dataset / 'manifest.json')}|"
-        f"max={args.max_length}|attn={args.attn_implementation}|dtype={evaluation_dtype}|"
+        f"max={args.max_length}|batch={effective_batch}|attn={attention}|dtype={evaluation_dtype}|"
         f"prompt={hashlib.sha256(QUERY_PROMPT.encode()).hexdigest()}"
     )
     model = ResumableSentenceTransformer(
@@ -144,7 +150,7 @@ def main() -> None:
         device=args.device,
         trust_remote_code=args.trust_remote_code,
         model_kwargs={
-            "attn_implementation": args.attn_implementation,
+            "attn_implementation": attention,
             "torch_dtype": torch_dtype,
         },
         tokenizer_kwargs={"padding_side": "left"},
@@ -247,7 +253,8 @@ def main() -> None:
             "batch_size": effective_batch,
             "requested_batch_size": args.batch_size,
             "max_length": args.max_length,
-            "attention": args.attn_implementation,
+            "requested_attention": args.attn_implementation,
+            "attention": attention,
             "torch_dtype": evaluation_dtype,
             "embedding_cache_hits": getattr(model, "embedding_cache_hits", 0),
             "embedding_cache_misses": getattr(model, "embedding_cache_misses", 0),

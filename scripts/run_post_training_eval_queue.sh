@@ -6,6 +6,7 @@ set -uo pipefail
 # winner on official Korean MTEB v1. Failures are isolated per candidate.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
@@ -64,7 +65,7 @@ retry_stage() {
 run_sionic_with_fallback() {
   local label="$1" model="$2" revision="$3" cache="$4"
   local batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "sionic9-$label-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" --max-length 8192 \
@@ -79,7 +80,7 @@ run_sionic_with_fallback() {
 run_official_with_fallback() {
   local label="$1" model="$2" revision="$3" cache="$4"
   local batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "official-korean-$label-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
       --model "$model" --revision "$revision" --max-length 8192 \
@@ -174,7 +175,7 @@ if [[ -s "$SELECTION" ]]; then
   sionic_summary="$(jq -r '.best.summary' "$SELECTION")"
   clean_summary="$CLEAN_OUT/$safe_model_name/$local_revision/summary.json"
   clean_success=0
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "clean-legal-selected-before-publish-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
       --model "$best_model" --revision "$local_revision" --batch-size "$batch" \
@@ -188,7 +189,7 @@ if [[ -s "$SELECTION" ]]; then
   (( clean_success == 1 )) || echo "[$(timestamp)] selected-model clean legal evaluation failed"
   robustness_summary="$ROBUST_OUT/$safe_model_name/$local_revision/summary.json"
   robustness_success=0
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "robustness-selected-before-publish-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
       --model "$best_model" --revision "$local_revision" --batch-size "$batch" \
@@ -248,7 +249,7 @@ for spec in "${clean_models[@]}"; do
   model="${spec%%|*}"
   revision="${spec#*|}"
   success=0
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "clean-legal-${model//\//__}-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" \
@@ -274,7 +275,7 @@ for spec in "${robustness_models[@]}"; do
   model="${spec%%|*}"
   revision="${spec#*|}"
   success=0
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "robustness-${model//\//__}-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" \

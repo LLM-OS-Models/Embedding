@@ -2,6 +2,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/legal-adaptation-20260711}"
@@ -38,6 +39,7 @@ fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
+FAISS_THREADS="${FAISS_THREADS:-$EFFECTIVE_CPU_COUNT}"
 if "$ROOT/.venv-train/bin/python" -c 'import flash_attn' >/dev/null 2>&1; then
   export ATTN_IMPL=flash_attention_2
 else
@@ -67,7 +69,7 @@ retry_stage() {
 
 run_sionic_with_fallback() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "sionic9-legal-target-adapted-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" --max-length 8192 \
@@ -81,7 +83,7 @@ run_sionic_with_fallback() {
 
 run_official_with_fallback() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "official-korean-legal-target-adapted-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
       --model "$model" --revision "$revision" --max-length 8192 \
@@ -136,7 +138,8 @@ if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
     --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
     --num-negatives 7 --selection-strategy score_rank_quantiles \
     --positive-relative-ratio .95 \
-    --nlist 512 --nprobe 32 --training-points 50000 --faiss-threads 64 \
+    --nlist 512 --nprobe 32 --training-points 50000 \
+    --faiss-threads "$FAISS_THREADS" \
     --keep-work-dir --allow-target-adapted || exit 3
 fi
 
@@ -269,7 +272,7 @@ run_official_with_fallback "$MODEL_REL" "$revision" \
 
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
-for batch in 192 96 48; do
+for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
   run_stage "clean-legal-legal-target-adapted-b$batch" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
     --model "$MODEL_REL" --revision "$revision" --batch-size "$batch" \
@@ -279,7 +282,7 @@ for batch in 192 96 48; do
 done
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
-for batch in 192 96 48; do
+for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
   run_stage "robustness-legal-target-adapted-b$batch" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
     --model "$MODEL_REL" --revision "$revision" --batch-size "$batch" \

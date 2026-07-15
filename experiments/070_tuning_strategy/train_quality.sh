@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 MODE="${1:-}"
 SWIFT="${TRAIN_ENV:-$ROOT/.venv-train}/bin/swift"
 TRAIN_FILE="${TRAIN_FILE:-$ROOT/outputs/data/performance-v1/ablation-200k/train.homogeneous-b16.jsonl}"

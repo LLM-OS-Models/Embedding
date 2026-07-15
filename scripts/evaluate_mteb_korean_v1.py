@@ -20,6 +20,19 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any
 
+try:
+    from evaluation_runtime import (
+        effective_attention,
+        enforce_runtime_contract,
+        runtime_contract,
+    )
+except ModuleNotFoundError:
+    from scripts.evaluation_runtime import (
+        effective_attention,
+        enforce_runtime_contract,
+        runtime_contract,
+    )
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = ROOT / "configs/mteb_korean_v1_protocol.json"
@@ -241,15 +254,32 @@ def main() -> None:
             "--max-length is required for models not pinned by this protocol"
         )
 
+    attention = effective_attention(args.attn_implementation, evaluation_dtype)
+
     if args.registered_loader:
         loader_contract = "registered-task-instruction"
     elif args.qwen3_instruction_loader:
         loader_contract = "qwen3-task-instruction"
     else:
         loader_contract = "sentence-transformer"
+    safe_model_name = args.model.replace("/", "__")
+    run_dir = args.output_dir / safe_model_name / revision
+    contract = runtime_contract(
+        protocol_id=protocol["protocol_id"],
+        protocol_path=args.protocol,
+        model=args.model,
+        revision=revision,
+        batch_size=effective_batch_size,
+        max_length=max_length,
+        requested_attention=args.attn_implementation,
+        attention=attention,
+        evaluation_dtype=evaluation_dtype,
+        loader_contract=loader_contract,
+    )
+    enforce_runtime_contract(run_dir, contract)
     cache_namespace = (
-        f"{args.model}@{revision}|protocol={protocol['protocol_id']}|"
-        f"max={max_length}|attn={args.attn_implementation}|dtype={evaluation_dtype}|"
+        f"{args.model}@{revision}|profile={contract['profile_id']}|"
+        f"max={max_length}|batch={effective_batch_size}|attn={attention}|dtype={evaluation_dtype}|"
         f"loader={loader_contract}"
     )
     if args.registered_loader:
@@ -258,7 +288,7 @@ def main() -> None:
             revision=revision,
             device=args.device,
             model_kwargs={
-                "attn_implementation": args.attn_implementation,
+                "attn_implementation": attention,
                 "torch_dtype": torch_dtype,
             },
             tokenizer_kwargs={"padding_side": "left"},
@@ -271,7 +301,7 @@ def main() -> None:
             revision=revision,
             device=args.device,
             model_kwargs={
-                "attn_implementation": args.attn_implementation,
+                "attn_implementation": attention,
                 "torch_dtype": torch_dtype,
             },
             tokenizer_kwargs={"padding_side": "left"},
@@ -319,7 +349,7 @@ def main() -> None:
             device=args.device,
             trust_remote_code=args.trust_remote_code,
             model_kwargs={
-                "attn_implementation": args.attn_implementation,
+                "attn_implementation": attention,
                 "torch_dtype": torch_dtype,
             },
             tokenizer_kwargs={"padding_side": "left"},
@@ -338,9 +368,6 @@ def main() -> None:
                 f"prompts={model.prompts!r}, default={model.default_prompt_name!r}"
             )
 
-    safe_model_name = args.model.replace("/", "__")
-    run_dir = args.output_dir / safe_model_name / revision
-    run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "protocol_resolved.json").write_text(
         json.dumps(resolved_protocol, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -381,6 +408,7 @@ def main() -> None:
     summary = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "protocol_id": protocol["protocol_id"],
+        "runtime_profile_id": contract["profile_id"],
         "benchmark": protocol["benchmark"],
         "model": args.model,
         "requested_revision": revision,
@@ -407,7 +435,8 @@ def main() -> None:
             "batch_size": effective_batch_size,
             "requested_batch_size": args.batch_size,
             "max_length": max_length,
-            "attention": args.attn_implementation,
+            "requested_attention": args.attn_implementation,
+            "attention": attention,
             "torch_dtype": evaluation_dtype,
             "registered_loader": args.registered_loader,
             "qwen3_instruction_loader": args.qwen3_instruction_loader,

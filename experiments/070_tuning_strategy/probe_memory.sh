@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 MODE="${1:-}"
 SWIFT="${TRAIN_ENV:-$ROOT/.venv-train}/bin/swift"
 DATA="${DATA:-$ROOT/data/processed/ko_triplet_smoke/train.jsonl}"

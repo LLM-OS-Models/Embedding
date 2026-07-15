@@ -45,6 +45,31 @@ protocol parity 모두에서 현재 Comsat full-corpus 기본값은 FA2이며, v
 
 Raw cache와 query-level predictions는 `outputs/evaluation/sionic9/` 아래에 보존되며 Git에는 대용량 artifact를 넣지 않습니다. 최종 모델 카드에는 전체 9개가 완료된 run의 hash와 공개 artifact URL을 연결합니다.
 
+## 2026-07-15 restored evaluator compute-profile audit
+
+과거 AutoRAG raw output이 Git/HF에 남아 있지 않아 문서 숫자만으로는 당시 compute
+profile을 완전히 감사할 수 없었다. 동일 model/dataset/MTEB revision으로 batch와 attention
+backend를 분리 재실행했다.
+
+| Model | Dtype / attention | Batch | AutoRAG NDCG@10 | Raw result SHA-256 |
+|---|---|---:|---:|---|
+| Qwen3-Embedding-8B | BF16 / SDPA | 2 | 0.82804 | `b0d48954263f14ae01658654a52d41984518f1f8908112b0d382905c65a0ef2c` |
+| Qwen3-Embedding-8B | BF16 / FA2 | 2 | 0.82776 | `9c46313e98222dfb4b550d56c8f9a9e3923f42496fed161f7f1e7016d69fb2d2` |
+| Qwen3-Embedding-8B | BF16 / FA2 | 192 | **0.82442** | `79a43fceba481cbf7067eed3c099cc019bf134cc67a5381fb876ae0edcef5681` |
+| Comsat-embed-ko-8b-preview | BF16 / FA2 | 192 | **0.85261** | `01a01b8c1cb263151f6fe01d309296b13eb3cc9be6ed90c61cc342182eac5c59` |
+
+Qwen의 batch 2와 192 차이는 `-0.00334`이므로 BF16 retrieval 결과에서 batch는
+단순 처리량 설정이 아니라 결과 계약의 일부다. 데이터 revision은 두 Qwen run 모두
+AutoRAG `fd7df84ac089bbec763b1c6bb1b56e985df5cc5c`, model revision은
+`1d8ad4ca9b3dd8059ad90a75d4983776a23d44af`로 동일하다. prompt도 최초 고정
+protocol의 `Query:` 뒤에 공백을 추가하지 않았다.
+
+이후 campaign 선택은 **BF16 + FA2 + batch 192 + max length 8192**끼리만 비교한다.
+과거 `0.82765`/`0.85222`는 legacy batch-2 parity로 보존하고 새 후보 선택에 사용하지
+않는다. evaluator는 runtime contract와 profile hash를 기록하며, 완료 task가 있는
+output directory에 다른 batch/backend가 들어오면 fail-closed한다. FP32 safe merge
+후보는 FA2가 지원하지 않으므로 evaluator가 SDPA로 전환하고 별도 profile로 기록한다.
+
 ## 2026-07-12 Comsat 공식 MTEB Korean v1 로컬 재현
 
 Model revision `a5cc22b651c1b2e51cdd8bf671774ae93584f0ab`, MTEB `2.18.0`,

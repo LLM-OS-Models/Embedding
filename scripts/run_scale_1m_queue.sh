@@ -2,6 +2,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/scale-1m-20260711}"
@@ -20,6 +21,9 @@ MINED_HOMOGENEOUS_PROVENANCE="$DATA_DIR/provenance.faiss-current-r095-n7.homogen
 MINED_HOMOGENEOUS_MANIFEST="$DATA_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json"
 MINED_QUALITY_AUDIT="$DATA_DIR/faiss-current-r095-n7.homogeneous-b16.quality-audit.json"
 MINED_OVERLAP_AUDIT="$DATA_DIR/faiss-current-r095-n7.homogeneous-b16.benchmark-overlap-audit.json"
+BASE_QUALITY_AUDIT="$DATA_DIR/homogeneous-b16.quality-audit.json"
+BASE_OVERLAP_AUDIT="$DATA_DIR/homogeneous-b16.benchmark-overlap-audit.json"
+BLOCKLIST_ROOT="$ROOT/outputs/decontamination/benchmark_blocklist"
 VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
 RUN_NAME="qwen3-embedding-8b-ko-performance1m-lora-r64"
 MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
@@ -37,6 +41,7 @@ fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
+FAISS_THREADS="${FAISS_THREADS:-$EFFECTIVE_CPU_COUNT}"
 if "$ROOT/.venv-train/bin/python" -c 'import flash_attn' >/dev/null 2>&1; then
   export ATTN_IMPL=flash_attention_2
 else
@@ -66,7 +71,7 @@ retry_stage() {
 
 run_sionic_with_fallback() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "sionic9-$RUN_NAME-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" --max-length 8192 \
@@ -80,7 +85,7 @@ run_sionic_with_fallback() {
 
 run_official_with_fallback() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     if run_stage "official-korean-$RUN_NAME-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
       --model "$model" --revision "$revision" --max-length 8192 \
@@ -101,7 +106,8 @@ fi
 if [[ ! -s "$DATA_MANIFEST" || "$(jq -r '.phase + ":" + (.built_rows|tostring)' "$DATA_MANIFEST" 2>/dev/null)" != "performance_1m:1000000" ]]; then
   run_stage "build-performance-1m" \
     "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_performance_mix.py" \
-    --phase performance_1m --output-dir "$DATA_DIR" || exit 2
+    --phase performance_1m --output-dir "$DATA_DIR" \
+    --critical-blocklist-root "$BLOCKLIST_ROOT" || exit 2
 fi
 if [[ ! -s "$VAL_FILE" ]]; then
   echo "[$(timestamp)] missing mined validation data: $VAL_FILE" >&2
@@ -139,6 +145,19 @@ TRAIN_FILE="$HOMOGENEOUS_TRAIN"
 TRAINING_MANIFEST="$HOMOGENEOUS_MANIFEST"
 TRAIN_HARD_NEGATIVES=4
 
+# The original homogeneous curriculum is the fallback whenever current-student
+# mining cannot finish.  Audit that fallback unconditionally so a fresh rebuild
+# can never bypass the same 15-task contamination gate as a mined curriculum.
+run_stage "audit-performance-1m-base-curriculum" \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/audit_embedding_training_data.py" \
+  --train "$HOMOGENEOUS_TRAIN" --provenance "$HOMOGENEOUS_PROVENANCE" \
+  --output "$BASE_QUALITY_AUDIT" --expected-batch-size 16 || exit 3
+run_stage "audit-performance-1m-base-benchmark-overlap" \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
+  --train "$HOMOGENEOUS_TRAIN" --provenance "$HOMOGENEOUS_PROVENANCE" \
+  --blocklist-root "$BLOCKLIST_ROOT" --output "$BASE_OVERLAP_AUDIT" \
+  --fail-on-critical || exit 3
+
 if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
   if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
       --manifest "$MINING_MANIFEST" --model "$CONTINUAL_BASE" \
@@ -156,7 +175,8 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
       --encode-batch-size 128 --candidate-pool-size 24 --search-k 256 \
       --num-negatives 7 --selection-strategy score_rank_quantiles \
       --positive-relative-ratio .95 \
-      --nlist 1024 --nprobe 32 --training-points 50000 --faiss-threads 64 \
+      --nlist 1024 --nprobe 32 --training-points 50000 \
+      --faiss-threads "$FAISS_THREADS" \
       --allow-target-adapted || true
   fi
   if [[ -s "$MINING_MANIFEST" && ! -s "$MINED_PROVENANCE" ]]; then
@@ -197,7 +217,7 @@ if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
     --train "$MINED_HOMOGENEOUS_TRAIN" \
     --provenance "$MINED_HOMOGENEOUS_PROVENANCE" \
-    --blocklist-root "$ROOT/outputs/decontamination/benchmark_blocklist" \
+    --blocklist-root "$BLOCKLIST_ROOT" \
     --output "$MINED_OVERLAP_AUDIT" --fail-on-critical || exit 3
 fi
 
@@ -294,7 +314,7 @@ run_official_with_fallback "$MODEL_REL" "$local_revision" \
 
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$local_revision/summary.json"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
-for batch in 192 96 48; do
+for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
   run_stage "clean-legal-$RUN_NAME-b$batch" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
     --model "$MODEL_REL" --revision "$local_revision" --batch-size "$batch" \
@@ -304,7 +324,7 @@ for batch in 192 96 48; do
 done
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$local_revision/summary.json"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
-for batch in 192 96 48; do
+for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
   run_stage "robustness-$RUN_NAME-b$batch" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
     --model "$MODEL_REL" --revision "$local_revision" --batch-size "$batch" \

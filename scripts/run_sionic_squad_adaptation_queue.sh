@@ -6,6 +6,7 @@ set -uo pipefail
 # other audited datasets such as the multilingual health shard.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 TARGET_KIND="${TARGET_KIND:-squad}"
@@ -61,6 +62,7 @@ fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
+FAISS_THREADS="${FAISS_THREADS:-$EFFECTIVE_CPU_COUNT}"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 run_stage() {
@@ -83,7 +85,7 @@ retry_stage() {
 }
 run_sionic() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     run_stage "sionic9-${TARGET_KIND}-target-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" \
@@ -94,7 +96,7 @@ run_sionic() {
 }
 run_official() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     run_stage "official-korean-${TARGET_KIND}-target-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" \
@@ -164,7 +166,8 @@ if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \
     --candidate-pool-size 24 --search-k 256 \
     --num-negatives 7 --selection-strategy score_rank_quantiles \
     --positive-relative-ratio .95 --nlist "$TARGET_NLIST" --nprobe 32 \
-    --training-points "$TARGET_TRAINING_POINTS" --faiss-threads 64 \
+    --training-points "$TARGET_TRAINING_POINTS" \
+    --faiss-threads "$FAISS_THREADS" \
     --allow-target-adapted || exit 3
 fi
 
@@ -289,7 +292,7 @@ run_official "$MODEL_REL" "$revision" \
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
 
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
-for batch in 192 96 48; do
+for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
   run_stage "clean-${TARGET_KIND}-target-b$batch" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
     --model "$MODEL_REL" --revision "$revision" --batch-size "$batch" \

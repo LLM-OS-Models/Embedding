@@ -2,6 +2,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 CONFIG="${CONFIG:-$ROOT/configs/models_to_evaluate.json}"

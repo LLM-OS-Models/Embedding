@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 PYTHON_ENV="${PYTHON_ENV:-$ROOT/.venv-mteb}"
 INPUT="${INPUT:-$ROOT/data/processed/ko_triplet_smoke/train.jsonl}"
 OUTPUT="${OUTPUT:-$ROOT/data/processed/ko_triplet_smoke/train.hn-qwen3-r095-n4.jsonl}"

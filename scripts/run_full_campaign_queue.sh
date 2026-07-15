@@ -2,6 +2,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 BASELINE_PID="${BASELINE_PID:-}"
 CAMPAIGN_LOG="${CAMPAIGN_LOG:-$ROOT/outputs/full-campaign-20260711.log}"

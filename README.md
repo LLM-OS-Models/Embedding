@@ -43,14 +43,14 @@ row는 101개였다.
 
 | 모델 | 9-task Avg | AutoRAG NDCG@10 | 측정 상태 | Comsat 대비 Avg |
 |---|---:|---:|---|---:|
-| `sionic-ai/comsat-embed-ko-8b-preview` | **0.7930** | **0.85222** 실측 | 9개 카드 + 1개 재현 | 기준 |
-| `Qwen/Qwen3-Embedding-8B` | 0.7825 | 0.82765 실측 | 9개 카드 + 1개 재현 | -0.0105 |
+| `sionic-ai/comsat-embed-ko-8b-preview` | **0.7930** | **0.85261** 실측 | 9개 카드 + 1개 canonical 재현 | 기준 |
+| `Qwen/Qwen3-Embedding-8B` | 0.7825 | 0.82442 실측 | 9개 카드 + 1개 canonical 재현 | -0.0105 |
 | `codefuse-ai/F2LLM-v2-8B` | 0.7621 | 0.76611 실측 | 9개 카드 + 1개 재현 | -0.0309 |
 | `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | — | 0.78329 실측 | AutoRAG만 측정 | — |
 | 우리 smoke LoRA r32 | — | 미측정 | 성능 주장 금지 | — |
 | 우리 공개 후보 목표 | **> 0.7930** | 회귀 없음 | 9개 전부 직접 측정 | **> 0** |
 
-현재 근거로 Comsat은 “별로인 모델”이 아니라 Qwen 대비 한국어 retrieval에 잘 특화된 모델입니다. 다만 선택된 9개 task만으로 일반 한국어·다국어 SOTA라고 할 수는 없습니다. raw run과 revision은 [평가 로그](docs/09_EVALUATION_RESULTS.md)에 기록합니다.
+현재 근거로 Comsat은 “별로인 모델”이 아니라 Qwen 대비 한국어 retrieval에 잘 특화된 모델입니다. 다만 선택된 9개 task만으로 일반 한국어·다국어 SOTA라고 할 수는 없습니다. 위 AutoRAG canonical 값은 두 모델 모두 BF16, FA2, batch 192, max length 8192로 다시 잰 값입니다. 과거 batch-2 값(Qwen `0.82765`, Comsat `0.85222`)과 섞어 비교하지 않습니다. raw run과 revision은 [평가 로그](docs/09_EVALUATION_RESULTS.md)에 기록합니다.
 
 ### 3. Clean Korean 종합 보드
 

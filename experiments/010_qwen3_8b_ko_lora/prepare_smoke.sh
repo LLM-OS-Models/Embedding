@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/data/processed/ko_triplet_smoke}"
 
 if [[ -f "$ROOT/.env" ]]; then

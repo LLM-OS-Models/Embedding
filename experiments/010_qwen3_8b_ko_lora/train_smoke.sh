@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 TRAIN_ENV="${TRAIN_ENV:-$ROOT/.venv-train}"
 DATA_DIR="${DATA_DIR:-$ROOT/data/processed/ko_triplet_smoke}"
 RUN_NAME="${RUN_NAME:-qwen3-embedding-8b-ko-smoke-r32}"

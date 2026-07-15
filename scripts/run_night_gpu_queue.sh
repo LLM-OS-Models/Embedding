@@ -6,6 +6,7 @@ set -uo pipefail
 # later useful stages from running.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/night-queue-20260711}"

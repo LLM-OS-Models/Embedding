@@ -18,6 +18,19 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any
 
+try:
+    from evaluation_runtime import (
+        effective_attention,
+        enforce_runtime_contract,
+        runtime_contract,
+    )
+except ModuleNotFoundError:
+    from scripts.evaluation_runtime import (
+        effective_attention,
+        enforce_runtime_contract,
+        runtime_contract,
+    )
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -168,6 +181,27 @@ def main() -> None:
     evaluation_dtype = local_merge_dtype(args.model)
     torch_dtype = torch.float32 if evaluation_dtype == "float32" else torch.bfloat16
     effective_batch_size = min(args.batch_size, 96) if evaluation_dtype == "float32" else args.batch_size
+    attention = effective_attention(args.attn_implementation, evaluation_dtype)
+
+    safe_model_name = args.model.replace("/", "__")
+    run_dir = args.output_dir / safe_model_name
+    contract = runtime_contract(
+        protocol_id=protocol["protocol_id"],
+        protocol_path=args.protocol,
+        model=args.model,
+        revision=args.revision,
+        batch_size=effective_batch_size,
+        max_length=args.max_length,
+        requested_attention=args.attn_implementation,
+        attention=attention,
+        evaluation_dtype=evaluation_dtype,
+        loader_contract="fixed-query-prompt-sentence-transformer",
+        extra={
+            "query_prompt": protocol["query_prompt"],
+            "document_prompt": protocol["document_prompt"],
+        },
+    )
+    enforce_runtime_contract(run_dir, contract)
 
     model_class = SentenceTransformer
     model_extra: dict[str, Any] = {}
@@ -181,8 +215,8 @@ def main() -> None:
             "embedding_cache_dir": args.embedding_cache_dir,
             "embedding_cache_namespace": (
                 f"{args.model}@{args.revision or 'unresolved'}|"
-                f"protocol={protocol['protocol_id']}|max={args.max_length}|"
-                f"attn={args.attn_implementation}|dtype={evaluation_dtype}|"
+                f"profile={contract['profile_id']}|max={args.max_length}|"
+                f"batch={effective_batch_size}|attn={attention}|dtype={evaluation_dtype}|"
                 f"prompts={json.dumps({'query': protocol['query_prompt'], 'document': protocol['document_prompt']}, sort_keys=True)}"
             ),
         }
@@ -193,7 +227,7 @@ def main() -> None:
         device=args.device,
         trust_remote_code=args.trust_remote_code,
         model_kwargs={
-            "attn_implementation": args.attn_implementation,
+            "attn_implementation": attention,
             "torch_dtype": torch_dtype,
         },
         tokenizer_kwargs={"padding_side": "left"},
@@ -205,9 +239,6 @@ def main() -> None:
         "document": protocol["document_prompt"],
     }
 
-    safe_model_name = args.model.replace("/", "__")
-    run_dir = args.output_dir / safe_model_name
-    run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "protocol_resolved.json").write_text(
         json.dumps(resolved, ensure_ascii=False, indent=2, default=str) + "\n",
         encoding="utf-8",
@@ -236,6 +267,7 @@ def main() -> None:
     summary = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "protocol_id": protocol["protocol_id"],
+        "runtime_profile_id": contract["profile_id"],
         "model": args.model,
         "requested_revision": args.revision,
         "resolved_revision": results.model_revision,
@@ -254,7 +286,8 @@ def main() -> None:
             "batch_size": effective_batch_size,
             "requested_batch_size": args.batch_size,
             "max_length": args.max_length,
-            "attention": args.attn_implementation,
+            "requested_attention": args.attn_implementation,
+            "attention": attention,
             "torch_dtype": evaluation_dtype,
             "embedding_cache_dir": (
                 str(args.embedding_cache_dir.resolve())

@@ -2,6 +2,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 cd "$ROOT"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-combined-adaptation-20260712}"
 OUT_DIR="$ROOT/outputs/data/sionic-combined-target-v1"
@@ -48,7 +49,7 @@ retry_stage() {
 }
 run_sionic() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     run_stage "sionic9-combined-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_sionic9.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" \
@@ -59,7 +60,7 @@ run_sionic() {
 }
 run_official() {
   local model="$1" revision="$2" cache="$3" batch
-  for batch in 192 96 48; do
+  for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     run_stage "official-korean-combined-b$batch" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
       --model "$model" --revision "$revision" --batch-size "$batch" \
@@ -193,6 +194,7 @@ retry_stage upload-combined-curriculum 3 \
   --source-dataset LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1 \
   --source-dataset LLM-OS-Models/korean-embedding-sionic-health-quantile-hn7-replay-v1 \
   --source-dataset LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1 \
+  --source-dataset LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1 \
   --source-dataset LLM-OS-Models/korean-legal-quantile-hn7-replay-v1 \
   --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
   --upload --public >"$LOG_DIR/dataset-upload.log" 2>&1 &
@@ -219,7 +221,7 @@ run_official "$MODEL_REL" "$revision" \
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
 
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
-for batch in 192 96 48; do
+for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
   run_stage "clean-combined-b$batch" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
     --model "$MODEL_REL" --revision "$revision" --batch-size "$batch" \

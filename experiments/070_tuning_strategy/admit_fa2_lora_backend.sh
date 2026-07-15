@@ -5,6 +5,7 @@ set -euo pipefail
 # forward/backward throughput probe. Import-only checks are insufficient.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 FA2_ENV="${FA2_ENV:-$ROOT/.venv-train-fa2}"
 TRAIN_FILE="${TRAIN_FILE:?TRAIN_FILE is required}"
 RUN_KEY="${RUN_KEY:-performance200k-lora-r64}"
@@ -111,4 +112,3 @@ report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(report, indent=2))
 raise SystemExit(0 if admitted else 1)
 PY
-

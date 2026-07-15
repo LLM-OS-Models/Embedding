@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
 
 export TARGET_KIND=autorag
 export TARGET_PHASE=sionic_autorag_domain_100k
