@@ -258,6 +258,12 @@ admitted = (
     and threshold is not None
     and measured <= threshold
 )
+matched_sdpa_eligible = (
+    measure_matched_sdpa
+    and sdpa_status == 0
+    and baseline is not None
+    and steps >= 5
+)
 subset_manifest = json.loads(subset_manifest_path.read_text(encoding="utf-8"))
 subset_train = subset_manifest["files"]["train.jsonl"]
 contract = build_workload_contract(
@@ -297,7 +303,20 @@ report = {
         baseline / measured if baseline is not None and measured else None
     ),
     "admitted": admitted,
-    "fallback": None if admitted else ".venv-train + sdpa",
+    "matched_sdpa_eligible": matched_sdpa_eligible,
+    "selected_backend": (
+        "flash_attention_2" if admitted else "sdpa"
+    ),
+    "selected_environment": (
+        runtime["python_prefix"] if admitted or matched_sdpa_eligible else None
+    ),
+    "fallback": (
+        None
+        if admitted
+        else ".venv-train-fa2 + sdpa"
+        if matched_sdpa_eligible
+        else ".venv-train + sdpa"
+    ),
     "workload_contract": contract,
     "workload_contract_sha256": canonical_sha256(contract),
     "runtime_fingerprint": runtime,

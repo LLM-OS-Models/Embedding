@@ -1,10 +1,16 @@
 # 진행 현황, 병목과 다음 의사결정
 
-기준일: 2026-07-12 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
+기준일: 2026-07-15 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
 
 ## 현재 한 줄 상태
 
-평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**. 최적화·보고 순서는 **Sionic retrieval 9종 → 공식 MTEB Korean v1 → clean 종합 보드**다. Comsat 공식 Korean 6-task, 10K exhaustive hard-negative mining, 첫 10K LoRA r64 학습을 완료했고 현재 50K LoRA r64가 실행 중이다. 이후 같은 자동 queue가 200K→F2 dual/MRL→1M→법률 replay로 확대한다. 첫 후보는 비상업 공개가 가능한 `performance` 트랙이며, 권리가 정리된 `clean/release` 트랙은 별도로 유지하되 performance 학습을 막지 않는다.
+평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**.
+10K r64는 merge parity 미달, 50K r64는 eval-query overlap으로 실격됐고, 오염을
+제거한 199,904행 200K r64가 첫 유효 성능 후보다. exact backend gate는 완료되어 빠른
+runtime의 SDPA가 선택됐으며 production 학습을 시작하는 단계다. checkpoint 선택은
+clean held-out을 우선하고, Sionic retrieval 9종과 공식 MTEB Korean v1은 최종 후보
+확인·보고에 사용한다. 이후 유효한 개선이 확인될 때만 1M, target-domain, legal replay로
+확대한다. `performance/non-commercial`과 `clean/release` 트랙은 분리한다.
 
 ## 두 개의 모델 트랙
 
@@ -21,6 +27,7 @@
 |---|---|---|
 | GitHub | `LLM-OS-Models/Embedding` main에 중간 commit 지속 push | secrets 제외, submodule/revision 고정 |
 | Qwen 학습 환경 | `.venv-train`, Torch 2.13/CUDA 13, ms-swift 4.5 dev | H100 BF16/SDPA 정상 |
+| 빠른 학습 환경 | `.venv-train-fa2`, NVIDIA Torch 2.5/CUDA 12.6, ms-swift 4.5 dev | exact r64 SDPA 5-step 통과; FA2는 1.03209x라 탈락 |
 | MTEB 환경 | `.venv-mteb`, MTEB 2.18.0/commit `193e3f66` | task/split/dataset SHA 고정 |
 | Sionic 9 evaluator parity | AutoRAG Qwen `0.82765`, Comsat `0.85222` | 카드와 각각 `0.00005`, `0.00042` 차이 |
 | 비교 모델 AutoRAG | F2 `0.76611`, PwC `0.78329` | 같은 full-corpus NDCG@10 |
@@ -227,12 +234,20 @@ ms-swift의 별도 `dataset_shuffle=true` 기본값을 끄지 않아 source-homo
 보존하지 못했다. 수치와 log는 진단 기록으로 남기되 report를 `admitted=false`로
 무효화했다.
 
-새 입장은 dataset·sampler shuffle=false, strict=true, exact train/base/batch/accum/
-length/LoRA/HN/runtime fingerprint가 모두 맞는 5+5-step 측정만 허용한다. import
-성공만으로 승격하지 않으며, 계약 변경·OOM·API 오류·속도 역전·로그 파싱 실패는
-`.venv-train + sdpa`로 자동 fallback한다. 1M, SQuAD/health/AutoRAG, legal,
-combined와 각 OOM fallback도 200K report를 재사용하지 않고 자기 exact workload로
-별도 probe한다.
+새 exact 입장은 dataset·sampler shuffle=false, strict=true, exact
+train/base/batch/accum/length/LoRA/HN/runtime fingerprint로 5+5-step을 다시 실행했다.
+빠른 NVIDIA Torch runtime에서 SDPA `11.90 s/step`, FA2 `11.53 s/step`으로
+FA2 speedup은 **1.03209배**에 그쳐 1.05x gate를 통과하지 못했다. peak는 각각
+`69.12/67.99 GiB`였다. stable Torch 2.13 runtime SDPA는 같은 subset에서
+`14.26 s/step`, `68.95 GiB`였다.
+
+따라서 200K production은 FA2가 아니라 exact backward를 통과한 빠른 runtime의
+**SDPA**를 사용한다. `check-sdpa`도 train SHA와 전체 workload/runtime fingerprint를
+fail-closed 검증하며 보고서 SHA는
+`effb5710447922d286e77c625782cdd275882b11463f246eba26affd73bd3eef`다. 계약 변경,
+runtime drift, OOM, API 오류, 로그 파싱 실패 시 stable `.venv-train + sdpa`로
+fallback한다. 1M, SQuAD/health/AutoRAG, legal, combined와 각 OOM fallback도 200K
+report를 재사용하지 않고 자기 exact workload로 별도 probe한다.
 
 2026-07-15 첫 200K launch preflight는 optimizer step 0 전에 중단했다. ms-swift의
 `dataset_shuffle` 기본값이 `true`라 `train_dataloader_shuffle=false`만으로는 이미 만든

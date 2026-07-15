@@ -2,6 +2,39 @@
 
 이 파일에는 실제로 실행한 결과만 기록합니다. 모델 카드의 성능표는 여기의 raw result와 revision을 기준으로 생성합니다.
 
+## 2026-07-15 exact-order 200K training backend decision
+
+무효 측정의 원인을 고친 뒤 같은 320행 subset으로 다시 실행했다. 양쪽 모두
+`dataset_shuffle=false`, `train_dataloader_shuffle=false`, `strict=true`, lazy
+tokenization, Qwen3-Embedding-8B LoRA r64, batch 16, accumulation 4, max length 512,
+HN4를 사용했다. 원본 train SHA-256은
+`8e2731ab25299ff558af675f067b253a6ce4375a850aa925acfe3b3117505e3c`, subset
+SHA-256은 `155ce90a20fb9f4dacce3244a43962bd9a96f8fc765365d54295d16f2cc503b9`다.
+
+| Runtime / backend | Seconds / optimizer-step | Peak VRAM | 결정 |
+|---|---:|---:|---|
+| NVIDIA Torch 2.5 runtime / SDPA | **11.90** | 69.12 GiB | 선택 |
+| NVIDIA Torch 2.5 runtime / FA2 | 11.53 | **67.99 GiB** | 1.05x gate 미달 |
+| stable Torch 2.13 runtime / SDPA | 14.26 | 68.95 GiB | 안전 fallback |
+
+같은 runtime에서 FA2 speedup은 **1.03209x**뿐이다. 사용자가 지정한 “미미한 차이는
+사실상 무시” 원칙과 기존 1.05x gate에 따라 FA2를 채택하지 않았다. 대신 exact SDPA
+backward가 성공한 빠른 runtime을 별도 fail-closed validator로 검증해 선택했다. 이
+선택은 stable runtime SDPA보다 측정상 약 1.198x 빠르다. stable 비교는 Torch와
+optimizer 구현도 다른 production stack 비교이므로 순수 attention 비교로 해석하지
+않는다.
+
+Admission report는 `admitted=false`, `matched_sdpa_eligible=true`,
+`selected_backend=sdpa`이며 SHA-256은
+`effb5710447922d286e77c625782cdd275882b11463f246eba26affd73bd3eef`다. workload
+contract SHA는 `b0ddf8101784d4b16cc6d3029d61c0a85c614042b604847d8de904174e6a6d07`,
+runtime fingerprint SHA는
+`39da71d9c5eeb5347d13554e3149f290604c64dff22236e7290a320e3cbc05bc`다. raw
+SDPA/FA2/stable-SDPA log SHA는 각각
+`27048efd1afcbe99e4c7c6704ad68617b24971d632ff0fc4d25112e6ba7f51d6`,
+`1394806995e49b5d07da8f2020e0f1a10b738be3a8cd065729c3ba2650050757`,
+`7a7eb9cff6b6f4a55ed2c4fd6944f529a27a61b8ed0041379915c76b32719db3`다.
+
 ## 2026-07-15 invalidated 200K training backend probe
 
 같은 격리 NVIDIA PyTorch 2.5 / flash-attn 2.4.2 환경에서 Qwen3-Embedding-8B

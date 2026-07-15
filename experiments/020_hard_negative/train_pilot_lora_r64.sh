@@ -94,7 +94,7 @@ if [[ "$RUN_NAME" == *performance200k* && "${AUTO_SELECT_FA2:-1}" == 1 ]]; then
       "$INFONCE_HARD_NEGATIVES" "${LORA_DROPOUT:-0.05}"; then
     TRAIN_ENV="$BACKEND_ADMISSION_ENV"
     ATTN_IMPL="$BACKEND_ADMISSION_ATTN"
-    echo "FA2 backend admitted for exact performance200k workload" >&2
+    echo "exact performance200k backend selected: $BACKEND_ADMISSION_SELECTED_KIND" >&2
   else
     TRAIN_ENV="$ROOT/.venv-train"
     ATTN_IMPL=sdpa
@@ -102,8 +102,7 @@ if [[ "$RUN_NAME" == *performance200k* && "${AUTO_SELECT_FA2:-1}" == 1 ]]; then
   fi
 fi
 
-if [[ "${ATTN_IMPL:-sdpa}" == flash_attention_2 \
-    || "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
+if [[ "${ATTN_IMPL:-sdpa}" == flash_attention_2 ]]; then
   if [[ "${DATASET_SHUFFLE:-${TRAIN_DATALOADER_SHUFFLE:-true}}" != false \
       || "${TRAIN_DATALOADER_SHUFFLE:-true}" != false \
       || -z "${BACKEND_ADMISSION_VERIFIED_REPORT:-}" ]] \
@@ -117,9 +116,26 @@ if [[ "${ATTN_IMPL:-sdpa}" == flash_attention_2 \
     ATTN_IMPL=sdpa
     BACKEND_ADMISSION_VERIFIED_REPORT=
     export BACKEND_ADMISSION_VERIFIED_REPORT
-  else
-    embedding_enable_torch25_swift_compat
   fi
+fi
+if [[ "${ATTN_IMPL:-sdpa}" == sdpa \
+    && "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
+  if [[ "${DATASET_SHUFFLE:-${TRAIN_DATALOADER_SHUFFLE:-true}}" != false \
+      || "${TRAIN_DATALOADER_SHUFFLE:-true}" != false \
+      || -z "${BACKEND_SDPA_VERIFIED_REPORT:-}" ]] \
+      || ! embedding_check_matched_sdpa "$BACKEND_SDPA_VERIFIED_REPORT" \
+        "$TRAIN_FILE" "${TRAIN_BATCH_SIZE:-16}" "${GRAD_ACCUM_STEPS:-4}" \
+        "${MAX_LENGTH:-512}" "${LORA_RANK:-64}" "${LORA_ALPHA:-128}" \
+        bfloat16 "$BASE_MODEL" "$BASE_REVISION" "$INFONCE_HARD_NEGATIVES" \
+        "${LORA_DROPOUT:-0.05}"; then
+    echo "unverified or contract-mismatched fast SDPA runtime; using stable SDPA" >&2
+    TRAIN_ENV="$ROOT/.venv-train"
+    BACKEND_SDPA_VERIFIED_REPORT=
+    export BACKEND_SDPA_VERIFIED_REPORT
+  fi
+fi
+if [[ "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
+  embedding_enable_torch25_swift_compat
 fi
 
 mkdir -p "$OUTPUT_DIR"

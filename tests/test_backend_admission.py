@@ -10,6 +10,7 @@ from scripts.backend_admission import (
     build_workload_contract,
     canonical_sha256,
     validate_admission_report,
+    validate_matched_sdpa_report,
 )
 
 
@@ -59,6 +60,20 @@ def admitted_report(contract: dict, runtime: dict) -> dict:
         "runtime_fingerprint": runtime,
         "runtime_fingerprint_sha256": canonical_sha256(runtime),
     }
+
+
+def matched_sdpa_report(contract: dict, runtime: dict) -> dict:
+    report = admitted_report(contract, runtime)
+    report.update(
+        {
+            "admitted": False,
+            "matched_sdpa_eligible": True,
+            "selected_backend": "sdpa",
+            "selected_environment": runtime["python_prefix"],
+            "measured_seconds_per_step": 29.0,
+        }
+    )
+    return report
 
 
 class BackendAdmissionTests(unittest.TestCase):
@@ -167,6 +182,43 @@ class BackendAdmissionTests(unittest.TestCase):
         self.assertIn("runtime fingerprint mismatch", errors)
         self.assertIn("runtime fingerprint SHA256 mismatch", errors)
 
+    def test_rejected_fa2_can_select_exact_matched_sdpa_runtime(self) -> None:
+        report = matched_sdpa_report(self.contract, self.runtime)
+        self.assertEqual(
+            validate_matched_sdpa_report(
+                report,
+                expected_contract=self.contract,
+                current_runtime=self.runtime,
+            ),
+            [],
+        )
+
+    def test_matched_sdpa_selection_fails_closed_on_policy_or_runtime_drift(self) -> None:
+        for field, value, expected_error in (
+            ("matched_sdpa_eligible", False, "matched SDPA runtime is not eligible"),
+            ("selected_backend", "flash_attention_2", "report did not select matched SDPA"),
+            ("matched_sdpa_process_status", 1, "matched SDPA probe process did not exit 0"),
+        ):
+            with self.subTest(field=field):
+                report = matched_sdpa_report(self.contract, self.runtime)
+                report[field] = value
+                errors = validate_matched_sdpa_report(
+                    report,
+                    expected_contract=self.contract,
+                    current_runtime=self.runtime,
+                )
+                self.assertIn(expected_error, errors)
+
+        report = matched_sdpa_report(self.contract, self.runtime)
+        current = copy.deepcopy(self.runtime)
+        current["packages"]["torch"] = "different"
+        errors = validate_matched_sdpa_report(
+            report,
+            expected_contract=self.contract,
+            current_runtime=current,
+        )
+        self.assertIn("runtime fingerprint mismatch", errors)
+
     def test_boolean_only_and_tampered_reports_fail_closed(self) -> None:
         errors = validate_admission_report(
             {"admitted": True},
@@ -243,6 +295,17 @@ class BackendAdmissionWiringTests(unittest.TestCase):
                 self.assertIn("--dataset_shuffle", text)
                 self.assertIn("--train_dataloader_shuffle", text)
                 self.assertIn("--strict true", text)
+
+    def test_fast_sdpa_requires_the_exact_matched_report(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        selector = (root / "scripts/backend_admission.sh").read_text(encoding="utf-8")
+        trainer = (
+            root / "experiments/020_hard_negative/train_pilot_lora_r64.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("embedding_check_matched_sdpa", selector)
+        self.assertIn("BACKEND_SDPA_VERIFIED_REPORT", selector)
+        self.assertIn("embedding_check_matched_sdpa", trainer)
+        self.assertIn("unverified or contract-mismatched fast SDPA runtime", trainer)
 
 
 if __name__ == "__main__":

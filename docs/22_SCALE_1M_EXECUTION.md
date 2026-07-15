@@ -49,12 +49,14 @@ row order를 보존하지 못했고 workload/runtime schema도 없었다. 따라
 기록으로만 남기며 production admission으로 재사용하지 않는다.
 
 새 admission은 `dataset_shuffle=false`, `train_dataloader_shuffle=false`,
-`strict=true`인 exact trainer input으로 다시 실행한다. report에는 train SHA,
-batch, accumulation, max length, LoRA rank/alpha/dropout, dtype, HN 수, base
-model/revision 또는 local artifact fingerprint, FA2 backend와 Python/Torch/CUDA/GPU/
-flash-attn/ms-swift/Transformers fingerprint를 기록한다. 현재 runtime에서 이 계약과
-두 SHA가 모두 일치할 때만 FA2로 전환하고, 실패하거나 계약이 달라지면 SDPA로 즉시
-fallback한다.
+`strict=true`인 exact trainer input으로 재실행했다. report에는 train SHA, batch,
+accumulation, max length, LoRA rank/alpha/dropout, dtype, HN 수, base model/revision
+또는 local artifact fingerprint, FA2 backend와 Python/Torch/CUDA/GPU/flash-attn/
+ms-swift/Transformers fingerprint를 기록한다. 200K 결과는 같은 빠른 runtime에서
+SDPA `11.90`, FA2 `11.53 s/step`(**1.03209x**)으로 1.05x gate 미달이었다. 따라서
+FA2 대신 exact workload/runtime 검증을 통과한 빠른 runtime의 SDPA를 선택했고,
+stable runtime SDPA `14.26 s/step`은 fail-closed fallback으로 유지했다. 이후 workload도
+FA2가 탈락했지만 matched SDPA가 정확히 성공한 경우 그 runtime의 SDPA를 쓸 수 있다.
 vLLM pooling은 평가·서빙 backend이며 gradient 학습 가속 경로로 사용하지 않는다.
 1M, 법률, Sionic domain, combined queue는 200K report를 재사용하지 않는다. primary와
 OOM fallback도 batch/accumulation이 다르므로 각 base·data·길이·HN 조합의 맞춤

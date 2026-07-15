@@ -319,6 +319,66 @@ def validate_admission_report(
     return errors
 
 
+def validate_matched_sdpa_report(
+    report: Mapping[str, Any],
+    *,
+    expected_contract: Mapping[str, Any],
+    current_runtime: Mapping[str, Any],
+) -> list[str]:
+    """Validate the exact SDPA half of a rejected matched FA2 comparison.
+
+    A rejected FA2 candidate can still leave a useful result: the same runtime
+    successfully completed the exact workload with SDPA.  This validator keeps
+    that fallback fail-closed without pretending that FA2 passed its speed gate.
+    """
+
+    errors: list[str] = []
+    if report.get("schema_version") != SCHEMA_VERSION:
+        errors.append(
+            f"schema_version={report.get('schema_version')!r}, expected {SCHEMA_VERSION}"
+        )
+    if report.get("admitted") is not False:
+        errors.append("FA2 report is not rejected")
+    if report.get("matched_sdpa_eligible") is not True:
+        errors.append("matched SDPA runtime is not eligible")
+    if report.get("selected_backend") != "sdpa":
+        errors.append("report did not select matched SDPA")
+    if report.get("real_8b_backward_probe") is not True:
+        errors.append("real_8b_backward_probe is not true")
+    if report.get("matched_sdpa_process_status") != 0:
+        errors.append("matched SDPA probe process did not exit 0")
+    if report.get("baseline_source") != "matched_subset_same_environment":
+        errors.append("baseline is not a matched SDPA measurement")
+    if not isinstance(report.get("probe_steps"), int) or report.get(
+        "probe_steps", 0
+    ) < MINIMUM_PROBE_STEPS:
+        errors.append("probe_steps is below the admission minimum")
+    baseline = report.get("baseline_sdpa_seconds_per_step")
+    if (
+        isinstance(baseline, bool)
+        or not isinstance(baseline, (int, float))
+        or baseline <= 0
+    ):
+        errors.append("matched SDPA timing evidence is missing or invalid")
+    recorded_contract = report.get("workload_contract")
+    if recorded_contract != expected_contract:
+        errors.append("workload contract mismatch")
+    expected_contract_sha = canonical_sha256(expected_contract)
+    if report.get("workload_contract_sha256") != expected_contract_sha:
+        errors.append("workload contract SHA256 mismatch")
+    recorded_runtime = report.get("runtime_fingerprint")
+    if recorded_runtime != current_runtime:
+        errors.append("runtime fingerprint mismatch")
+    expected_runtime_sha = canonical_sha256(current_runtime)
+    if report.get("runtime_fingerprint_sha256") != expected_runtime_sha:
+        errors.append("runtime fingerprint SHA256 mismatch")
+    if report.get("selected_environment") != current_runtime.get("python_prefix"):
+        errors.append("selected environment does not match runtime")
+    if report.get("backend") != expected_contract.get("backend"):
+        errors.append("top-level backend does not match paired probe contract")
+    return errors
+
+
 def _contract_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--train-file", type=Path, required=True)
     parser.add_argument("--backend", default="flash_attention_2")
@@ -368,6 +428,11 @@ def parse_args() -> argparse.Namespace:
     check.add_argument("--runtime-json")
     check.add_argument("--quiet", action="store_true")
     _contract_arguments(check)
+    check_sdpa = subparsers.add_parser("check-sdpa")
+    check_sdpa.add_argument("--report", type=Path, required=True)
+    check_sdpa.add_argument("--runtime-json")
+    check_sdpa.add_argument("--quiet", action="store_true")
+    _contract_arguments(check_sdpa)
 
     return parser.parse_args()
 
@@ -381,18 +446,26 @@ def main() -> int:
             print(f"missing admission report: {args.report}", file=sys.stderr)
         return 1
     report = json.loads(args.report.read_text(encoding="utf-8"))
-    errors = validate_admission_report(
-        report, expected_contract=contract, current_runtime=runtime
+    validator = (
+        validate_matched_sdpa_report
+        if args.command == "check-sdpa"
+        else validate_admission_report
     )
+    errors = validator(report, expected_contract=contract, current_runtime=runtime)
     if errors:
         if not args.quiet:
-            print(json.dumps({"admitted": False, "errors": errors}, indent=2))
+            status_key = "verified" if args.command == "check-sdpa" else "admitted"
+            print(json.dumps({status_key: False, "errors": errors}, indent=2))
         return 1
     if not args.quiet:
+        status_key = "verified" if args.command == "check-sdpa" else "admitted"
         print(
             json.dumps(
                 {
-                    "admitted": True,
+                    status_key: True,
+                    "selected_backend": (
+                        "sdpa" if args.command == "check-sdpa" else "flash_attention_2"
+                    ),
                     "report": str(args.report.resolve()),
                     "workload_contract_sha256": canonical_sha256(contract),
                     "runtime_fingerprint_sha256": canonical_sha256(runtime),
