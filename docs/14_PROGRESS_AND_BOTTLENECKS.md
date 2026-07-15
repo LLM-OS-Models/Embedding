@@ -249,6 +249,23 @@ runtime drift, OOM, API 오류, 로그 파싱 실패 시 stable `.venv-train + s
 fallback한다. 1M, SQuAD/health/AutoRAG, legal, combined와 각 OOM fallback도 200K
 report를 재사용하지 않고 자기 exact workload로 별도 probe한다.
 
+200K production `qwen3-embedding-8b-ko-performance200k-lora-r64`는 2026-07-15
+18:46 KST에 실제 시작했다. 선택 runtime/backend는 `.venv-train-fa2 + sdpa`, trainer
+output version은 `v1-20260715-184610`이다. train 199,904행, validation 512행,
+3,123 optimizer-step, global batch 64, LR `1e-5`, cosine/warmup 5%, eval/save 250,
+checkpoint 보존 3개로 고정했다. step 1–7의 loss와 grad norm은 모두 finite였고 peak
+trainer memory `70.02 GiB`, 장치 관측 약 `72.4 GiB`, GPU utilization 100%였다. 실제
+length mix 초기 투영은 약 18 s/step이므로 첫 표시 ETA는 15–16시간이며, strata별 길이가
+달라 이후 실측으로 갱신한다.
+
+별도 watcher도 동시에 시작했다. step-250과 이후 completed same-step validation
+checkpoint만 전체 BF16 safetensors 검증 후 private
+`LLM-OS-Models/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates`에
+allowlist 3파일로 업로드한다. admission report SHA
+`effb5710447922d286e77c625782cdd275882b11463f246eba26affd73bd3eef`와 training
+manifest SHA `eeed4fcdab4eb3eecf62f6bde483451f8be12cf2aa54bff21f64f234cfbcf280`를
+candidate lineage에 고정했다.
+
 2026-07-15 첫 200K launch preflight는 optimizer step 0 전에 중단했다. ms-swift의
 `dataset_shuffle` 기본값이 `true`라 `train_dataloader_shuffle=false`만으로는 이미 만든
 source-homogeneous 16행 묶음이 보존되지 않는 것을 args log에서 확인했기 때문이다.
