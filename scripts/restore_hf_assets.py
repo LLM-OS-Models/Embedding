@@ -53,6 +53,60 @@ class ModelAsset:
 
 DATASETS = (
     DatasetAsset(
+        "bcai-finance-triplet",
+        "BCCard/BCAI-Finance-Kor-Embedding-Triplet",
+        "f63d59969dba9916bd34c86c82112331890b11da",
+        "outputs/assets/bcai-finance-kor-embedding-triplet",
+        (
+            FileContract(
+                "data/train-00000-of-00001.parquet",
+                None,
+                "a84665bc2214ca0cd9d72d6e3355228a0ac3ba76b5275041a2cffdc00af70384",
+            ),
+            FileContract(
+                "data/validation-00000-of-00001.parquet",
+                None,
+                "eb0d31a4d8ae6fb6ca81d8813f7a2a4389e31cc1f0233f295ffa9202058e8c63",
+            ),
+            FileContract(
+                "data/test-00000-of-00001.parquet",
+                None,
+                "dc92e3f876dc24bd7712b61964c1099efec90cecbfedec8b61844c8bd8358c4e",
+            ),
+        ),
+    ),
+    DatasetAsset(
+        "bcai-finance-pair",
+        "BCCard/BCAI-Finance-Kor-Embedding-Pair",
+        "e022cb013f2907e0716ebe40d13f30ed93ffa9b0",
+        "outputs/assets/bcai-finance-kor-embedding-pair",
+        (
+            FileContract(
+                "data/train-00000-of-00001.parquet",
+                None,
+                "0390e3ef89033cca3161914816e495ad239e5d8033f1a7bc14a922adb081888d",
+            ),
+        ),
+    ),
+    DatasetAsset(
+        "kotsqa-v2",
+        "etri-lirs/KoTSQA-v.2.0",
+        "ff9349df469a765b4561959e36ef1b3f377765cd",
+        "outputs/assets/kotsqa-v2",
+        (
+            FileContract(
+                "train.parquet",
+                None,
+                "e38c3509fd9ff844488dc0687f6b919c3dfb4db13d989e063b60aa48826758ee",
+            ),
+            FileContract(
+                "test.parquet",
+                None,
+                "5e8719d1d48b45dc9d325dd448a201b6d739c1e9921274faae66c2883656e949",
+            ),
+        ),
+    ),
+    DatasetAsset(
         "pilot10k",
         "LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k",
         "0865276985dd2eae5efec33a4fa181ee3086bd5f",
@@ -189,6 +243,7 @@ MODELS = (
     ModelAsset("harrier", "microsoft/harrier-oss-v1-27b", "0c0fc62f6d8af9e8604cb818c412301b103a0093", "comparison"),
     ModelAsset("kalm", "tencent/KaLM-Embedding-Gemma3-12B-2511", "98c19ba34197906fbc93f6f1ef79402ca3a33956", "comparison"),
     ModelAsset("nemotron", "nvidia/llama-embed-nemotron-8b", "aa3b43a495a9b280d1bdb716da37c54bb495d630", "comparison"),
+    ModelAsset("qwen-reranker-teacher", "Qwen/Qwen3-Reranker-8B", "77d193c791ed757ca307ee72715aa132723da912", "teacher"),
 )
 
 
@@ -313,6 +368,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--datasets", action="store_true", help="restore all required public datasets")
     parser.add_argument("--core-models", action="store_true", help="cache Qwen and Comsat revisions")
     parser.add_argument("--comparison-models", action="store_true", help="cache the five additional comparison models")
+    parser.add_argument("--teacher-models", action="store_true", help="cache pinned teacher and reranker models")
     parser.add_argument("--all", action="store_true", help="restore datasets and every model")
     parser.add_argument("--asset", action="append", default=[], help="restore only a named dataset/model key")
     parser.add_argument("--local-only", action="store_true", help="verify/link without network access")
@@ -324,7 +380,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     requested = set(args.asset)
-    if not any((args.datasets, args.core_models, args.comparison_models, args.all, requested)):
+    if not any((args.datasets, args.core_models, args.comparison_models, args.teacher_models, args.all, requested)):
         args.datasets = True
     known = {asset.key for asset in DATASETS} | {asset.key for asset in MODELS}
     unknown = requested - known
@@ -344,6 +400,7 @@ def main() -> None:
         or asset.key in requested
         or (args.core_models and asset.group == "core")
         or (args.comparison_models and asset.group == "comparison")
+        or (args.teacher_models and asset.group == "teacher")
     ]
     for asset in selected_datasets:
         restore_dataset(asset, token, args.cache_dir, args.max_workers, args.local_only)

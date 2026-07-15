@@ -36,6 +36,29 @@ class RestoreHfAssetsTests(unittest.TestCase):
         self.assertIn("train.homogeneous-b16.jsonl", aliases["performance1m"])
         self.assertIn("train.bootstrap.jsonl", aliases["legal250k"])
 
+    def test_next_stage_assets_are_exactly_pinned(self) -> None:
+        datasets = {asset.key: asset for asset in MODULE.DATASETS}
+        models = {asset.key: asset for asset in MODULE.MODELS}
+        self.assertEqual(
+            datasets["bcai-finance-triplet"].revision,
+            "f63d59969dba9916bd34c86c82112331890b11da",
+        )
+        self.assertEqual(
+            datasets["bcai-finance-pair"].revision,
+            "e022cb013f2907e0716ebe40d13f30ed93ffa9b0",
+        )
+        self.assertEqual(
+            datasets["kotsqa-v2"].revision,
+            "ff9349df469a765b4561959e36ef1b3f377765cd",
+        )
+        teacher = models["qwen-reranker-teacher"]
+        self.assertEqual(teacher.repo_id, "Qwen/Qwen3-Reranker-8B")
+        self.assertEqual(
+            teacher.revision,
+            "77d193c791ed757ca307ee72715aa132723da912",
+        )
+        self.assertEqual(teacher.group, "teacher")
+
 
 if __name__ == "__main__":
     unittest.main()

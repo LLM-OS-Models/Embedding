@@ -148,6 +148,7 @@ row는 101개였다.
 30. [MIRACL·MrTidy·MLDR train-family specialist](docs/29_SIONIC_RETRIEVAL_FAMILY_ADAPTATION.md)
 31. [상위 모델 공식 근거 종합과 1×H100 최단 승리 레시피](docs/30_TOP_MODEL_RECIPE_SYNTHESIS.md)
 32. [200K private checkpoint 증분 업로드 watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md)
+33. [Qwen reranker teacher와 금융·시간성 추가 데이터](docs/32_NEXT_STAGE_TEACHER_AND_DATA.md)
 
 ## 실험 지도
 

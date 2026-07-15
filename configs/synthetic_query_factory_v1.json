@@ -92,6 +92,7 @@
   },
   "teacher_scoring": {
     "recommended_model": "Qwen/Qwen3-Reranker-8B",
+    "recommended_revision": "77d193c791ed757ca307ee72715aa132723da912",
     "score_file_format": "one JSON object per generated_id with a documents array",
     "score_field_priority": [
       "reranker_score",
