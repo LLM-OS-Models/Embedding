@@ -49,8 +49,11 @@ Sionic shard만 token 없는 익명 다운로드를 허용하도록 수정했다
 Mr.TyDi 완료 직후 MLDR의 첫 64-document long-context batch에서 7.98GiB 연속 할당이
 필요했으나 PyTorch allocated 60.57GiB와 fragmented reserved 11.92GiB 때문에 OOM이 났다.
 모델/데이터 오류가 아니며 완료 MIRACL·Mr.TyDi result와 MLDR query cache는 정상이다.
-동일 nominal batch/runtime 계약을 유지하면서 PyTorch 권고
-`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`를 base runner에 고정해 재개한다.
+PyTorch 권고 `expandable_segments:True`로 fragmentation을 제거해 재시도했으나 allocated
+70.82GiB, free 7.51GiB 상태에서 추가 7.98GiB가 필요해 물리 용량 초과가 재현됐다.
+따라서 동일 nominal batch 64/runtime/cache-key 계약은 유지하고 resumable encoder 내부
+microbatch만 `CUDA OutOfMemoryError`일 때 32→16으로 반감한다. batch 1에서도 실패하면
+오류를 숨기지 않는다. 실제 retry 횟수와 최소 effective batch는 최종 summary에 기록한다.
 
 Nemotron-3가 base gate를 통과할 때의 공개 LoRA 경로는
 `scripts/train_nemotron3_public_lora.py`로 고정했다. SentenceTransformers 5.6.0 + PEFT

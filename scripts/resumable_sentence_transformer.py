@@ -5,12 +5,54 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
+
+
+def _encode_with_oom_backoff(
+    function: Any,
+    inputs: Any,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    counters: Any,
+) -> Any:
+    """Retry only CUDA OOMs with a smaller internal microbatch."""
+
+    import torch
+
+    effective = dict(kwargs)
+    while True:
+        try:
+            return function(inputs, *args, **effective)
+        except torch.OutOfMemoryError:
+            batch_size = effective.get("batch_size")
+            if (
+                isinstance(batch_size, bool)
+                or not isinstance(batch_size, int)
+                or batch_size <= 1
+            ):
+                raise
+            reduced = max(1, batch_size // 2)
+            counters.embedding_oom_retries += 1
+            previous_minimum = counters.minimum_effective_batch_size
+            counters.minimum_effective_batch_size = (
+                reduced
+                if previous_minimum is None
+                else min(previous_minimum, reduced)
+            )
+            effective["batch_size"] = reduced
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print(
+                f"CUDA OOM at embedding microbatch={batch_size}; retrying with {reduced}",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 def _canonical_cache_options(kwargs: dict[str, Any]) -> dict[str, Any] | None:
@@ -160,6 +202,8 @@ class ResumableSentenceTransformer(SentenceTransformer):
         self._embedding_cache_namespace = embedding_cache_namespace
         self.embedding_cache_hits = 0
         self.embedding_cache_misses = 0
+        self.embedding_oom_retries = 0
+        self.minimum_effective_batch_size = None
         super().__init__(*args, **kwargs)
 
     def encode(self, inputs: Any, *args: Any, **kwargs: Any) -> Any:
@@ -181,7 +225,9 @@ class ResumableSentenceTransformer(SentenceTransformer):
         if cached is not None:
             self.embedding_cache_hits += 1
             return cached
-        result = super().encode(inputs, *args, **kwargs)
+        result = _encode_with_oom_backoff(
+            super().encode, inputs, args, kwargs, self
+        )
         array = np.asarray(result)
         if array.dtype == np.float32 and array.ndim == 2:
             self._exact_embedding_cache.store(key, array)
@@ -203,6 +249,8 @@ def install_exact_encode_cache(
     counters = counter_target if counter_target is not None else target
     counters.embedding_cache_hits = 0
     counters.embedding_cache_misses = 0
+    counters.embedding_oom_retries = 0
+    counters.minimum_effective_batch_size = None
 
     def cached_encode(inputs: Any, *args: Any, **kwargs: Any) -> Any:
         if (
@@ -224,7 +272,7 @@ def install_exact_encode_cache(
         if value is not None:
             counters.embedding_cache_hits += 1
             return value
-        result = original(inputs, *args, **kwargs)
+        result = _encode_with_oom_backoff(original, inputs, args, kwargs, counters)
         array = np.asarray(result)
         if array.dtype == np.float32 and array.ndim == 2:
             cache.store(key, array)

@@ -523,6 +523,10 @@ def main() -> None:
             ),
             "embedding_cache_hits": getattr(model, "embedding_cache_hits", 0),
             "embedding_cache_misses": getattr(model, "embedding_cache_misses", 0),
+            "embedding_oom_retries": getattr(model, "embedding_oom_retries", 0),
+            "minimum_effective_batch_size": getattr(
+                model, "minimum_effective_batch_size", None
+            ),
         },
     }
     (run_dir / "summary.json").write_text(
