@@ -22,6 +22,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--train", type=Path, required=True)
+    parser.add_argument("--eval", type=Path)
+    parser.add_argument("--eval-manifest", type=Path)
     parser.add_argument("--training-manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-steps", type=int, default=300)
@@ -60,6 +62,43 @@ def validate_contract(args: argparse.Namespace) -> dict[str, Any]:
     for path in (args.model, args.train, args.training_manifest):
         if not path.exists():
             raise FileNotFoundError(path)
+    if args.eval is not None and not args.eval.is_file():
+        raise FileNotFoundError(args.eval)
+    if args.eval_manifest is not None and not args.eval_manifest.is_file():
+        raise FileNotFoundError(args.eval_manifest)
+    if (args.eval is None) != (args.eval_manifest is None):
+        raise ValueError("--eval and --eval-manifest must be supplied together")
+    if args.max_steps > 1 and (args.eval is None or args.eval_manifest is None):
+        raise ValueError(
+            "Multi-step public training requires --eval and --eval-manifest for checkpoint validation"
+        )
+    eval_contract = None
+    if args.eval is not None:
+        if args.eval_manifest is None and args.max_steps > 1:
+            raise ValueError("Multi-step public training requires --eval-manifest")
+        if args.eval_manifest is not None:
+            eval_manifest = read_object(args.eval_manifest)
+            declared_eval = eval_manifest.get("files", {}).get(args.eval.name, {})
+            if declared_eval.get("sha256") != sha256(args.eval):
+                raise ValueError("Evaluation JSONL SHA does not match its manifest")
+            assertions = eval_manifest.get("assertions", {})
+            required_zero = (
+                "selected_query_training_text_overlap",
+                "selected_positive_training_text_overlap",
+                "selected_negative_training_text_overlap",
+                "selected_source_document_training_provenance_overlap",
+            )
+            if assertions.get("source_holdout_contract_verified") is not True or any(
+                assertions.get(field) != 0 for field in required_zero
+            ):
+                raise ValueError("Evaluation manifest independence assertions failed")
+            eval_contract = {
+                "path": str(args.eval.resolve()),
+                "sha256": sha256(args.eval),
+                "manifest_path": str(args.eval_manifest.resolve()),
+                "manifest_sha256": sha256(args.eval_manifest),
+                "independence_verified": True,
+            }
     config = read_object(args.model / "config.json")
     if config.get("model_type") != "ministral3" or config.get("architectures") != [
         "Ministral3Model"
@@ -112,6 +151,7 @@ def validate_contract(args: argparse.Namespace) -> dict[str, Any]:
             "release_eligible": True,
             "visibility": "public",
         },
+        **({"evaluation_data": eval_contract} if eval_contract is not None else {}),
         "input_contract": {
             "query": "stored fixed Korean retrieval instruction; no implicit prompt",
             "document": "stored document text; no implicit prompt",
@@ -225,13 +265,21 @@ def train(args: argparse.Namespace, contract: dict[str, Any]) -> None:
             bias="none",
         )
     )
-    dataset = load_dataset("json", data_files=str(args.train), split="train")
-    original_columns = dataset.column_names
-    dataset = dataset.map(
-        convert_example,
-        with_indices=True,
-        remove_columns=original_columns,
-        desc="Converting strict embedding rows",
+    def load_strict_dataset(path: Path, description: str):
+        dataset = load_dataset("json", data_files=str(path), split="train")
+        original_columns = dataset.column_names
+        return dataset.map(
+            convert_example,
+            with_indices=True,
+            remove_columns=original_columns,
+            desc=description,
+        )
+
+    dataset = load_strict_dataset(args.train, "Converting strict training rows")
+    eval_dataset = (
+        load_strict_dataset(args.eval, "Converting strict evaluation rows")
+        if args.eval is not None
+        else None
     )
     loss = CachedMultipleNegativesRankingLoss(
         model,
@@ -254,6 +302,9 @@ def train(args: argparse.Namespace, contract: dict[str, Any]) -> None:
         save_strategy="steps",
         save_steps=args.save_steps,
         save_total_limit=None,
+        eval_strategy="steps" if eval_dataset is not None else "no",
+        eval_steps=args.save_steps if eval_dataset is not None else None,
+        per_device_eval_batch_size=args.batch_size,
         logging_steps=5,
         logging_first_step=True,
         report_to="none",
@@ -266,6 +317,7 @@ def train(args: argparse.Namespace, contract: dict[str, Any]) -> None:
         model=model,
         args=training_args,
         train_dataset=dataset,
+        eval_dataset=eval_dataset,
         loss=loss,
     )
     resume = args.resume_from_checkpoint or latest_complete_checkpoint(args.output_dir)

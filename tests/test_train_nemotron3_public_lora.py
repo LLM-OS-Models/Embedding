@@ -60,6 +60,8 @@ class TrainNemotron3PublicLoraTest(unittest.TestCase):
                 model=model,
                 revision="a" * 40,
                 train=train,
+                eval=None,
+                eval_manifest=None,
                 training_manifest=manifest,
                 output_dir=root / "out",
                 max_steps=1,
@@ -76,6 +78,10 @@ class TrainNemotron3PublicLoraTest(unittest.TestCase):
             contract = validate_contract(args)
             self.assertEqual(contract["base_revision"], "a" * 40)
             self.assertTrue(contract["training_data"]["release_eligible"])
+            args.max_steps = 2
+            with self.assertRaisesRegex(ValueError, "requires --eval"):
+                validate_contract(args)
+            args.max_steps = 1
             manifest_value = json.loads(manifest.read_text())
             manifest_value["release_eligible"] = False
             manifest.write_text(json.dumps(manifest_value))

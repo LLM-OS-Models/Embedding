@@ -51,6 +51,9 @@ Nemotron-3가 base gate를 통과할 때의 공개 LoRA 경로는
 complete optimizer/scheduler/trainer checkpoint만 자동 재개한다. 현재는 공개 250K manifest와
 train SHA를 사용한 contract-only 검증 및 단위 테스트까지 통과했다. 실제 1-step backward
 probe는 Sionic 병렬 평가가 GPU에서 내려간 직후 실행한다.
+2-step 이상 실제 run은 `--eval`과 `--eval-manifest`가 필수다. evaluator manifest의 JSONL
+SHA, source-holdout 검증, query/positive/negative/source-document training overlap 0을 확인한
+뒤 save step마다 eval loss를 기록해 public checkpoint watcher의 completion gate와 맞춘다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를
