@@ -105,6 +105,10 @@ Qwen이면 `last_token`을 별도 검증하고 카드의 방법 설명에 실제
 Sionic summary model/revision을 exact 결합한다. Qwen/Comsat 최고 reference 대비 legal 및
 multidomain macro `-0.010`, finance/knowledge 각각 `-0.015`, Sionic strict `>0.7930`을
 모두 요구하며 public score가 checkpoint 선택에 쓰이지 않았음을 report에 남긴다.
+최종 `scripts/approve_nemotron3_public_release.py`는 사용자의 2026-07-17 public model 지시를
+authorization basis로 기록하지만, exact merged weight·rights-safe manifest·final gate와
+Sionic/공식6/comprehensive/clean/robustness summary SHA가 모두 일치할 때만 지정 public
+repo에 대한 machine-readable approval을 만든다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를
