@@ -107,6 +107,12 @@ Qwen 원 run의 exact validation은
 
 ## 공개 정책
 
+- 첫 공개 rights-safe curriculum은
+  [`LLM-OS-Models2/ko-legal-embedding-training-v1`](https://huggingface.co/datasets/LLM-OS-Models2/ko-legal-embedding-training-v1)
+  commit `faf431f53a9d8e8bbfa4d57903012a5d786f8716`에 올렸다. 250,000행 모두
+  source/revision/license/redistribution approval을 갖고, 독립 text-hash audit에서 고정
+  benchmark query/evaluation/corpus exact overlap이 모두 0이다. bootstrap negative는 최종
+  학습 전에 채택한 current student로 다시 mining한다.
 - 재배포가 허용된 학습 데이터와 derived dataset은 기본 public이다.
 - dataset card에 upstream repository/revision, license, row별 source/provenance, 변환,
   dedup과 benchmark-overlap 감사를 기록한다.
