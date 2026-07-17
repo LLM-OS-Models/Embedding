@@ -187,6 +187,31 @@ class FailFirstCommitApi(FakeApi):
 
 
 class PrivateCheckpointWatcherTests(unittest.TestCase):
+    def test_public_checkpoint_repo_requires_rights_manifest_and_base_license(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            args = make_args(root, upload=False)
+            args.public = True
+            args.base_license = "apache-2.0"
+            args.training_manifest_path = root / "training-manifest.json"
+            args.training_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "release_eligible": True,
+                        "release_blockers": [],
+                        "visibility": "public",
+                        "source_licenses": ["cc-by-4.0"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            watcher.validate_cli(args)
+            self.assertEqual(args.training_rights["release_eligible"], True)
+            args.base_license = ""
+            with self.assertRaises(watcher.WatcherError) as caught:
+                watcher.validate_cli(args)
+            self.assertEqual(caught.exception.code, "invalid_argument")
+
     def test_remote_recovery_rechecks_private_visibility(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
