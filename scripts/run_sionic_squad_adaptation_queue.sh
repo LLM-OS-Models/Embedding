@@ -217,7 +217,7 @@ MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$CURRICULUM_MANIFEST")"
 (( MAX_STEPS > 0 )) || exit 6
 train_target() {
   local output_name="$1" batch="$2" accum="$3"
-  local train_env="$ROOT/.venv-train" train_attn=sdpa admission_report
+  local train_env="$EMBEDDING_TRAIN_ENV" train_attn=sdpa admission_report
   local admission_key="sionic-${TARGET_KIND}-lora-r64-b${batch}-a${accum}-m${TARGET_MAX_LENGTH}-hn7"
   if embedding_select_fa2_backend "$CURRICULUM" "$admission_key" \
       "$batch" "$accum" "$TARGET_MAX_LENGTH" 64 128 bfloat16 \

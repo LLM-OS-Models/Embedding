@@ -223,7 +223,7 @@ MAX_STEPS_1M="$(jq -r '.output_rows / 128 | floor' "$TRAINING_MANIFEST")"
 
 train_scale() {
   local output_name="$1" batch="$2" accum="$3"
-  local train_env="$ROOT/.venv-train" train_attn=sdpa admission_report
+  local train_env="$EMBEDDING_TRAIN_ENV" train_attn=sdpa admission_report
   local admission_key="scale1m-lora-r64-b${batch}-a${accum}-m512-hn${TRAIN_HARD_NEGATIVES}"
   if embedding_select_fa2_backend "$TRAIN_FILE" "$admission_key" \
       "$batch" "$accum" 512 64 128 bfloat16 \

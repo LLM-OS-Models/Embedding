@@ -3,13 +3,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+embedding_resolve_train_runtime
 MODE="${1:-}"
-SWIFT="${TRAIN_ENV:-$ROOT/.venv-train}/bin/swift"
+TRAIN_ENV="${TRAIN_ENV:-$EMBEDDING_TRAIN_ENV}"
+SWIFT="$TRAIN_ENV/bin/swift"
 TRAIN_FILE="${TRAIN_FILE:-$ROOT/outputs/data/performance-v1/ablation-200k/train.homogeneous-b16.jsonl}"
 VAL_FILE="${VAL_FILE:-$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl}"
 REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
 
-if [[ "${TRAIN_ENV:-$ROOT/.venv-train}" == "$ROOT/.venv-train-fa2" ]]; then
+if [[ "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
   embedding_enable_torch25_swift_compat
 fi
 
@@ -127,6 +129,6 @@ case "$MODE" in
 esac
 
 mkdir -p "$OUTPUT_DIR"
-"$ROOT/.venv-train/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
+"$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
   "$TRAIN_FILE" "$VAL_FILE"
 "$SWIFT" "${COMMON[@]}" "${EXTRA[@]}" 2>&1 | tee "$OUTPUT_DIR/train.log"

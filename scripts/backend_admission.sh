@@ -12,7 +12,6 @@ embedding_check_fa2_admission() {
   local lora_dropout="${12:-0.05}"
   local root="${ROOT:?ROOT must be defined before sourcing backend_admission.sh}"
   local fa2_env="${FA2_ENV:-$root/.venv-train-fa2}"
-
   [[ -x "$fa2_env/bin/python" && -s "$report" ]] || return 1
   if declare -F embedding_enable_torch25_swift_compat >/dev/null; then
     embedding_enable_torch25_swift_compat
@@ -58,6 +57,10 @@ embedding_select_fa2_backend() {
   local lora_dropout="${12:-0.05}"
   local root="${ROOT:?ROOT must be defined before sourcing backend_admission.sh}"
   local fa2_env="${FA2_ENV:-$root/.venv-train-fa2}"
+  local stable_env="${EMBEDDING_TRAIN_ENV:-$root/.venv-train}"
+  if [[ ! -x "$stable_env/bin/python" && -x "$fa2_env/bin/python" ]]; then
+    stable_env="$fa2_env"
+  fi
   local report="$root/outputs/backend-probes/$run_key/admission.json"
 
   if [[ ! "$run_key" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -66,7 +69,7 @@ embedding_select_fa2_backend() {
   fi
   export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
   export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
-  BACKEND_ADMISSION_ENV="$root/.venv-train"
+  BACKEND_ADMISSION_ENV="$stable_env"
   BACKEND_ADMISSION_ATTN=sdpa
   BACKEND_ADMISSION_REPORT="$report"
   BACKEND_ADMISSION_VERIFIED_REPORT=

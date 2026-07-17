@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 source "$ROOT/scripts/backend_admission.sh"
-TRAIN_ENV="${TRAIN_ENV:-$ROOT/.venv-train}"
+embedding_resolve_train_runtime
+TRAIN_ENV="${TRAIN_ENV:-$EMBEDDING_TRAIN_ENV}"
 DATA_DIR="${DATA_DIR:-$ROOT/data/processed/ko_triplet_pilot_10k}"
 TRAIN_FILE="${TRAIN_FILE:-$DATA_DIR/train.hn-qwen3-r095-n4.jsonl}"
 VAL_FILE="${VAL_FILE:-$DATA_DIR/validation.hn-qwen3-r095-n4.jsonl}"
@@ -100,7 +101,7 @@ if [[ "$RUN_NAME" == *performance200k* && "${AUTO_SELECT_FA2:-1}" == 1 ]]; then
     ATTN_IMPL="$BACKEND_ADMISSION_ATTN"
     echo "exact performance200k backend selected: $BACKEND_ADMISSION_SELECTED_KIND" >&2
   else
-    TRAIN_ENV="$ROOT/.venv-train"
+    TRAIN_ENV="$EMBEDDING_TRAIN_ENV"
     ATTN_IMPL=sdpa
     echo "FA2 backend rejected; using SDPA fallback" >&2
   fi
@@ -116,7 +117,7 @@ if [[ "${ATTN_IMPL:-sdpa}" == flash_attention_2 ]]; then
         bfloat16 "$BASE_MODEL" "$BASE_REVISION" "$INFONCE_HARD_NEGATIVES" \
         "${LORA_DROPOUT:-0.05}"; then
     echo "unverified or contract-mismatched FA2 workload; falling back to SDPA" >&2
-    TRAIN_ENV="$ROOT/.venv-train"
+    TRAIN_ENV="$EMBEDDING_TRAIN_ENV"
     ATTN_IMPL=sdpa
     BACKEND_ADMISSION_VERIFIED_REPORT=
     export BACKEND_ADMISSION_VERIFIED_REPORT
@@ -133,7 +134,7 @@ if [[ "${ATTN_IMPL:-sdpa}" == sdpa \
         bfloat16 "$BASE_MODEL" "$BASE_REVISION" "$INFONCE_HARD_NEGATIVES" \
         "${LORA_DROPOUT:-0.05}"; then
     echo "unverified or contract-mismatched fast SDPA runtime; using stable SDPA" >&2
-    TRAIN_ENV="$ROOT/.venv-train"
+    TRAIN_ENV="$EMBEDDING_TRAIN_ENV"
     BACKEND_SDPA_VERIFIED_REPORT=
     export BACKEND_SDPA_VERIFIED_REPORT
   fi

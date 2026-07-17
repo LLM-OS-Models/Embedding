@@ -264,6 +264,22 @@ class BackendAdmissionTests(unittest.TestCase):
 
 
 class BackendAdmissionWiringTests(unittest.TestCase):
+    def test_all_training_fallbacks_use_the_resolved_runtime(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        selector = (root / "scripts/backend_admission.sh").read_text(encoding="utf-8")
+        trainer = (
+            root / "experiments/020_hard_negative/train_pilot_lora_r64.sh"
+        ).read_text(encoding="utf-8")
+        quality = (
+            root / "experiments/070_tuning_strategy/train_quality.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('EMBEDDING_TRAIN_ENV:-$root/.venv-train', selector)
+        self.assertIn("embedding_resolve_train_runtime", trainer)
+        self.assertIn('TRAIN_ENV="${TRAIN_ENV:-$EMBEDDING_TRAIN_ENV}"', trainer)
+        self.assertIn("embedding_resolve_train_runtime", quality)
+        self.assertNotIn('"$ROOT/.venv-train/bin/python"', trainer)
+        self.assertNotIn('"$ROOT/.venv-train/bin/python"', quality)
+
     def test_queues_do_not_reuse_boolean_only_200k_report(self) -> None:
         root = Path(__file__).resolve().parents[1]
         queues = [
