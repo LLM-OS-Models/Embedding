@@ -64,6 +64,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--encode-batch-size", type=int, default=128)
     parser.add_argument("--query-prefix", default="")
     parser.add_argument("--document-prefix", default="")
+    parser.add_argument("--strip-stored-query-instruction", action="store_true")
     parser.add_argument("--candidate-pool-size", type=int, default=24)
     parser.add_argument("--search-k", type=int, default=256)
     parser.add_argument("--num-negatives", type=int, default=7)
@@ -112,6 +113,16 @@ def local_model_weights_sha256(model: str) -> str | None:
             for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
                 digest.update(block)
     return digest.hexdigest()
+
+
+def strip_stored_query_instruction(text: str) -> str:
+    stripped = text.strip()
+    if not stripped.startswith("Instruct:") or "\nQuery:" not in stripped:
+        raise ValueError("query has no explicit stored Instruct/Query prefix")
+    query = stripped.rpartition("Query:")[2].strip()
+    if not query:
+        raise ValueError("stored query body is empty")
+    return query
 
 
 def validate_args(args: argparse.Namespace, rows: int, corpus: int) -> None:
@@ -177,6 +188,9 @@ def cache_namespace(
         "model_dtype": args.model_dtype,
         "attention": args.attn_implementation,
         "prefix": prefix,
+        "strip_stored_query_instruction": (
+            args.strip_stored_query_instruction if role == "queries" else False
+        ),
         "normalized": True,
         "dtype": "float32",
     }
@@ -422,6 +436,12 @@ def main() -> None:
     rows = read_rows(args.input)
     corpus, corpus_lookup = canonical_documents(row.positive for row in rows)
     validate_args(args, len(rows), len(corpus))
+    query_texts = [
+        strip_stored_query_instruction(row.query)
+        if args.strip_stored_query_instruction
+        else row.query
+        for row in rows
+    ]
     input_sha = file_hash(args.input)
     model_weights_sha = local_model_weights_sha256(args.model)
     plan = {
@@ -437,6 +457,7 @@ def main() -> None:
         "prompt": {
             "query_prefix": args.query_prefix,
             "document_prefix": args.document_prefix,
+            "stored_query_instruction_stripped": args.strip_stored_query_instruction,
             "sentence_transformers_implicit_prompt": "disabled with prompt=''",
         },
         "teacher_requests": (
@@ -488,7 +509,7 @@ def main() -> None:
     )
     query_embeddings, query_dimension, query_resumed = encode_or_resume(
         model,
-        [row.query for row in rows],
+        query_texts,
         work_dir / "queries.f32",
         query_namespace,
         args.encode_batch_size,

@@ -78,6 +78,7 @@ if [[ ! -s "$MINING_MANIFEST" \
       --work-dir "$OUT/faiss-work" --keep-work-dir \
       --model "$MODEL" --revision "$NEMOTRON_REVISION" \
       --encode-batch-size 128 --max-seq-length 512 \
+      --strip-stored-query-instruction \
       --query-prefix "$QUERY_PROMPT" --document-prefix "" \
       --candidate-pool-size 24 --search-k 256 --num-negatives 7 \
       --selection-strategy score_rank_quantiles --positive-relative-ratio .95 \

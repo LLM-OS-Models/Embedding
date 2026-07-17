@@ -26,6 +26,7 @@ class FaissSelectionTests(unittest.TestCase):
             max_seq_length=512,
             model_dtype="bfloat16",
             attn_implementation="flash_attention_2",
+            strip_stored_query_instruction=True,
         )
         plain = MODULE.cache_namespace(args, "b" * 64, "queries", 2, None, "")
         prompted = MODULE.cache_namespace(
@@ -33,6 +34,12 @@ class FaissSelectionTests(unittest.TestCase):
         )
         self.assertEqual(prompted["prefix"], "fixed prompt")
         self.assertNotEqual(plain, prompted)
+
+    def test_stored_query_instruction_is_stripped_exactly_once(self) -> None:
+        text = "Instruct: legal retrieval\nQuery: 실제 질의"
+        self.assertEqual(MODULE.strip_stored_query_instruction(text), "실제 질의")
+        with self.assertRaisesRegex(ValueError, "no explicit stored"):
+            MODULE.strip_stored_query_instruction("실제 질의")
 
     def test_teacher_request_sampling_is_seeded_and_without_replacement(self) -> None:
         first = MODULE.deterministic_sample_indices(1000, 50, 42)

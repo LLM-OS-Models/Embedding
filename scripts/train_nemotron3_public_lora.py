@@ -163,7 +163,7 @@ def validate_contract(args: argparse.Namespace) -> dict[str, Any]:
         },
         **({"evaluation_data": eval_contract} if eval_contract is not None else {}),
         "input_contract": {
-            "query": "source query text with exact training_prompts.anchor prepended by the collator",
+            "query": "stored Instruct/Query prefix stripped, then exact training_prompts.anchor prepended by the collator",
             "document": "source-native positive/negative text; no prefix",
             "max_length": args.max_length,
         },
@@ -199,6 +199,18 @@ def extract_text(group: Any, field: str, line_number: int) -> str:
     return message["content"]
 
 
+def strip_stored_query_instruction(text: str, line_number: int) -> str:
+    stripped = text.strip()
+    if not stripped.startswith("Instruct:") or "\nQuery:" not in stripped:
+        raise ValueError(
+            f"line {line_number}: query must contain one explicit stored Instruct/Query prefix"
+        )
+    query = stripped.rpartition("Query:")[2].strip()
+    if not query:
+        raise ValueError(f"line {line_number}: stored query body is empty")
+    return query
+
+
 def convert_example(example: dict[str, Any], index: int) -> dict[str, str]:
     positives = example.get("positive_messages")
     negatives = example.get("negative_messages")
@@ -207,7 +219,9 @@ def convert_example(example: dict[str, Any], index: int) -> dict[str, str]:
     if not isinstance(negatives, list) or not negatives:
         raise ValueError(f"line {index + 1}: at least one negative is required")
     converted = {
-        "anchor": extract_text(example.get("messages"), "messages", index + 1),
+        "anchor": strip_stored_query_instruction(
+            extract_text(example.get("messages"), "messages", index + 1), index + 1
+        ),
         "positive": extract_text(positives[0], "positive_messages[0]", index + 1),
     }
     for negative_index, group in enumerate(negatives):

@@ -97,7 +97,9 @@ class TrainNemotron3PublicLoraTest(unittest.TestCase):
 
     def test_strict_row_conversion_and_complete_checkpoint_selection(self) -> None:
         row = {
-            "messages": [{"role": "user", "content": "query"}],
+            "messages": [
+                {"role": "user", "content": "Instruct: legal retrieval\nQuery: query"}
+            ],
             "positive_messages": [[{"role": "user", "content": "positive"}]],
             "negative_messages": [
                 [{"role": "user", "content": "negative one"}],
@@ -113,6 +115,9 @@ class TrainNemotron3PublicLoraTest(unittest.TestCase):
                 "negative_2": "negative two",
             },
         )
+        row["messages"][0]["content"] = "query"
+        with self.assertRaisesRegex(ValueError, "explicit stored"):
+            convert_example(row, 0)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for step, complete in ((50, True), (100, False), (150, True)):

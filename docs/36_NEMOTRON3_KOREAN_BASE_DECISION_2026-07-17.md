@@ -51,9 +51,10 @@ Nemotron-3가 base gate를 통과할 때의 공개 LoRA 경로는
 complete optimizer/scheduler/trainer checkpoint만 자동 재개한다. 현재는 공개 250K manifest와
 train SHA를 사용한 contract-only 검증 및 단위 테스트까지 통과했다. 실제 1-step backward
 probe는 Sionic 병렬 평가가 GPU에서 내려간 직후 실행한다.
-학습의 `anchor`에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 적용하고 positive와
-hard negative는 무접두 source-native text로 유지한다. 따라서 checkpoint 선택 및 final-once
-평가와 학습의 query/document 입력 형식이 동일하다.
+source JSONL query에 이미 저장된 legal/web `Instruct/Query`는 fail-closed로 정확히 한 번
+제거하고, 학습의 `anchor`에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 적용한다.
+positive와 hard negative는 무접두 source-native text로 유지한다. 따라서 이중 prompt 없이
+checkpoint 선택 및 final-once 평가와 학습의 query/document 입력 형식이 동일하다.
 2-step 이상 실제 run은 `--eval`과 `--eval-manifest`가 필수다. evaluator manifest의 JSONL
 SHA, source-holdout 검증, query/positive/negative/source-document training overlap 0을 확인한
 뒤 save step마다 eval loss를 기록해 public checkpoint watcher의 completion gate와 맞춘다.
@@ -67,9 +68,11 @@ Nemotron으로 FAISS HN7 mining하고, provenance projection → source-homogene
 batch32 → 최종 benchmark audit → rights finalization을 순서대로 실행한다. exact 원격 payload를
 `LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1`에 public 배포한 뒤 위 trainer를
 호출한다. 각 대형 stage의 manifest/cache를 재사용하므로 중단 후 같은 명령으로 재개한다.
-FAISS query embedding에도 학습·Sionic 평가와 동일한 query-only 고정 prompt를 명시하고
-document prefix는 비워 둔다. 두 prefix는 embedding cache namespace와 mining manifest에
-포함되어 다른 prompt로 만든 캐시가 재사용되지 않는다.
+FAISS query embedding도 저장된 기존 instruction을 먼저 제거한 다음 학습·Sionic 평가와
+동일한 query-only 고정 prompt를 명시하고 document prefix는 비워 둔다. strip 여부와 두
+prefix는 embedding cache namespace와 mining manifest에 포함되어 다른 입력 계약으로 만든
+캐시가 재사용되지 않는다. 실제 public 250K 전 행 dry-run에서 `250000/250000` strip 검증을
+통과했다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를
