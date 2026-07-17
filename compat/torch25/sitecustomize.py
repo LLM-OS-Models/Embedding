@@ -60,3 +60,13 @@ if _os.environ.get("EMBEDDING_TRUST_LOCAL_TORCH_LOAD") == "1":
             return spec
 
     _sys.meta_path.insert(0, _TrustLocalTorchLoadFinder())
+
+    # Trainer RNG/optimizer states our own run serialized contain plain numpy
+    # arrays; allowlist exactly those constructors for weights_only unpickling.
+    import numpy as _np
+    import torch.serialization as _torch_serialization
+
+    _safe_globals = {_np.core.multiarray._reconstruct, _np.ndarray, _np.dtype}
+    for _scalar in _np.sctypeDict.values():
+        _safe_globals.add(type(_np.dtype(_scalar)))
+    _torch_serialization.add_safe_globals(list(_safe_globals))
