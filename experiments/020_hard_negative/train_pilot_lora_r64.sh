@@ -150,8 +150,20 @@ if [[ -n "$BASE_REVISION" ]]; then
   MODEL_ARGS+=(--model_revision "$BASE_REVISION")
 fi
 
-"$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
-  "$TRAIN_FILE" "$VAL_FILE"
+LOSS_ARGS=(--loss_type infonce)
+if [[ "${ENABLE_LISTWISE_KD:-0}" == 1 ]]; then
+  "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
+    --require-teacher-scores "$TRAIN_FILE"
+  "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" "$VAL_FILE"
+  LOSS_ARGS=(
+    --external_plugins "$ROOT/experiments/030_teacher_distillation/listwise_kd_plugin.py"
+    --remove_unused_columns false
+    --loss_type listwise_embedding_kd
+  )
+else
+  "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
+    "$TRAIN_FILE" "$VAL_FILE"
+fi
 
 "$TRAIN_ENV/bin/swift" sft \
   "${MODEL_ARGS[@]}" \
@@ -197,5 +209,5 @@ fi
   --seed "${SEED:-42}" \
   --report_to none \
   --output_dir "$OUTPUT_DIR" \
-  --loss_type infonce \
+  "${LOSS_ARGS[@]}" \
   2>&1 | tee "$OUTPUT_DIR/train.log"

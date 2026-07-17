@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -28,10 +29,34 @@ def nested_message_text(groups: Any, field: str) -> list[str]:
     return [message_text(group, f"{field}[{index}]") for index, group in enumerate(groups)]
 
 
-def validate(path: Path) -> dict[str, Any]:
+def validate_teacher_scores(
+    values: Any, *, negatives: int, path: Path, line_number: int
+) -> None:
+    if not isinstance(values, list) or len(values) != negatives + 1:
+        raise ValueError(
+            f"{path}:{line_number}: teacher_scores must align with positive+negatives"
+        )
+    scores = []
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{path}:{line_number}: teacher_scores must be numeric")
+        score = float(value)
+        if not math.isfinite(score) or not 0 <= score <= 1:
+            raise ValueError(
+                f"{path}:{line_number}: teacher_scores must be finite probabilities"
+            )
+        scores.append(score)
+    if scores[0] <= max(scores[1:]):
+        raise ValueError(
+            f"{path}:{line_number}: teacher positive must outrank every negative"
+        )
+
+
+def validate(path: Path, *, require_teacher_scores: bool = False) -> dict[str, Any]:
     digest = hashlib.sha256()
     identities: set[str] = set()
     rows = 0
+    teacher_rows = 0
     with path.open("rb") as binary:
         for chunk in iter(lambda: binary.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -40,7 +65,12 @@ def validate(path: Path) -> dict[str, Any]:
             if not line.strip():
                 raise ValueError(f"{path}:{line_number}: blank line")
             row = json.loads(line)
-            if set(row) != {"messages", "positive_messages", "negative_messages"}:
+            required = {"messages", "positive_messages", "negative_messages"}
+            fields = frozenset(row)
+            if fields not in {
+                frozenset(required),
+                frozenset(required | {"teacher_scores"}),
+            }:
                 raise ValueError(f"{path}:{line_number}: unexpected fields {sorted(row)}")
             query = message_text(row["messages"], "messages")
             positives = nested_message_text(row["positive_messages"], "positive_messages")
@@ -49,6 +79,14 @@ def validate(path: Path) -> dict[str, Any]:
                 raise ValueError(f"{path}:{line_number}: exactly one positive is required")
             if positives[0] in negatives:
                 raise ValueError(f"{path}:{line_number}: positive duplicated as negative")
+            if "teacher_scores" in row:
+                teacher_rows += 1
+                validate_teacher_scores(
+                    row["teacher_scores"],
+                    negatives=len(negatives),
+                    path=path,
+                    line_number=line_number,
+                )
             identity = hashlib.sha256(
                 "\0".join((query, positives[0], *negatives)).encode("utf-8")
             ).hexdigest()
@@ -58,14 +96,30 @@ def validate(path: Path) -> dict[str, Any]:
             rows += 1
     if rows < 2:
         raise ValueError(f"{path}: at least two rows are required")
-    return {"path": str(path), "rows": rows, "sha256": digest.hexdigest()}
+    if require_teacher_scores and teacher_rows != rows:
+        raise ValueError(f"{path}: every row must contain teacher_scores")
+    return {
+        "path": str(path),
+        "rows": rows,
+        "teacher_score_rows": teacher_rows,
+        "sha256": digest.hexdigest(),
+    }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", type=Path, nargs="+")
+    parser.add_argument("--require-teacher-scores", action="store_true")
     args = parser.parse_args()
-    print(json.dumps([validate(path) for path in args.paths], indent=2))
+    print(
+        json.dumps(
+            [
+                validate(path, require_teacher_scores=args.require_teacher_scores)
+                for path in args.paths
+            ],
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

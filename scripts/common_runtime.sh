@@ -108,6 +108,34 @@ embedding_resolve_train_runtime() {
   export EMBEDDING_TRAIN_ENV EMBEDDING_TRAIN_PYTHON
 }
 
+embedding_resolve_general_base() {
+  local selection="${GENERAL_SELECTION:-$EMBEDDING_RUNTIME_ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json}"
+  local selected_rel selected_abs candidate
+  EMBEDDING_GENERAL_BASE=
+  if [[ -s "$selection" ]]; then
+    selected_rel="$(jq -r '.best.model // empty' "$selection" 2>/dev/null)"
+    if [[ -n "$selected_rel" && "$selected_rel" != /* \
+        && "$selected_rel" != *../* && "$selected_rel" != ../* ]]; then
+      selected_abs="$EMBEDDING_RUNTIME_ROOT/$selected_rel"
+      if [[ -s "$selected_abs/merge_report.json" ]]; then
+        EMBEDDING_GENERAL_BASE="$selected_abs"
+      fi
+    fi
+  fi
+  if [[ -z "$EMBEDDING_GENERAL_BASE" ]]; then
+    for candidate in \
+      "$EMBEDDING_RUNTIME_ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-best-merged" \
+      "$EMBEDDING_RUNTIME_ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-b8-best-merged"; do
+      if [[ -s "$candidate/merge_report.json" ]]; then
+        EMBEDDING_GENERAL_BASE="$candidate"
+        break
+      fi
+    done
+  fi
+  export EMBEDDING_GENERAL_BASE
+  [[ -n "$EMBEDDING_GENERAL_BASE" ]]
+}
+
 embedding_enable_torch25_swift_compat() {
   local compat="$EMBEDDING_RUNTIME_ROOT/compat/torch25"
   case ":${PYTHONPATH:-}:" in

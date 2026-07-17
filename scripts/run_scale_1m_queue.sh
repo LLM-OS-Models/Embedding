@@ -359,23 +359,35 @@ if [[ -n "$DATA_UPLOAD_PID" ]]; then
   fi
 fi
 
+GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json"
+if [[ "${ENABLE_RERANKER_KD_ABLATION:-1}" == 1 ]]; then
+  run_stage "qwen3-reranker-listwise-kd-ablation" env \
+    LOG_DIR="$ROOT/outputs/reranker-kd-20260717-frontier" \
+    GENERAL_BASE_MODEL="$MODEL_DIR" \
+    bash "$ROOT/scripts/run_reranker_kd_ablation_queue.sh" || true
+fi
+
 if [[ "${ENABLE_SIONIC_RETRIEVAL_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-retrieval-train-family-adaptation" env WAIT_PID= \
+    GENERAL_SELECTION="$GENERAL_SELECTION" \
     LOG_DIR="$ROOT/outputs/sionic-retrieval-family-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_retrieval_adaptation_queue.sh" || true
 fi
 if [[ "${ENABLE_SIONIC_SQUAD_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-squad-train-family-adaptation" env WAIT_PID= \
+    GENERAL_SELECTION="$GENERAL_SELECTION" \
     LOG_DIR="$ROOT/outputs/sionic-squad-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_squad_adaptation_queue.sh" || true
 fi
 if [[ "${ENABLE_SIONIC_HEALTH_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-health-domain-adaptation" env WAIT_PID= \
+    GENERAL_SELECTION="$GENERAL_SELECTION" \
     LOG_DIR="$ROOT/outputs/sionic-health-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_health_adaptation_queue.sh" || true
 fi
 if [[ "${ENABLE_SIONIC_AUTORAG_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-autorag-domain-adaptation" env WAIT_PID= \
+    GENERAL_SELECTION="$GENERAL_SELECTION" \
     LOG_DIR="$ROOT/outputs/sionic-autorag-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_autorag_adaptation_queue.sh" || true
 fi

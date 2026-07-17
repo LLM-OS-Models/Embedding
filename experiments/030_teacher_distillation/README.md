@@ -176,3 +176,47 @@ false-negative filter, text dedup을 적용한다. 기본 `score_rank_quantiles`
 top-24 pool의 양 끝을 포함한 7개 rank quantile을 결정론적으로 선택한다. `top_k`와
 `hash_sample_from_top_pool`은 ablation으로 유지한다. 각 row audit에는 선택 index,
 최소/최대 teacher score, scorer model/revision을 저장한다.
+
+## 구현된 listwise KD와 자동 A/B
+
+[`mine_faiss_hard_negatives.py`](../../scripts/mine_faiss_hard_negatives.py)는 기존 HN7을
+만드는 동일 current-student embedding/FAISS run에서 seed 고정 query subset과 넓은 top-200
+pool을 teacher request 계약으로 추가 출력할 수 있다. 이 넓은 pool에는 student `.95`
+false-negative filter를 미리 적용하지 않는다. positive보다 더 높은 student 후보도 teacher가
+판정해야 하기 때문이다.
+
+[`compile_reranker_kd_dataset.py`](../../scripts/compile_reranker_kd_dataset.py)는 scorer의
+완성 state/shard/output/manifest를 다시 전수 검증하고 `admissible_for_training=true`인 pinned
+production cache만 받는다. positive `.5`, positive-relative `.95`, absolute margin `.02`를
+통과한 후보에서 양 끝을 포함한 rank-quantile 15개를 선택하고 strict ms-swift row에
+`teacher_scores=[positive, negative...]`를 정렬 보존한다. score 수, finite `[0,1]`, positive
+우위, query/document ID/hash가 하나라도 어긋나면 학습 전에 실패한다.
+
+[`listwise_distillation.py`](../../scripts/listwise_distillation.py)와
+[`listwise_kd_plugin.py`](listwise_kd_plugin.py)는 ms-swift submodule을 수정하지 않는 공식
+`--external_plugins` 확장이다. 기본 objective는 다음과 같다.
+
+```text
+L = 0.3 * L_InfoNCE(in-batch + explicit HN)
+  + 0.7 * KL(softmax(logit(p_teacher) / T_teacher)
+             || softmax(cos(q,d) / T_student))
+```
+
+기본값은 `T_teacher=1.0`, `T_student=0.02`다. normalized yes probability를 다시 logit으로
+옮겨 candidate distribution을 만들며, `MarginMSE`는 별도 ablation이다. 선택적
+stop-gradient document queue는 4096개까지 유지하고 현재 positive와 cosine `.02` 이내인
+queue 문서를 denominator에서 mask한다. teacher score가 없는 validation은 순수 hard
+InfoNCE로 평가하므로 기존 512-row validation을 그대로 쓸 수 있다.
+
+[`run_reranker_kd_ablation_queue.sh`](../../scripts/run_reranker_kd_ablation_queue.sh)는 1M
+merged base, filter-only, listwise-KL, listwise-KL+queue4096을 같은 query/token budget으로
+학습·병합한다. public Sionic/MTEB는 보지 않고 Grade-I legal과 robustness에서 base 포함
+winner를 고른 뒤 그 selection만 target/legal/combined queue에 전달한다. 기본 10K는
+throughput과 clean delta를 확인하는 pilot이며 이득이 확인되면 50K, 100K로 확장한다.
+compile이 끝난 exact train/audit/request/score-cache/manifest는 학습과 병렬로 검증한 뒤
+`LLM-OS-Models2/korean-embedding-qwen3-reranker-kd-pilot-v1` private dataset에 최대 3회
+재시도 업로드한다. token은 `.env`에서 upload subprocess memory로만 전달하며 command line,
+log, repo URL에는 넣지 않는다.
+
+현재 구현/시험은 끝났지만 실제 reranker score cache와 KD 성능 결과는 아직 없다. 결과가
+생기기 전에는 KD가 baseline보다 낫다고 주장하지 않는다.

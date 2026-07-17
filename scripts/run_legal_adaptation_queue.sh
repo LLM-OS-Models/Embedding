@@ -106,14 +106,10 @@ fi
 [[ -s "$BOOTSTRAP" && -s "$DATA_DIR/provenance.jsonl" && -s "$VAL_FILE" \
   && -s "$GENERAL_TRAIN" && -s "$GENERAL_PROVENANCE" ]] || exit 2
 
-CONTINUAL_BASE="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-best-merged"
-if [[ ! -s "$CONTINUAL_BASE/merge_report.json" ]]; then
-  CONTINUAL_BASE="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-b8-best-merged"
-fi
-if [[ -s "$CONTINUAL_BASE/merge_report.json" ]]; then
-  MINING_MODEL="$CONTINUAL_BASE"
+if embedding_resolve_general_base; then
+  MINING_MODEL="$EMBEDDING_GENERAL_BASE"
   MINING_REVISION=""
-  echo "[$(timestamp)] continuing from 1M model: $CONTINUAL_BASE"
+  echo "[$(timestamp)] continuing from clean-selected general winner: $MINING_MODEL"
 else
   MINING_MODEL="Qwen/Qwen3-Embedding-8B"
   MINING_REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"

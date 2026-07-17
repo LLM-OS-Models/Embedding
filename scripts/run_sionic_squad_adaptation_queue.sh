@@ -139,17 +139,14 @@ if [[ -s "$GENERAL_DIR/faiss-current-r095-n7.homogeneous-b16.manifest.json" \
   GENERAL_PROVENANCE="$GENERAL_DIR/provenance.faiss-current-r095-n7.homogeneous-b16.jsonl"
 fi
 
-MINING_MODEL="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-best-merged"
-if [[ ! -s "$MINING_MODEL/merge_report.json" ]]; then
-  MINING_MODEL="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-b8-best-merged"
-fi
 MINING_REVISION=""
-if [[ ! -s "$MINING_MODEL/merge_report.json" ]]; then
+if embedding_resolve_general_base; then
+  MINING_MODEL="$EMBEDDING_GENERAL_BASE"
+  echo "[$(timestamp)] continuing from clean-selected general winner: $MINING_MODEL"
+else
   MINING_MODEL="Qwen/Qwen3-Embedding-8B"
   MINING_REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
   echo "[$(timestamp)] 1M winner unavailable; using pinned Qwen base"
-else
-  echo "[$(timestamp)] continuing from 1M winner: $MINING_MODEL"
 fi
 
 if ! "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/check_mining_manifest.py" \

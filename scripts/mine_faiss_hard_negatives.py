@@ -78,6 +78,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--query-block-size", type=int, default=2048)
     parser.add_argument("--faiss-threads", type=int, default=min(32, max(1, os.cpu_count() or 1)))
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--teacher-request-output",
+        type=Path,
+        help="Optionally emit positive+wide ANN candidate rows for reranker scoring",
+    )
+    parser.add_argument("--teacher-request-limit", type=int, default=0)
+    parser.add_argument("--teacher-candidate-count", type=int, default=200)
     parser.add_argument("--assert-no-benchmark-data", action="store_true")
     parser.add_argument(
         "--allow-target-adapted",
@@ -130,6 +137,22 @@ def validate_args(args: argparse.Namespace, rows: int, corpus: int) -> None:
         raise ValueError("--positive-relative-ratio must be in (0, 1]")
     if rows < 2 or corpus < 2:
         raise ValueError("At least two rows and documents are required")
+    if args.teacher_request_limit < 0:
+        raise ValueError("--teacher-request-limit must be nonnegative")
+    if args.teacher_request_output is not None:
+        if args.teacher_request_limit < 2 or args.teacher_request_limit > rows:
+            raise ValueError("teacher request limit must be in [2, input rows]")
+        if args.teacher_candidate_count < 1 or args.search_k < args.teacher_candidate_count:
+            raise ValueError("teacher candidate count must be positive and <= search-k")
+
+
+def deterministic_sample_indices(total: int, count: int, seed: int) -> set[int]:
+    if count < 0 or count > total:
+        raise ValueError("sample count must be between zero and total")
+    if count == 0:
+        return set()
+    generator = np.random.default_rng(seed)
+    return set(int(index) for index in generator.choice(total, count, replace=False))
 
 
 def cache_namespace(
@@ -286,6 +309,73 @@ def select_candidates(
     return positive_score, threshold, candidates[:pool_size], exclusions
 
 
+def select_unfiltered_candidates(
+    query: np.ndarray,
+    positive: np.ndarray,
+    indices: np.ndarray,
+    corpus_embeddings: Any,
+    own_index: int,
+    query_match_index: int,
+    pool_size: int,
+) -> tuple[float, list[tuple[int, float]], dict[str, int]]:
+    """Return a wide ANN pool without student-score false-negative filtering."""
+
+    positive_score = float(np.dot(query, positive))
+    exclusions = {
+        "own_positive": 0,
+        "query_document_exact_match": 0,
+        "nonfinite": 0,
+    }
+    candidates = []
+    seen = set()
+    for raw_index in indices:
+        index = int(raw_index)
+        if index < 0 or index in seen:
+            continue
+        seen.add(index)
+        if index == own_index:
+            exclusions["own_positive"] += 1
+            continue
+        if index == query_match_index:
+            exclusions["query_document_exact_match"] += 1
+            continue
+        score = float(np.dot(query, np.asarray(corpus_embeddings[index], dtype=np.float32)))
+        if not math.isfinite(score):
+            exclusions["nonfinite"] += 1
+            continue
+        candidates.append((index, score))
+    candidates.sort(key=lambda item: (-item[1], item[0]))
+    return positive_score, candidates[:pool_size], exclusions
+
+
+def teacher_request_row(
+    row_index: int,
+    row: Any,
+    corpus: Sequence[Any],
+    positive_score: float,
+    pool: Sequence[tuple[int, float]],
+) -> dict[str, Any]:
+    query_sha = text_hash(row.query)
+    positive_sha = text_hash(row.positive_normalized)
+    return {
+        "generated_id": f"faiss-kd-{row_index:09d}-{query_sha[:16]}",
+        "query": row.query,
+        "positive": {
+            "candidate_id": f"doc-{positive_sha}",
+            "text": row.positive,
+            "retriever_score": positive_score,
+        },
+        "candidates": [
+            {
+                "candidate_id": f"doc-{corpus[index].sha256}",
+                "text": corpus[index].text,
+                "retriever_score": score,
+            }
+            for index, score in pool
+        ],
+    }
+
+
 def evenly_spaced_rank_indices(pool_size: int, selected_size: int) -> list[int]:
     if selected_size < 1 or pool_size < selected_size:
         raise ValueError("rank quantiles require pool_size >= selected_size >= 1")
@@ -340,6 +430,15 @@ def main() -> None:
         "num_negatives": args.num_negatives,
         "selection_strategy": args.selection_strategy,
         "positive_relative_ratio": args.positive_relative_ratio,
+        "teacher_requests": (
+            {
+                "rows": args.teacher_request_limit,
+                "candidate_count": args.teacher_candidate_count,
+                "selection": "seeded_without_replacement_over_input_rows",
+            }
+            if args.teacher_request_output is not None
+            else None
+        ),
     }
     if args.dry_run:
         print(json.dumps(plan, ensure_ascii=False, indent=2))
@@ -355,6 +454,13 @@ def main() -> None:
     manifest_output = (args.manifest_output or Path(str(output) + ".manifest.json")).resolve()
     for path in (output, audit_output, manifest_output):
         path.parent.mkdir(parents=True, exist_ok=True)
+    teacher_request_output = (
+        args.teacher_request_output.resolve()
+        if args.teacher_request_output is not None
+        else None
+    )
+    if teacher_request_output is not None:
+        teacher_request_output.parent.mkdir(parents=True, exist_ok=True)
     work_dir = (args.work_dir or output.parent / f".{output.name}.faiss-work").resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -391,75 +497,128 @@ def main() -> None:
     )
     output_tmp = output.with_name(output.name + ".tmp")
     audit_tmp = audit_output.with_name(audit_output.name + ".tmp")
+    teacher_tmp = (
+        teacher_request_output.with_name(teacher_request_output.name + ".tmp")
+        if teacher_request_output is not None
+        else None
+    )
+    teacher_indices = deterministic_sample_indices(
+        len(rows), args.teacher_request_limit, args.seed
+    )
+    teacher_handle = teacher_tmp.open("w", encoding="utf-8") if teacher_tmp else None
+    teacher_rows = 0
     output_rows = dropped = 0
     score_values = []
     exclusion_totals = {"own_positive": 0, "query_document_exact_match": 0, "above_threshold": 0}
-    with output_tmp.open("w", encoding="utf-8") as output_handle, audit_tmp.open(
-        "w", encoding="utf-8"
-    ) as audit_handle:
-        for start in range(0, len(rows), args.query_block_size):
-            end = min(len(rows), start + args.query_block_size)
-            query_block = np.ascontiguousarray(query_embeddings[start:end], dtype=np.float32)
-            _, approximate_indices = index.search(query_block, args.search_k)
-            for local, global_index in enumerate(range(start, end)):
-                own_index = int(positive_indices[global_index])
-                positive_score, threshold, pool, exclusions = select_candidates(
-                    query_block[local],
-                    np.asarray(corpus_embeddings[own_index], dtype=np.float32),
-                    approximate_indices[local],
-                    corpus_embeddings,
-                    own_index,
-                    int(query_match_indices[global_index]),
-                    args.positive_relative_ratio,
-                    args.candidate_pool_size,
-                )
-                for key, value in exclusions.items():
-                    exclusion_totals[key] += value
-                selected, selected_pool_indices = select_from_pool(
-                    pool,
-                    args.num_negatives,
-                    args.selection_strategy,
-                    args.seed,
-                    global_index,
-                )
-                output_index = None
-                if len(selected) == args.num_negatives:
-                    output_index = output_rows
-                    output_rows += 1
-                    negatives = [corpus[index].text for index, _ in selected]
-                    score_values.extend(score for _, score in selected)
-                    output_handle.write(
-                        json.dumps(strict_output_row(rows[global_index], negatives), ensure_ascii=False, separators=(",", ":")) + "\n"
+    try:
+        with output_tmp.open("w", encoding="utf-8") as output_handle, audit_tmp.open(
+            "w", encoding="utf-8"
+        ) as audit_handle:
+            for start in range(0, len(rows), args.query_block_size):
+                end = min(len(rows), start + args.query_block_size)
+                query_block = np.ascontiguousarray(query_embeddings[start:end], dtype=np.float32)
+                _, approximate_indices = index.search(query_block, args.search_k)
+                for local, global_index in enumerate(range(start, end)):
+                    own_index = int(positive_indices[global_index])
+                    positive_score, threshold, pool, exclusions = select_candidates(
+                        query_block[local],
+                        np.asarray(corpus_embeddings[own_index], dtype=np.float32),
+                        approximate_indices[local],
+                        corpus_embeddings,
+                        own_index,
+                        int(query_match_indices[global_index]),
+                        args.positive_relative_ratio,
+                        args.candidate_pool_size,
                     )
-                else:
-                    dropped += 1
-                audit_handle.write(
-                    json.dumps(
-                        {
-                            "input_row_index": global_index,
-                            "output_row_index": output_index,
-                            "query_sha256": text_hash(normalize_text(rows[global_index].query)),
-                            "positive_sha256": text_hash(rows[global_index].positive_normalized),
-                            "positive_score": positive_score,
-                            "threshold": threshold,
-                            "selected": [
-                                {"document_sha256": corpus[index].sha256, "score": score}
-                                for index, score in selected
-                            ],
-                            "selection_strategy": args.selection_strategy,
-                            "selected_pool_indices_zero_based": selected_pool_indices,
-                            "eligible_top_pool_count": len(pool),
-                            "ann_search_k": args.search_k,
-                            "drop_reason": None if output_index is not None else "insufficient_ann_candidates",
-                        },
-                        ensure_ascii=False,
-                        separators=(",", ":"),
+                    for key, value in exclusions.items():
+                        exclusion_totals[key] += value
+                    selected, selected_pool_indices = select_from_pool(
+                        pool,
+                        args.num_negatives,
+                        args.selection_strategy,
+                        args.seed,
+                        global_index,
                     )
-                    + "\n"
-                )
-            print(f"[mine:faiss] {end}/{len(rows)}", file=sys.stderr)
+                    if global_index in teacher_indices:
+                        teacher_positive_score, teacher_pool, _ = select_unfiltered_candidates(
+                            query_block[local],
+                            np.asarray(corpus_embeddings[own_index], dtype=np.float32),
+                            approximate_indices[local],
+                            corpus_embeddings,
+                            own_index,
+                            int(query_match_indices[global_index]),
+                            args.teacher_candidate_count,
+                        )
+                        if len(teacher_pool) != args.teacher_candidate_count:
+                            raise RuntimeError(
+                                "sampled KD row does not have the requested wide candidate pool"
+                            )
+                        assert teacher_handle is not None
+                        teacher_handle.write(
+                            json.dumps(
+                                teacher_request_row(
+                                    global_index,
+                                    rows[global_index],
+                                    corpus,
+                                    teacher_positive_score,
+                                    teacher_pool,
+                                ),
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            )
+                            + "\n"
+                        )
+                        teacher_rows += 1
+                    output_index = None
+                    if len(selected) == args.num_negatives:
+                        output_index = output_rows
+                        output_rows += 1
+                        negatives = [corpus[index].text for index, _ in selected]
+                        score_values.extend(score for _, score in selected)
+                        output_handle.write(
+                            json.dumps(strict_output_row(rows[global_index], negatives), ensure_ascii=False, separators=(",", ":")) + "\n"
+                        )
+                    else:
+                        dropped += 1
+                    audit_handle.write(
+                        json.dumps(
+                            {
+                                "input_row_index": global_index,
+                                "output_row_index": output_index,
+                                "query_sha256": text_hash(normalize_text(rows[global_index].query)),
+                                "positive_sha256": text_hash(rows[global_index].positive_normalized),
+                                "positive_score": positive_score,
+                                "threshold": threshold,
+                                "selected": [
+                                    {"document_sha256": corpus[index].sha256, "score": score}
+                                    for index, score in selected
+                                ],
+                                "selection_strategy": args.selection_strategy,
+                                "selected_pool_indices_zero_based": selected_pool_indices,
+                                "eligible_top_pool_count": len(pool),
+                                "ann_search_k": args.search_k,
+                                "drop_reason": None if output_index is not None else "insufficient_ann_candidates",
+                            },
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
+                print(f"[mine:faiss] {end}/{len(rows)}", file=sys.stderr)
+        if teacher_handle is not None:
+            teacher_handle.flush()
+            os.fsync(teacher_handle.fileno())
+            teacher_handle.close()
+            teacher_handle = None
+    finally:
+        if teacher_handle is not None:
+            teacher_handle.close()
     os.replace(output_tmp, output)
     os.replace(audit_tmp, audit_output)
+    if teacher_tmp is not None and teacher_request_output is not None:
+        if teacher_rows != args.teacher_request_limit:
+            raise RuntimeError("teacher request output row count differs from contract")
+        os.replace(teacher_tmp, teacher_request_output)
     manifest = {
         **plan,
         "schema_version": 1,
@@ -489,6 +648,17 @@ def main() -> None:
         "files": {
             output.name: {"rows": output_rows, "sha256": file_hash(output)},
             audit_output.name: {"rows": len(rows), "sha256": file_hash(audit_output)},
+            **(
+                {
+                    teacher_request_output.name: {
+                        "rows": teacher_rows,
+                        "sha256": file_hash(teacher_request_output),
+                        "documents_per_row": args.teacher_candidate_count + 1,
+                    }
+                }
+                if teacher_request_output is not None
+                else {}
+            ),
         },
         "claim_scope": "ANN candidate generation with deterministic pool selection; selected candidate dot scores are exact float32, but ANN recall is approximate and teacher/reranker validation remains required",
         "benchmark_adaptation": (

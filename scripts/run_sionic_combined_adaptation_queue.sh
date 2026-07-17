@@ -145,10 +145,8 @@ run_stage audit-sionic-combined-overlap \
   --blocklist-root "$ROOT/outputs/decontamination/benchmark_blocklist" \
   --output "$OVERLAP" --fail-on-critical || exit 3
 
-BASE_MODEL="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-best-merged"
-if [[ ! -s "$BASE_MODEL/merge_report.json" ]]; then
-  BASE_MODEL="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-b8-best-merged"
-fi
+embedding_resolve_general_base || exit 4
+BASE_MODEL="$EMBEDDING_GENERAL_BASE"
 [[ -s "$BASE_MODEL/merge_report.json" && -s "$VAL_FILE" ]] || exit 4
 MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$MANIFEST")"
 

@@ -135,6 +135,7 @@ embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] starting legal replay and combined target adaptation"
 env WAIT_PID= LOG_DIR="$LEGAL_LOG" \
+  GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json" \
   ENABLE_SIONIC_COMBINED_ADAPTATION=1 \
   bash "$ROOT/scripts/run_legal_adaptation_queue.sh"
 
