@@ -1,6 +1,6 @@
 # 논문·모델별 데이터와 학습 방법 매트릭스
 
-조사 기준일: 2026-07-11. 이 문서는 이 저장소에서 검토한 논문, 공식 모델 카드, 공식 학습 저장소를 하나의 실행 가능한 의사결정표로 합친다. 논문의 arXiv 라이선스, 모델 가중치 라이선스, 학습 데이터 라이선스는 서로 다른 항목이다. 아래에서 `공개`는 곧 `상업적 재배포 가능`을 뜻하지 않는다.
+조사 기준일: 2026-07-17. 이 문서는 이 저장소에서 검토한 논문, 공식 모델 카드, 공식 학습 저장소를 하나의 실행 가능한 의사결정표로 합친다. 논문의 arXiv 라이선스, 모델 가중치 라이선스, 학습 데이터 라이선스는 서로 다른 항목이다. 아래에서 `공개`는 곧 `상업적 재배포 가능`을 뜻하지 않는다.
 
 ## 결론
 
@@ -54,6 +54,7 @@ Qwen3, E5, F2LLM, Nemotron, KaLM의 첫 대규모 단계가 논문에서 `pre-tr
 | [KV-Embedding](https://aclanthology.org/2026.acl-long.540/) | frozen decoder LLM의 마지막-token layer별 KV를 prefix로 re-route하는 training-free 방식. Qwen/Mistral/Llama, 최대 4,096 tokens | 현재 SentenceTransformer/Qwen3-Embedding weight contract와 다르므로 `060` frozen architecture ablation에만 보류 |
 | [LEAF](https://aclanthology.org/2026.acl-long.2008/) | judgment/HN 없이 teacher vector space에 학생을 정렬해 asymmetric query-student/corpus-teacher 검색과 MRL·quantization 특성 상속 | 8B 최고 교사가 확정된 뒤 `120_compression`에서 사용. 현재 Sionic 추월 8B 학습에는 미적용 |
 | [Qwen3-VL-Embedding](https://arxiv.org/abs/2601.04720) | 2B/8B multimodal 계열; contrastive pre-training→reranker distillation→MRL, 32K, 텍스트·이미지·문서 이미지·비디오 | text-only 보드의 비교 모델은 아님. OCR 이미지용 별도 multimodal track에만 참고 |
+| [Dewey Long Context Embedding](https://arxiv.org/abs/2503.20376) | localized chunk embedding과 global document embedding을 distillation으로 함께 정렬하는 chunk-alignment training; 공개 보고는 영어 MTEB v2·LongEmbed와 128K context 중심 | single-vector 장문 정보 손실을 직접 겨냥하므로 최종 8B weight 고정 뒤 한국어 법률/QA 장문 specialist A/B에 사용. 영어 결과를 한국어 우위로 간주하지 않고 chunk/global clean holdout을 별도 구성 |
 | [Multi-Prefix Embedding](https://arxiv.org/abs/2606.23642) | 한 장문을 EOS 경계 chunk로 나누되 causal forward는 한 번만 수행하고 각 prefix 경계 embedding을 꺼내 chunk-level MaxSim. MLDR-en·BrowseComp-Plus·LongEmbed에서 single-vector/독립 chunk 대비 경쟁력과 evidence attribution을 보고 | 문서당 단일 4096-d vector라는 현재 index/API 계약과 다르다. 주 모델 weight를 바꾸지 않고도 적용 가능한 별도 multi-vector serving/index track으로 두며, Korean MLDR raw result 없이 주 모델 우위로 합치지 않음 |
 | [EvoEmbedding](https://arxiv.org/abs/2606.21649) | segment를 순차 처리하며 latent memory를 갱신해 동일 query도 context history에 따라 다른 embedding을 생성. EvoTrain-180K, collapse 방지 memory queue, segment batching을 사용하고 장문·agentic-memory에서 Qwen3-Embedding-8B/KaLM-12B 대비 우위를 보고 | stateless text→vector 함수가 아니라 session state를 갖는 새 architecture다. corpus 재색인·serving state·평가 protocol이 모두 달라 현재 SentenceTransformers release와 merge하지 않고 agentic-memory track으로 격리 |
 
