@@ -27,8 +27,10 @@ from typing import Any
 
 try:
     from scripts.merge_embedding_adapter import validate_sentence_transformers_contract
+    from scripts.model_lineage import lineage_from_evidence, merge_lineages
 except ImportError:  # pragma: no cover - direct script execution fallback
     from merge_embedding_adapter import validate_sentence_transformers_contract
+    from model_lineage import lineage_from_evidence, merge_lineages
 
 
 ARTIFACT_TYPE = "weighted-full-model-embedding-soup"
@@ -59,6 +61,7 @@ class SourceModel:
     model_weights_sha256: str
     weight_map: dict[str, str]
     shards: tuple[str, ...]
+    upstream_base_models: list[dict[str, str]]
 
 
 def parse_args() -> argparse.Namespace:
@@ -202,6 +205,11 @@ def validate_sources(models: list[Path], weights: list[float]) -> list[SourceMod
         if root.is_symlink() or not root.is_dir():
             raise ValueError(f"Soup source is missing or unsafe: {root}")
         evidence_path, evidence = model_evidence(root)
+        upstream_base_models = lineage_from_evidence(
+            evidence,
+            evidence_dir=root,
+            context=str(evidence_path),
+        )
         config = normalized_config(root / "config.json")
         contract = contract_files(root)
         weight_map, shards = safetensors_layout(root)
@@ -227,6 +235,7 @@ def validate_sources(models: list[Path], weights: list[float]) -> list[SourceMod
                 model_weights_sha256=actual_sha,
                 weight_map=weight_map,
                 shards=shards,
+                upstream_base_models=upstream_base_models,
             )
         )
     return sources
@@ -362,7 +371,7 @@ def build_soup(args: argparse.Namespace) -> dict[str, Any]:
         contract = validate_sentence_transformers_contract(staging)
         output_sha = model_weights_sha256(staging, sources[0].shards)
         report = {
-            "schema_version": 1,
+            "schema_version": 2,
             "artifact_type": ARTIFACT_TYPE,
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "status": "pass",
@@ -374,9 +383,13 @@ def build_soup(args: argparse.Namespace) -> dict[str, Any]:
                     "weights_sha256": source.model_weights_sha256,
                     "evidence_file": source.evidence_path.name,
                     "evidence_sha256": source.evidence_sha256,
+                    "upstream_base_models": source.upstream_base_models,
                 }
                 for source in sources
             ],
+            "upstream_base_models": merge_lineages(
+                *(source.upstream_base_models for source in sources)
+            ),
             "soup": {
                 "method": "weighted_arithmetic_mean",
                 "weight_sum": sum(source.weight for source in sources),

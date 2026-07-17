@@ -60,6 +60,8 @@ def make_model(
         json.dumps(
             {
                 "status": "pass",
+                "base_model": "Qwen/Qwen3-Embedding-8B",
+                "base_revision": "1" * 40,
                 "model": {"weights_sha256": weights_sha},
                 "sentence_transformers_contract": contract,
             }
@@ -90,6 +92,11 @@ def test_full_model_soup_averages_in_fp32_and_emits_bf16(tmp_path: Path) -> None
         tensors["norm.weight"], torch.full((4,), 5.0, dtype=torch.bfloat16)
     )
     assert report["status"] == "pass"
+    assert report["schema_version"] == 2
+    assert report["upstream_base_models"] == [
+        {"model": "Qwen/Qwen3-Embedding-8B", "revision": "1" * 40}
+    ]
+    assert all(source["upstream_base_models"] for source in report["sources"])
     assert report["soup"]["accumulation_dtype"] == "float32"
     assert report["model"]["weights_sha256"] == soup.model_weights_sha256(
         output, (soup.SINGLE_WEIGHTS_NAME,)

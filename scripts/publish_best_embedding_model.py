@@ -15,6 +15,11 @@ from statistics import fmean
 from pathlib import Path
 from typing import Any, Mapping
 
+try:
+    from scripts.model_lineage import lineage_from_evidence
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from model_lineage import lineage_from_evidence
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_RELEASE_APPROVAL_TYPE = "embedding-model-public-release-approval"
@@ -513,6 +518,11 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     training = read_json(args.training_manifest.resolve())
     if model_evidence.get("status") != "pass":
         raise ValueError("Model packaging/parity evidence did not pass")
+    lineage_from_evidence(
+        model_evidence,
+        evidence_dir=model_dir,
+        context=str(model_evidence_path),
+    )
     contract = model_evidence.get("sentence_transformers_contract", {})
     if contract.get("pooling") != "last_token" or contract.get("normalize") is not True:
         raise ValueError("Merged SentenceTransformers contract drifted")
@@ -768,6 +778,30 @@ def build_card(
     )
     adaptation = str(training.get("benchmark_adaptation", ""))
     target_adapted = adaptation.startswith("target-adapted")
+    upstream_bases = lineage_from_evidence(evidence, context="publication evidence")
+    upstream_ids = [row["model"] for row in upstream_bases]
+    upstream_rows = "; ".join(
+        f"{row['model']}@{row['revision']}" for row in upstream_bases
+    )
+    upstream_label = " + ".join(upstream_ids)
+    if len(upstream_ids) == 1:
+        base_model_yaml = f"base_model: {upstream_ids[0]}"
+    else:
+        base_model_yaml = "base_model:\n" + "\n".join(
+            f"- {model_id}" for model_id in upstream_ids
+        )
+    base_model_relation = "merge" if is_model_soup(evidence) else "finetune"
+    upstream_links = ", ".join(
+        f"https://huggingface.co/{row['model']}/tree/{row['revision']}"
+        for row in upstream_bases
+    )
+    if "sionic-ai/comsat-embed-ko-8b-preview" in upstream_ids:
+        upstream_notice = (
+            "**이 모델은 `sionic-ai/comsat-embed-ko-8b-preview` 계보를 포함하므로 "
+            "해당 upstream의 CC-BY-NC-4.0 비상업 조건을 승계한다.**"
+        )
+    else:
+        upstream_notice = "정확한 pinned upstream 계보는 아래 학습 절에 공개한다."
     if target_adapted and "legal" in adaptation:
         adaptation_notice = (
             "**이 모델은 법률/공공 target-adapted 모델이다. LawIRKo와 AutoRAG "
@@ -789,11 +823,11 @@ def build_card(
         )
     else:
         method_intro = (
-            "Qwen3-Embedding-8B의 상위 transformer block을 부분 full-parameter update한 "
+            f"{upstream_label} 계보 모델의 상위 transformer block을 부분 full-parameter update한 "
             "한국어 retrieval 성능 후보다. optimizer state를 제외한 SentenceTransformers "
             "artifact를 만들고 last-token/L2 계약과 실제 embedding probe를 검증했다."
             if full_update
-            else "Qwen3-Embedding-8B를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업 "
+            else f"{upstream_label} 계보를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업 "
             "성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와 "
             "SentenceTransformers last-token/L2/prompt 계약을 검증했다."
         )
@@ -849,13 +883,14 @@ retrieval, K-HATERS 지원 또는 해당 영역의 우위를 주장하는 근거
             if isinstance(row, dict)
         )
         method_rows = f"""- method: basis-safe weighted arithmetic mean of safe-merged full model weights
+- pinned upstream base lineage: `{upstream_rows}`
 - fixed source weights: `{source_rows}`
 - FP32 accumulation / emitted dtype: `{evidence.get('soup', {}).get('accumulation_dtype')}` / `{evidence.get('soup', {}).get('output_floating_dtype')}`
 - model weight SHA-256: `{weights_sha(evidence)}`
 - source count: `{len(evidence.get('sources', []))}`
 - tensor count: `{evidence.get('soup', {}).get('tensor_count')}`"""
     elif full_update:
-        method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
+        method_rows = f"""- pinned upstream base lineage: `{upstream_rows}`
 - method: partial full-parameter contrastive fine-tuning, InfoNCE/explicit negatives
 - packaged model weight SHA-256: `{weights_sha(evidence)}`
 - packaged probe maximum norm error: `{evidence['probe']['metrics']['maximum_norm_error']}`
@@ -864,7 +899,7 @@ retrieval, K-HATERS 지원 또는 해당 영역의 우위를 주장하는 근거
         training_arguments = evidence.get("adapter", {}).get("training", {}).get(
             "arguments", {}
         )
-        method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
+        method_rows = f"""- pinned upstream base lineage: `{upstream_rows}`
 - method: LoRA continued contrastive fine-tuning, InfoNCE/explicit negatives
 - LoRA rank/alpha/dropout: `{adapter.get('r')}` / `{adapter.get('lora_alpha')}` / `{adapter.get('lora_dropout')}`
 - target modules: `{', '.join(adapter.get('target_modules') or [])}`
@@ -881,7 +916,8 @@ language:
 license: other
 library_name: sentence-transformers
 pipeline_tag: feature-extraction
-base_model: Qwen/Qwen3-Embedding-8B
+{base_model_yaml}
+base_model_relation: {base_model_relation}
 {dataset_yaml.rstrip()}
 tags:
 - sentence-transformers
@@ -896,6 +932,8 @@ tags:
 {method_intro}
 
 {adaptation_notice}
+
+{upstream_notice}
 
 ## 결과
 
@@ -972,7 +1010,7 @@ query에는 model의 `query` prompt를 적용하고 document에는 instruction�
 
 ```bash
 MODEL_ID={repo_id} \\
-SERVED_MODEL_NAME=qwen3-embedding-8b-ko \\
+SERVED_MODEL_NAME=ko-embedding-8b \\
 MAX_MODEL_LEN=8192 \\
 DTYPE={merge_dtype} \\
 scripts/serve_vllm_embedding.sh
@@ -983,7 +1021,7 @@ from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
 result = client.embeddings.create(
-    model="qwen3-embedding-8b-ko",
+    model="ko-embedding-8b",
     input=[
         "Instruct: Given a Korean web search query, retrieve relevant passages that answer the query\\nQuery: 질문",
         "검색할 문서",
@@ -1002,7 +1040,7 @@ benchmark한다.
 
 - code: https://github.com/LLM-OS-Models/Embedding
 - data: {dataset_link}
-- base: https://huggingface.co/Qwen/Qwen3-Embedding-8B
+- pinned upstream base(s): {upstream_links}
 - comparison: https://huggingface.co/sionic-ai/comsat-embed-ko-8b-preview
 
 모델 선택·평가·데이터 노출과 exact command는 repository의 README와 docs에 기록돼

@@ -23,6 +23,11 @@ except ModuleNotFoundError:
         write_sentence_transformers_contract,
     )
 
+try:
+    from model_lineage import resolve_base_lineage
+except ModuleNotFoundError:
+    from scripts.model_lineage import resolve_base_lineage
+
 
 DEFAULT_BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
 DEFAULT_BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
@@ -225,6 +230,9 @@ def verify(output: Path, args: argparse.Namespace) -> dict:
         "training_method": "partial-full-parameter-update",
         "base_model": args.base_model,
         "base_revision": args.base_revision,
+        "upstream_base_models": resolve_base_lineage(
+            args.base_model, args.base_revision
+        ),
         "source_checkpoint": str(args.checkpoint.resolve()),
         "training_contract": training_contract,
         "model": {"weights_sha256": hash_model_files(output)},

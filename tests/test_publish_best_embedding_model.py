@@ -990,6 +990,16 @@ class PublishBestModelTests(unittest.TestCase):
                         "status": "pass",
                         "artifact_type": "weighted-full-model-embedding-soup",
                         "training_method": "weighted-full-model-soup",
+                        "upstream_base_models": [
+                            {
+                                "model": "Qwen/Qwen3-Embedding-8B",
+                                "revision": "1" * 40,
+                            },
+                            {
+                                "model": "sionic-ai/comsat-embed-ko-8b-preview",
+                                "revision": "a" * 40,
+                            },
+                        ],
                         "sources": [
                             {"model": "/models/general", "weight": 0.5},
                             {"model": "/models/combined", "weight": 0.5},
@@ -1023,6 +1033,9 @@ class PublishBestModelTests(unittest.TestCase):
             )
             soup_card = (model / "README.md").read_text()
             self.assertIn("safe-merged full transformer weight", soup_card)
+            self.assertIn("base_model:\n- Qwen/Qwen3-Embedding-8B", soup_card)
+            self.assertIn("- sionic-ai/comsat-embed-ko-8b-preview", soup_card)
+            self.assertIn("CC-BY-NC-4.0", soup_card)
             soup_publication = json.loads(
                 (model / "publication_manifest.json").read_text()
             )

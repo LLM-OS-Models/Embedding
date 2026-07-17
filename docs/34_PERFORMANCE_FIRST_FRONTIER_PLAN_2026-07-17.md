@@ -563,6 +563,29 @@ credential이 없다. `.env`는 ignored 상태로 존재하지만 public restore
 `restore_comprehensive_eval_assets.py` 모두 `--use-token`을 명시한 경우에만 credential을
 읽는다. upload process만 token을 메모리에서 읽는다.
 
+### Pinned Hub 계보와 모델 카드
+
+최종 winner가 Qwen 직접 계보라고 미리 가정하지 않는다. merge/full package는 직접 base의
+Hub model ID와 40-hex commit을 `upstream_base_models`에 기록한다. continual 학습이 로컬
+clean winner를 base로 쓰면 그 모델의 단 하나뿐인 passing evidence에서 이 목록을 재귀
+승계한다. soup는 각 source의 evidence SHA·weights SHA와 함께 이 계보 목록을 복사하고 전체
+합집합을 보고서에 저장한다. local 절대경로는 즉시 학습 base evidence일 뿐 공개 계보로
+표시하지 않는다.
+
+다음 경우 package/publication은 fail-closed다.
+
+- Hub commit이 `main`/빈 문자열이거나 정확한 40-hex가 아님
+- 로컬 base에 `merge_report.json`, `full_tuning_report.json`, `soup_report.json`이 없거나
+  두 개 이상 존재함
+- local parent가 사라져 legacy evidence의 계보를 재귀 확인할 수 없음
+- 순환 local lineage 또는 Hub model ID가 아닌 경로가 최종 계보에 들어옴
+
+모델 카드는 증거에서 단일 또는 복수 `base_model` YAML을 동적으로 만든다. 이는 merge에
+복수 model ID를 허용하는 [Hugging Face 공식 model-card metadata 사양](https://huggingface.co/docs/hub/en/model-cards#specifying-a-base-model)에
+따른다. Comsat이 하나라도 포함되면 `sionic-ai/comsat-embed-ko-8b-preview`와 pinned commit을
+숨기지 않고 `CC-BY-NC-4.0` 비상업 조건 승계를 본문에 표시한다. `license: other`는 혼합
+training data나 upstream 권리를 재허가한다는 뜻이 아니다.
+
 ## 10. 즉시 해야 할 일
 
 1. 이 문서와 README의 재시작 상태를 commit/push한다. — **완료; `origin/main@eade122`**

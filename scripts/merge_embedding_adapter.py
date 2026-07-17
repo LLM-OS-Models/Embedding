@@ -25,6 +25,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+try:
+    from scripts.model_lineage import resolve_base_lineage
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from model_lineage import resolve_base_lineage
+
 
 DEFAULT_BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
 DEFAULT_BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
@@ -703,6 +708,9 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
         "status": "pass",
         "base_model": args.base_model,
         "base_revision": args.base_revision,
+        "upstream_base_models": resolve_base_lineage(
+            args.base_model, args.base_revision
+        ),
         "adapter": {key: value for key, value in adapter.items() if key != "config"},
         "model": {"weights_sha256": model_weights_sha256(staging_dir)},
         "adapter_config": {
