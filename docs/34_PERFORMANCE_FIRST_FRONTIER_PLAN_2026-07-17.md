@@ -46,9 +46,9 @@ data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다
 | 항목 | 현재 실제 상태 |
 |---|---|
 | Git | 복구/방법론/capacity/soup/runtime storage guard 변경을 `origin/main`에 지속 push; credential은 one-shot helper에서만 사용 |
-| submodule | 4개 모두 pinned commit으로 복원 완료 |
-| 로컬 data/cache/output | 이전 checkpoint는 없음. 13개 pinned dataset, core/teacher 8B 4개, 법률 312,581문서를 exact 복원·검증 |
-| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 221/221 통과 |
+| submodule | 5개 모두 pinned commit으로 복원 완료; 최신 conditional method 참고용 CLEAR 포함 |
+| 로컬 data/cache/output | 학습/검증 dataset 15개, comprehensive text용 dataset 13개, core/teacher 4개, 외부 비교 5개, 법률 312,581문서를 exact 복원·검증 |
+| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 225/225 통과 |
 | valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K와 나머지 frontier campaign 직렬 queue 대기 |
 | GPU | H100 80GB 1장, Qwen production 100% utilization |
 | NFS | `/home/ubuntu/data`, 49TB 중 48TB 가용, 사용률 3%, inode 1% |

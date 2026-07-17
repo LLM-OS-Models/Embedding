@@ -95,8 +95,9 @@ row는 101개였다.
 
 > **재시작 정정(2026-07-17):** 아래 dataset/card와 과거 run 기록은 원격 공개 artifact와
 > 역사적 실측을 뜻한다. 재시작 직후에는 `data/`, `outputs/`, 기존 `.venv-*`, model cache가
-> 없었으나, 현재 submodule 4개, 공개 dataset 13개, Qwen/Comsat/reranker 8B cache와 H100
-> 학습 환경을 NFS에 exact 복원했다. valid candidate는 아직 0이며 새 200K run이 active다.
+> 없었으나, 현재 submodule 5개, 학습/검증 dataset 15개, comprehensive text용 dataset
+> 13개, core/teacher 4개와 외부 비교 모델 5개 cache, H100 학습 환경을 NFS에 exact 복원했다.
+> valid candidate는 아직 0이며 새 200K run이 active다.
 > cache/env/data/checkpoint는 모두 `/home/ubuntu/data/Embedding`의 NFS 아래에 둔다.
 
 | 항목 | 상태 | 위치 |
@@ -104,8 +105,8 @@ row는 101개였다.
 | Hugging Face 새 publish namespace | `LLM-OS-Models2` private model repo 생성+README write 실검증 완료; 기존 `LLM-OS-Models`는 source read-only | [`embedding-upload-permission-test-20260717`](https://huggingface.co/LLM-OS-Models2/embedding-upload-permission-test-20260717) |
 | Qwen3-Embedding 공식 저장소 | pinned submodule 복원 완료 (`44548aa5`) | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
 | 공식 후속학습 프레임워크 `ms-swift` | pinned submodule `3d61b931`, NFS `.venv-train-fa2`, CUDA 12.6/PyTorch 2.5 import+8B backward 통과 | [`third_party/ms-swift/`](third_party/ms-swift/) |
-| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 221/221 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
-| 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B revision은 고정; 재시작 후 local cache 복원 대기 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
+| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 225/225 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
+| 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B exact revision 익명 복구·hard-offline config/tokenizer load 완료 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
 | Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
 | 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
 | 외부 상위 모델·종합 평가 자산 복구 | F2LLM-v2-8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B exact revision과 comprehensive text용 13개 dataset snapshot을 `token=False`로 복구하고 hard local-only 재검증. 총 HF cache 147GB; 48TB NFS에 저장. frontier 종료 뒤 7모델 Sionic 동등 비교 queue와 별도 storage watchdog 예약 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
