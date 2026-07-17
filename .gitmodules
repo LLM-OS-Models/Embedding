@@ -10,3 +10,6 @@
 [submodule "third_party/CodeFuse-Embeddings"]
 	path = third_party/CodeFuse-Embeddings
 	url = https://github.com/codefuse-ai/CodeFuse-Embeddings.git
+[submodule "third_party/CLEAR"]
+	path = third_party/CLEAR
+	url = https://github.com/dltmddbs100/CLEAR.git
