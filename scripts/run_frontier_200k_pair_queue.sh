@@ -153,6 +153,7 @@ embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] starting clean-only Qwen/Comsat lineage comparison"
 env WAIT_PID= SELECTION_ONLY=1 LOG_DIR="$POST_EVAL_LOG" \
+  SELECTION_PRIVATE_REPO_ID=LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lineage-clean-winner-v1-private \
   CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
   bash "$ROOT/scripts/run_post_training_eval_queue.sh"
 if [[ ! -s "$POST_EVAL_SELECTION" ]]; then
@@ -170,6 +171,7 @@ embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] selecting final 200K winner including capacity challenger"
 env WAIT_PID= SELECTION_ONLY=1 LOG_DIR="$CAPACITY_EVAL_LOG" \
+  SELECTION_PRIVATE_REPO_ID=LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-capacity-clean-winner-v1-private \
   CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
   bash "$ROOT/scripts/run_post_training_eval_queue.sh"
 if [[ ! -s "$CAPACITY_EVAL_SELECTION" ]]; then

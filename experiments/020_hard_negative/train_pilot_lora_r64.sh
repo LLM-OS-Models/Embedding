@@ -13,6 +13,16 @@ RUN_NAME="${RUN_NAME:-qwen3-embedding-8b-ko-hn10k-lora-r64}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
 BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
+ENABLE_PRIVATE_CHECKPOINT_WATCHER="${ENABLE_PRIVATE_CHECKPOINT_WATCHER:-0}"
+CHECKPOINT_TRAINING_MANIFEST="${CHECKPOINT_TRAINING_MANIFEST:-}"
+CHECKPOINT_BASE_UPLOAD_REPORT="${CHECKPOINT_BASE_UPLOAD_REPORT:-}"
+PRIVATE_CHECKPOINT_REPO_ID="${PRIVATE_CHECKPOINT_REPO_ID:-LLM-OS-Models2/${RUN_NAME}-candidates}"
+
+if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" != 0 \
+    && "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" != 1 ]]; then
+  echo "ENABLE_PRIVATE_CHECKPOINT_WATCHER must be 0 or 1" >&2
+  exit 2
+fi
 
 # Legacy 50K/200K eval losses used a validation set later proven to overlap the
 # 200K curriculum.  Continual-base promotion by that signal is permanently
@@ -141,6 +151,91 @@ else
     "$TRAIN_FILE" "$VAL_FILE"
 fi
 
+checkpoint_watcher_pid=""
+checkpoint_watcher_args=()
+stop_checkpoint_watcher() {
+  if [[ -n "$checkpoint_watcher_pid" ]]; then
+    kill "$checkpoint_watcher_pid" 2>/dev/null || true
+    wait "$checkpoint_watcher_pid" 2>/dev/null || true
+    checkpoint_watcher_pid=""
+  fi
+}
+
+if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
+  if [[ ! -s "$CHECKPOINT_TRAINING_MANIFEST" ]]; then
+    echo "checkpoint watcher requires an exact training manifest" >&2
+    exit 2
+  fi
+  watcher_base_model="$BASE_MODEL"
+  watcher_base_revision="$BASE_REVISION"
+  if [[ "$BASE_MODEL" == /* ]]; then
+    if [[ ! -s "$CHECKPOINT_BASE_UPLOAD_REPORT" ]]; then
+      echo "local continual base requires a verified private upload report" >&2
+      exit 2
+    fi
+    report_contract="$(jq -r \
+      '.visibility + ":" + (.remote_manifest_exact|tostring)' \
+      "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
+    report_model="$(jq -r '.model // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
+    report_weights_sha="$(jq -r '.weights_sha256 // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
+    watcher_base_model="$(jq -r '.repo_id // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
+    watcher_base_revision="$(jq -r '.commit_sha // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
+    base_evidence=""
+    for name in merge_report.json full_tuning_report.json soup_report.json; do
+      if [[ -s "$BASE_MODEL/$name" ]]; then
+        [[ -z "$base_evidence" ]] || {
+          echo "local continual base has ambiguous model evidence" >&2
+          exit 2
+        }
+        base_evidence="$BASE_MODEL/$name"
+      fi
+    done
+    if [[ -z "$base_evidence" ]]; then
+      echo "local continual base has no model evidence" >&2
+      exit 2
+    fi
+    expected_base_sha="$(jq -r '.model.weights_sha256 // empty' "$base_evidence" 2>/dev/null)"
+    if [[ "$report_contract" != private:true \
+        || "$watcher_base_model" != LLM-OS-Models2/* \
+        || ! "$watcher_base_revision" =~ ^[0-9a-f]{40}$ \
+        || ! "$report_weights_sha" =~ ^[0-9a-f]{64}$ \
+        || "$report_weights_sha" != "$expected_base_sha" \
+        || "$(readlink -f "$ROOT/$report_model" 2>/dev/null)" != "$(readlink -f "$BASE_MODEL")" ]]; then
+      echo "local continual base private-upload lineage verification failed" >&2
+      exit 2
+    fi
+  fi
+  if [[ ! "$watcher_base_revision" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "checkpoint watcher base revision must be a pinned Hub commit" >&2
+    exit 2
+  fi
+  training_data_sha="$(sha256sum "$TRAIN_FILE" | awk '{print $1}')"
+  training_manifest_sha="$(sha256sum "$CHECKPOINT_TRAINING_MANIFEST" | awk '{print $1}')"
+  checkpoint_watcher_args=(
+    "$ROOT/scripts/watch_private_adapter_checkpoints.py"
+    --watch-dir "$OUTPUT_DIR"
+    --repo-id "$PRIVATE_CHECKPOINT_REPO_ID"
+    --base-model "$watcher_base_model"
+    --base-revision "$watcher_base_revision"
+    --run-id "$RUN_NAME"
+    --training-data-sha256 "$training_data_sha"
+    --training-manifest-sha256 "$training_manifest_sha"
+    --poll-seconds 5 --settle-seconds 10
+    --remote-attempts 3 --remote-retry-seconds 15 --upload
+  )
+  admission_report="${BACKEND_ADMISSION_VERIFIED_REPORT:-${BACKEND_SDPA_VERIFIED_REPORT:-}}"
+  if [[ -n "$admission_report" && -s "$admission_report" ]]; then
+    checkpoint_watcher_args+=(
+      --admission-report-sha256 "$(sha256sum "$admission_report" | awk '{print $1}')"
+    )
+  fi
+  "$TRAIN_ENV/bin/python" "${checkpoint_watcher_args[@]}" \
+    >> "$OUTPUT_DIR/checkpoint-watcher.log" 2>&1 &
+  checkpoint_watcher_pid=$!
+  trap stop_checkpoint_watcher EXIT INT TERM
+fi
+
+training_status=0
 "$TRAIN_ENV/bin/swift" sft \
   "${MODEL_ARGS[@]}" \
   --model_type qwen3_emb \
@@ -186,4 +281,15 @@ fi
   --report_to none \
   --output_dir "$OUTPUT_DIR" \
   "${LOSS_ARGS[@]}" \
-  2>&1 | tee "$OUTPUT_DIR/train.log"
+  2>&1 | tee "$OUTPUT_DIR/train.log" || training_status=$?
+
+if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
+  stop_checkpoint_watcher
+  if ! "$TRAIN_ENV/bin/python" "${checkpoint_watcher_args[@]}" \
+      --once --settle-seconds 0 \
+      >> "$OUTPUT_DIR/checkpoint-watcher.log" 2>&1; then
+    echo "final private checkpoint reconciliation failed; local checkpoints retained" >&2
+  fi
+  trap - EXIT INT TERM
+fi
+exit "$training_status"

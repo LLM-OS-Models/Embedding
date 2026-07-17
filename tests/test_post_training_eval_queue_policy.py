@@ -12,6 +12,7 @@ CAPACITY_QUEUE = ROOT / "scripts/run_capacity_ablation_queue.sh"
 CAPACITY_TRAIN = ROOT / "experiments/070_tuning_strategy/train_quality.sh"
 CAPACITY_PROBE = ROOT / "experiments/070_tuning_strategy/probe_memory.sh"
 COMMON_RUNTIME = ROOT / "scripts/common_runtime.sh"
+PILOT_TRAIN = ROOT / "experiments/020_hard_negative/train_pilot_lora_r64.sh"
 
 
 def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
@@ -32,7 +33,10 @@ def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
     assert source.count("run_comprehensive_with_fallback \\") == 1
     selection_only_gate = source.index('if [[ "$SELECTION_ONLY" == 1 ]]', selector_call)
     assert selector_call < selection_only_gate < final_sionic_call
-    assert "public evaluation and publication skipped" in source
+    assert "public evaluation and public-score publication skipped" in source
+    private_backup = source.index("publish_private_clean_candidate.py", selection_only_gate)
+    selection_only_exit = source.index("exit 0", private_backup)
+    assert selection_only_gate < private_backup < selection_only_exit < final_sionic_call
 
 
 def test_queue_uses_safe_batches_and_token_free_offline_evaluation() -> None:
@@ -122,6 +126,7 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
     assert "SELECTION_ONLY=0" not in frontier
     assert 'POSTTRAIN_SELECTION="$CAPACITY_EVAL_SELECTION"' in frontier
     assert frontier.count("ENABLE_PUBLIC_INTERMEDIATE_EVAL=0") == 2
+    assert frontier.count("SELECTION_PRIVATE_REPO_ID=LLM-OS-Models2/") == 2
     assert frontier.count("embedding_require_storage_headroom") >= 8
 
     scale_source = SCALE_QUEUE.read_text(encoding="utf-8")
@@ -153,6 +158,7 @@ def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
     for queue in queues:
         source = queue.read_text(encoding="utf-8")
         assert "unset HF_TOKEN HUGGINGFACE_HUB_TOKEN" in source, queue
+        assert "EMBEDDING_OFFLINE=1" in source, queue
         assert "HF_TOKEN=\"$(sed" not in source, queue
         assert 'PUBLISH_HF_TOKEN_FILE="$ROOT/.env"' in source, queue
         assert '--hf-token-file "$PUBLISH_HF_TOKEN_FILE"' in source, queue
@@ -186,6 +192,32 @@ def test_intermediate_queues_disable_public_evaluation_by_default() -> None:
         )
         publisher = source.index("publish_best_embedding_model.py", publish_gate)
         assert publish_gate < publisher, queue
+
+
+def test_future_lora_runs_upload_reconstructable_private_checkpoints() -> None:
+    queues = (
+        SCALE_QUEUE,
+        ROOT / "scripts/run_reranker_kd_ablation_queue.sh",
+        ROOT / "scripts/run_legal_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+    )
+    for queue in queues:
+        source = queue.read_text(encoding="utf-8")
+        assert "ENABLE_PRIVATE_CHECKPOINT_WATCHER=1" in source, queue
+        assert "CHECKPOINT_TRAINING_MANIFEST=" in source, queue
+        assert "CHECKPOINT_BASE_UPLOAD_REPORT=" in source, queue
+        assert "PRIVATE_CHECKPOINT_REPO_ID=" in source, queue
+        assert "EMBEDDING_OFFLINE=1" in source, queue
+
+    train = PILOT_TRAIN.read_text(encoding="utf-8")
+    watcher = train.index("watch_private_adapter_checkpoints.py")
+    swift = train.index('"$TRAIN_ENV/bin/swift" sft')
+    reconciliation = train.index("--once --settle-seconds 0", swift)
+    assert watcher < swift < reconciliation
+    assert "local continual base requires a verified private upload report" in train
+    assert '"$report_weights_sha" != "$expected_base_sha"' in train
+    assert '"$watcher_base_revision" =~ ^[0-9a-f]{40}$' in train
 
 
 def test_model_soup_coefficients_are_fixed_before_clean_evaluation() -> None:

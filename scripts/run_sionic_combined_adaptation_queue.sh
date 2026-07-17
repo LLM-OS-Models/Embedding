@@ -9,6 +9,8 @@ UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-combined-adaptation-20260712}"
 ENABLE_PUBLIC_INTERMEDIATE_EVAL="${ENABLE_PUBLIC_INTERMEDIATE_EVAL:-0}"
+GENERAL_SELECTION="${GENERAL_SELECTION:-$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json}"
+GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-${GENERAL_SELECTION%/*}/private-clean-candidate-upload.json}"
 OUT_DIR="$ROOT/outputs/data/sionic-combined-target-v1"
 CURRICULUM="$OUT_DIR/train.multidomain.jsonl"
 PROVENANCE="$OUT_DIR/provenance.multidomain.jsonl"
@@ -166,7 +168,13 @@ train_combined() {
   fi
   admission_report="$BACKEND_ADMISSION_REPORT"
   echo "[$(timestamp)] combined training backend=$train_attn env=$train_env admission=$admission_report"
-  run_stage "train-$name" env TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
+  run_stage "train-$name" env \
+    EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
+    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+    CHECKPOINT_TRAINING_MANIFEST="$MANIFEST" \
+    CHECKPOINT_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
+    PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${name}-candidates" \
+    TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=5 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \

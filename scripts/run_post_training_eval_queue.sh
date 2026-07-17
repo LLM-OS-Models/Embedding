@@ -13,7 +13,9 @@ UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 SELECTION_ONLY="${SELECTION_ONLY:-0}"
+SELECTION_PRIVATE_REPO_ID="${SELECTION_PRIVATE_REPO_ID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
+SELECTION_UPLOAD_REPORT="${SELECTION_UPLOAD_REPORT:-$LOG_DIR/private-clean-candidate-upload.json}"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain-contract-v1"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain-contract-v1"
 COMPREHENSIVE_OUT="$ROOT/outputs/evaluation/comprehensive-text-v1-posttrain"
@@ -455,7 +457,35 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
     echo "[$(timestamp)] selection-only run produced no clean selection" >&2
     exit 20
   fi
-  echo "[$(timestamp)] selection-only run complete; public evaluation and publication skipped"
+  if [[ -n "$SELECTION_PRIVATE_REPO_ID" ]]; then
+    best_model="$(jq -r '.best.model // empty' "$SELECTION")"
+    best_abs="$ROOT/$best_model"
+    training_manifest="$(resolve_training_manifest "$best_model" 2>/dev/null)" || \
+      training_manifest=""
+    if [[ -z "$best_model" || ! -d "$best_abs" || ! -s "$training_manifest" ]]; then
+      echo "[$(timestamp)] clean winner or training manifest unavailable for private backup" >&2
+      exit 21
+    fi
+    if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+      echo "[$(timestamp)] Hugging Face token file unavailable for required private backup" >&2
+      exit 21
+    fi
+    retry_stage "publish-selection-only-clean-winner" 3 \
+      env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
+      "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
+      --model-dir "$best_abs" --selection "$SELECTION" \
+      --training-manifest "$training_manifest" \
+      --repo-id "$SELECTION_PRIVATE_REPO_ID" \
+      --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
+      --report-output "$SELECTION_UPLOAD_REPORT" --upload || exit 21
+    if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
+        "$SELECTION_UPLOAD_REPORT" 2>/dev/null)" != "private:true" ]]; then
+      echo "[$(timestamp)] private clean-winner upload report failed verification" >&2
+      exit 21
+    fi
+    echo "[$(timestamp)] selection-only clean winner privately preserved"
+  fi
+  echo "[$(timestamp)] selection-only run complete; public evaluation and public-score publication skipped"
   exit 0
 fi
 

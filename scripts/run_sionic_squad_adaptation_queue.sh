@@ -13,6 +13,8 @@ UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 ENABLE_PUBLIC_INTERMEDIATE_EVAL="${ENABLE_PUBLIC_INTERMEDIATE_EVAL:-0}"
+GENERAL_SELECTION="${GENERAL_SELECTION:-$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json}"
+GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-${GENERAL_SELECTION%/*}/private-clean-candidate-upload.json}"
 TARGET_KIND="${TARGET_KIND:-squad}"
 TARGET_PHASE="${TARGET_PHASE:-sionic_squad_train_60k}"
 TARGET_DATA_REL="${TARGET_DATA_REL:-outputs/data/performance-v1/sionic-squad-train-60k}"
@@ -229,7 +231,13 @@ train_target() {
   fi
   admission_report="$BACKEND_ADMISSION_REPORT"
   echo "[$(timestamp)] ${TARGET_KIND} training backend=$train_attn env=$train_env admission=$admission_report"
-  run_stage "train-$output_name" env TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
+  run_stage "train-$output_name" env \
+    EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
+    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+    CHECKPOINT_TRAINING_MANIFEST="$CURRICULUM_MANIFEST" \
+    CHECKPOINT_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
+    PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${output_name}-candidates" \
+    TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$output_name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS" EVAL_STEPS=125 SAVE_STEPS=125 SAVE_TOTAL_LIMIT=5 \
     MAX_LENGTH="$TARGET_MAX_LENGTH" \

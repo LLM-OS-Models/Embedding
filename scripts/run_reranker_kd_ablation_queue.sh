@@ -21,6 +21,7 @@ KD_AUDIT="$DATA_DIR/train.reranker-quantile-kd15.audit.jsonl"
 KD_MANIFEST="$DATA_DIR/train.reranker-quantile-kd15.manifest.json"
 SELECTION="$LOG_DIR/clean-first-selection.json"
 GENERAL_TRAINING_MANIFEST="${GENERAL_TRAINING_MANIFEST:-$ROOT/outputs/data/performance-v1/performance-1m/homogeneous-b16.manifest.json}"
+GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-$ROOT/outputs/scale-1m-20260717-frontier/private-clean-candidate-upload.json}"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
 REQUEST_ROWS="${KD_REQUEST_ROWS:-10000}"
@@ -191,6 +192,10 @@ for variant in "${variants[@]}"; do
     embedding_require_storage_headroom /tmp 50 100000
     run_stage "train-$label" env \
       EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 AUTO_SELECT_FA2=0 \
+      ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+      CHECKPOINT_TRAINING_MANIFEST="$KD_MANIFEST" \
+      CHECKPOINT_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
+      PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${run_name}-candidates" \
       TRAIN_ENV="$EMBEDDING_TRAIN_ENV" ATTN_IMPL=sdpa ENABLE_LISTWISE_KD=1 \
       EMBEDDING_KD_HARD_WEIGHT="$hard_weight" EMBEDDING_KD_WEIGHT="$kd_weight" \
       EMBEDDING_KD_MODE="$kd_mode" EMBEDDING_KD_QUEUE_SIZE="$queue_size" \
@@ -255,9 +260,13 @@ run_stage select-clean-reranker-kd-winner \
   --output "$SELECTION" --disqualification-root "$ROOT/outputs" \
   "${candidate_args[@]}" || exit 6
 
-MODEL_UPLOAD_STATUS="$LOG_DIR/private-model-upload-status.json"
-if [[ -f "$ROOT/.env" \
-    && "$(jq -r '.status // empty' "$MODEL_UPLOAD_STATUS" 2>/dev/null)" != complete ]]; then
+MODEL_UPLOAD_REPORT="$LOG_DIR/private-clean-candidate-upload.json"
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
+    "$MODEL_UPLOAD_REPORT" 2>/dev/null)" != "private:true" ]]; then
+  if [[ ! -f "$ROOT/.env" ]]; then
+    echo "[$(timestamp)] .env unavailable for required KD winner backup" >&2
+    exit 7
+  fi
   selected_model_rel="$(jq -r '.best.model // empty' "$SELECTION")"
   selected_model="$ROOT/$selected_model_rel"
   if [[ -n "$selected_model_rel" && -s "$selected_model/merge_report.json" ]]; then
@@ -266,27 +275,22 @@ if [[ -f "$ROOT/.env" \
       selected_training_manifest="$GENERAL_TRAINING_MANIFEST"
     fi
     if [[ ! -s "$selected_training_manifest" ]]; then
-      echo "[$(timestamp)] selected model training manifest is unavailable; upload skipped" >&2
+      echo "[$(timestamp)] selected model training manifest is unavailable" >&2
+      exit 7
     else
       embedding_require_storage_headroom "$ROOT" 500 1000000
-      (
-        status_tmp="$MODEL_UPLOAD_STATUS.tmp.$$"
-        if env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
-          "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
-          --model-dir "$selected_model" --selection "$SELECTION" \
-          --training-manifest "$selected_training_manifest" \
-          --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1-private \
-          --hf-token-file "$ROOT/.env" --upload; then
-          printf '{"status":"complete"}\n' > "$status_tmp"
-        else
-          printf '{"status":"failed"}\n' > "$status_tmp"
-        fi
-        mv "$status_tmp" "$MODEL_UPLOAD_STATUS"
-      ) >"$LOG_DIR/private-model-upload.log" 2>&1 &
-      MODEL_UPLOAD_PID=$!
-      printf '%s\n' "$MODEL_UPLOAD_PID" > "$LOG_DIR/private-model-upload.pid"
-      echo "[$(timestamp)] private clean-selected model upload started pid=$MODEL_UPLOAD_PID"
+      run_stage "publish-private-clean-selected-kd-winner" \
+        env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
+        "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
+        --model-dir "$selected_model" --selection "$SELECTION" \
+        --training-manifest "$selected_training_manifest" \
+        --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1-private \
+        --hf-token-file "$ROOT/.env" --report-output "$MODEL_UPLOAD_REPORT" \
+        --upload >"$LOG_DIR/private-model-upload.log" 2>&1 || exit 7
     fi
+  else
+    echo "[$(timestamp)] selected KD winner is unavailable for private backup" >&2
+    exit 7
   fi
 fi
 

@@ -35,6 +35,9 @@ MODEL_DIR="$ROOT/$MODEL_REL"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-scale1m"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-scale1m"
 POSTTRAIN_SELECTION="${POSTTRAIN_SELECTION:-$ROOT/outputs/post-capacity-eval-20260717-frontier/clean-first-selection.json}"
+POSTTRAIN_UPLOAD_REPORT="${POSTTRAIN_UPLOAD_REPORT:-${POSTTRAIN_SELECTION%/*}/private-clean-candidate-upload.json}"
+SCALE_SELECTION="$LOG_DIR/clean-first-selection.json"
+SCALE_UPLOAD_REPORT="$LOG_DIR/private-clean-candidate-upload.json"
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
@@ -239,6 +242,11 @@ train_scale() {
   admission_report="$BACKEND_ADMISSION_REPORT"
   echo "[$(timestamp)] scale training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$output_name" env \
+    EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
+    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+    CHECKPOINT_TRAINING_MANIFEST="$TRAINING_MANIFEST" \
+    CHECKPOINT_BASE_UPLOAD_REPORT="$POSTTRAIN_UPLOAD_REPORT" \
+    PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${output_name}-candidates" \
     TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$output_name" TRAIN_FILE="$TRAIN_FILE" VAL_FILE="$VAL_FILE" \
     MAX_STEPS="$MAX_STEPS_1M" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=5 \
@@ -343,6 +351,30 @@ for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" && break
 done
 ROBUST_SUMMARY="$ROBUST_OUT/$safe/$local_revision/summary.json"
+if [[ ! -s "$CLEAN_SUMMARY" || ! -s "$ROBUST_SUMMARY" ]]; then
+  echo "[$(timestamp)] 1M clean/robustness evidence is incomplete" >&2
+  exit 6
+fi
+run_stage "select-clean-$RUN_NAME" \
+  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_clean_model.py" \
+  "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
+  --output "$SCALE_SELECTION" --disqualification-root "$ROOT/outputs" \
+  --candidate-model "$MODEL_REL" || exit 6
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
+    "$SCALE_UPLOAD_REPORT" 2>/dev/null)" != "private:true" ]]; then
+  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+    echo "[$(timestamp)] token file unavailable for required 1M private backup" >&2
+    exit 6
+  fi
+  retry_stage "publish-clean-$RUN_NAME" 3 \
+    env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
+    "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
+    --model-dir "$MODEL_DIR" --selection "$SCALE_SELECTION" \
+    --training-manifest "$TRAINING_MANIFEST" \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance1m-clean-winner-v1-private \
+    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
+    --report-output "$SCALE_UPLOAD_REPORT" --upload || exit 6
+fi
 if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
     && -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
@@ -384,6 +416,7 @@ if [[ "${ENABLE_RERANKER_KD_ABLATION:-1}" == 1 ]]; then
     LOG_DIR="$ROOT/outputs/reranker-kd-20260717-frontier" \
     GENERAL_BASE_MODEL="$MODEL_DIR" \
     GENERAL_TRAINING_MANIFEST="$TRAINING_MANIFEST" \
+    GENERAL_BASE_UPLOAD_REPORT="$SCALE_UPLOAD_REPORT" \
     bash "$ROOT/scripts/run_reranker_kd_ablation_queue.sh" || true
 fi
 

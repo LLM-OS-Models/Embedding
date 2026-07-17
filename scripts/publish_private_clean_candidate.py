@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,6 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--training-manifest", type=Path, required=True)
     parser.add_argument("--repo-id", required=True)
     parser.add_argument("--hf-token-file", type=Path)
+    parser.add_argument("--report-output", type=Path)
     parser.add_argument("--upload", action="store_true")
     return parser.parse_args()
 
@@ -155,9 +157,16 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
         if float(source[key]) != float(best.get(key)):
             raise ValueError(f"Selection metric drift: {key}")
 
-    evidence_path = model_dir / "merge_report.json"
-    if not evidence_path.is_file():
-        raise FileNotFoundError("Private intermediate candidate must have merge_report.json")
+    evidence_paths = [
+        model_dir / name
+        for name in ("merge_report.json", "full_tuning_report.json", "soup_report.json")
+        if (model_dir / name).is_file()
+    ]
+    if len(evidence_paths) != 1:
+        raise FileNotFoundError(
+            "Private intermediate candidate must have exactly one merge/full/soup report"
+        )
+    evidence_path = evidence_paths[0]
     evidence = read_json(evidence_path)
     if evidence.get("status") != "pass":
         raise ValueError("Model safe-merge evidence did not pass")
@@ -184,6 +193,7 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
         "clean": clean,
         "robustness": robustness,
         "evidence_path": evidence_path,
+        "evidence_name": evidence_path.name,
         "weights_sha256": actual_sha,
         "revision": expected_revision,
     }
@@ -250,7 +260,10 @@ def prepare_publication(args: argparse.Namespace, validated: dict[str, Any]) -> 
             "path": validated["model_rel"],
             "revision": validated["revision"],
             "weights_sha256": validated["weights_sha256"],
-            "merge_report_sha256": sha256(validated["evidence_path"]),
+            "evidence": {
+                "file": validated["evidence_name"],
+                "sha256": sha256(validated["evidence_path"]),
+            },
             "shards": model_shards,
         },
         "selection": {
@@ -333,6 +346,15 @@ def main() -> None:
         report["commit_sha"] = info.sha
         report["remote_manifest_exact"] = True
         report["url"] = f"https://huggingface.co/{args.repo_id}"
+    if args.report_output:
+        report_output = args.report_output.expanduser().resolve()
+        report_output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = report_output.with_name(f".{report_output.name}.tmp.{os.getpid()}")
+        temporary.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(report_output)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
 
 

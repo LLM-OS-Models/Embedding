@@ -1,13 +1,18 @@
 # Private checkpoint candidate watcher
 
-`scripts/watch_private_adapter_checkpoints.py` watches a 200K LoRA training
-output for completed `checkpoint-N` directories and incrementally commits only
-verified adapter candidates to the private model repository:
+`scripts/watch_private_adapter_checkpoints.py` watches a LoRA training output
+for completed `checkpoint-N` directories and incrementally commits only
+verified adapter candidates to a private model repository. The active Qwen
+200K repository is:
 
 `LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates`
 
-The watcher is deliberately separate from the training process. It does not
-start or modify training and uploading is disabled unless `--upload` is given.
+The watcher does not start or modify training and uploading is disabled unless
+`--upload` is given. The active Qwen process uses a separately supervised
+watcher. Future 1M/KD/target/legal LoRA entrypoints opt in through
+`ENABLE_PRIVATE_CHECKPOINT_WATCHER=1`; the trainer wrapper starts the same
+watcher, stops it after training, and runs a final `--once --settle-seconds 0`
+reconciliation so the last completed checkpoint cannot be missed.
 
 ## Upload contract
 
@@ -30,8 +35,11 @@ staged, uploaded, or copied into the manifest:
 - local absolute paths or credentials
 
 The source `adapter_config.json` is reconstructed from pinned PEFT fields. Its
-base model and revision are replaced with the public model ID and pinned Git
-SHA, so a local model-cache path cannot leak.
+base model and revision are replaced with a Hub model ID and pinned Git SHA, so
+a local model-cache path cannot leak. For continual training from a local
+winner, the wrapper requires the preceding private full-model upload report,
+checks its model path and 64-hex weight identity against local merge/full/soup
+evidence, and only then records that private repository's exact 40-hex commit.
 
 ## Completion and validation gates
 
@@ -151,6 +159,25 @@ Step 500도 `eval_loss=0.00343669`로 step 250보다 개선됐으며 commit
 `36268988d5b529dc364ad242ef98900d0f80d126d490b40a0bbbe2d32cc386f7`와 manifest SHA
 `f77f0ac6788adda45a48eb60d5d088f625d5f111c8ef099753d2af5beb9ca249`가 local state와
 일치했으며 repo visibility도 private로 재확인했다.
+
+Step 750은 `eval_loss=0.00342328`, commit
+`adf013c90eeb6e93fe7de905f854870bc707c645`로 보존됐다. Step 1000은
+`eval_loss=0.0034344`, commit `363fede65381bc597904a2f49f4514ced318080b`로 보존됐다.
+Step 1000의 698,419,728-byte remote LFS SHA
+`b5a65f907b63079476f2c80d9ebc4df4cde2c5b0488737a544a2fff36499fe57`와 manifest SHA
+`8222ebb346f1995f0e981f5a2888dbebfda1bd3f41efdd5323b6b296fcf1cb2a`는 local state/archive와
+exact match였고, 해당 commit의 prefix는 allowlist 3파일뿐이며 repo는 private였다.
+
+## Continual-base 복구 사슬
+
+selection-only 200K lineage winner와 capacity 포함 winner는 public benchmark를 호출하지 않은
+채 Grade-I clean/robustness evidence로 고른 전체 모델을 각각 private upload한다. uploader는
+merge LoRA뿐 아니라 partial-full 및 fixed soup evidence도 같은 weight SHA gate로 검증하고,
+remote manifest 재다운로드가 일치한 뒤 `repo_id`, `commit_sha`, `weights_sha256`를 atomic report로
+남긴다. 1M은 capacity report, KD는 1M report, specialist/legal/combined는 KD winner report를
+사용한다. 어느 local base든 report의 path·weight SHA·private visibility·remote manifest·commit이
+하나라도 맞지 않으면 다음 watcher를 시작하지 않는다. 학습 프로세스는 Hub token-free offline이고
+watcher만 mode-0600 `.env`를 process memory에서 읽는다.
 
 ## Idempotency and recovery
 

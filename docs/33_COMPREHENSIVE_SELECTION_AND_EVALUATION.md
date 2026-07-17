@@ -106,6 +106,12 @@ optimizer, scheduler, RNG, trainer state, training args, log, raw/processed data
 SHA가 들어간다. private 업로드 성공은 보존·복구 가능성을 뜻할 뿐 성능 승격이나 public
 release를 뜻하지 않는다.
 
+200K selection-only 경계에서는 clean winner 전체 모델도 private로 올리고 remote manifest를
+재다운로드해 exact commit report를 남긴다. 이후 1M/KD/target/legal LoRA watcher는 local base의
+weight SHA와 이 report의 private repo/commit을 대조한 뒤에만 시작한다. 따라서 adapter만 남고
+그 adapter가 의존한 continual base를 잃는 복구 공백도 허용하지 않는다. 학습은 명시적 offline,
+token-free이고 uploader/watcher만 ignored mode-0600 `.env`를 메모리에서 읽는다.
+
 ## Clean-first 선택 정책
 
 ### 1. 후보 자격

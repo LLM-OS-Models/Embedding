@@ -32,8 +32,12 @@ def test_sensitive_file_gate_allows_tokenizer_but_rejects_credentials(
         publisher.validate_no_sensitive_files(tmp_path)
 
 
+@pytest.mark.parametrize(
+    "evidence_name",
+    ("merge_report.json", "full_tuning_report.json", "soup_report.json"),
+)
 def test_candidate_is_bound_to_exact_clean_winner_and_model_shards(
-    tmp_path: Path,
+    tmp_path: Path, evidence_name: str
 ) -> None:
     root = tmp_path / "workspace"
     model = root / "artifacts/models/kd-winner"
@@ -41,7 +45,7 @@ def test_candidate_is_bound_to_exact_clean_winner_and_model_shards(
     (model / "model-00001-of-00001.safetensors").write_bytes(b"model-weights")
     weights_sha = publisher.model_weights_sha256(model)
     revision = f"model-{weights_sha[:12]}"
-    (model / "merge_report.json").write_text(
+    (model / evidence_name).write_text(
         json.dumps(
             {
                 "status": "pass",
@@ -108,6 +112,7 @@ def test_candidate_is_bound_to_exact_clean_winner_and_model_shards(
     ):
         validated = publisher.validate_candidate(args)
     assert validated["weights_sha256"] == weights_sha
+    assert validated["evidence_name"] == evidence_name
 
     selection = json.loads(selection_path.read_text())
     selection["best"]["weights_sha256"] = "0" * 64
