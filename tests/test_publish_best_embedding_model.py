@@ -457,7 +457,7 @@ class PublishBestModelTests(unittest.TestCase):
             )
         self.assertEqual(visibility_drift.upload_calls, 1)
 
-    def test_performance_queues_use_private_candidate_model_repositories(self) -> None:
+    def test_only_final_queue_uses_rights_approved_public_model_publisher(self) -> None:
         queue_paths = [
             ROOT / "scripts/run_post_training_eval_queue.sh",
             ROOT / "scripts/run_scale_1m_queue.sh",
@@ -472,12 +472,15 @@ class PublishBestModelTests(unittest.TestCase):
                 for index, line in enumerate(lines)
                 if "publish_best_embedding_model.py" in line
             ]
+            if path.name != "run_post_training_eval_queue.sh":
+                self.assertFalse(publish_indexes, path)
+                continue
             self.assertTrue(publish_indexes, path)
             for index in publish_indexes:
                 invocation = "\n".join(lines[index : index + 16])
                 self.assertIn("--upload", invocation, path)
-                self.assertNotIn("--public", invocation, path)
-            self.assertIn("private-candidate", "\n".join(lines), path)
+                self.assertIn("--public", invocation, path)
+                self.assertIn("--release-approval", invocation, path)
 
     def test_pilot_card_links_published_hard_negative_dataset(self) -> None:
         self.assertEqual(

@@ -37,9 +37,9 @@ OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-scale1m"
 MULTIDOMAIN_OUT="$ROOT/outputs/evaluation/multidomain-selection"
 MULTIDOMAIN_DATASET="$ROOT/outputs/evaluation/multidomain-selection-heldout-v1"
 POSTTRAIN_SELECTION="${POSTTRAIN_SELECTION:-$ROOT/outputs/post-capacity-eval-20260717-frontier/clean-first-selection.json}"
-POSTTRAIN_UPLOAD_REPORT="${POSTTRAIN_UPLOAD_REPORT:-${POSTTRAIN_SELECTION%/*}/private-clean-candidate-upload.json}"
+POSTTRAIN_UPLOAD_REPORT="${POSTTRAIN_UPLOAD_REPORT:-${POSTTRAIN_SELECTION%/*}/public-clean-candidate-upload.json}"
 SCALE_SELECTION="$LOG_DIR/clean-first-selection.json"
-SCALE_UPLOAD_REPORT="$LOG_DIR/private-clean-candidate-upload.json"
+SCALE_UPLOAD_REPORT="$LOG_DIR/public-clean-candidate-upload.json"
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$MULTIDOMAIN_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
@@ -95,7 +95,7 @@ retry_stage() {
   return "$status"
 }
 
-verified_private_report() {
+verified_public_report() {
   local report="$1" expected_model="$2" expected_weights_sha="$3"
   local contract report_model report_weights_sha report_commit
   contract="$(jq -r \
@@ -104,7 +104,7 @@ verified_private_report() {
   report_model="$(jq -r '.model // empty' "$report" 2>/dev/null || true)"
   report_weights_sha="$(jq -r '.weights_sha256 // empty' "$report" 2>/dev/null || true)"
   report_commit="$(jq -r '.commit_sha // empty' "$report" 2>/dev/null || true)"
-  [[ "$contract" == "private:true:true" \
+  [[ "$contract" == "public:true:true" \
       && "$report_model" == "$expected_model" \
       && "$report_weights_sha" == "$expected_weights_sha" \
       && "$report_commit" =~ ^[0-9a-f]{40}$ ]]
@@ -278,7 +278,7 @@ train_scale() {
   echo "[$(timestamp)] scale training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$output_name" env \
     EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
-    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 CHECKPOINT_REPO_PUBLIC=1 \
     CHECKPOINT_TRAINING_MANIFEST="$TRAINING_MANIFEST" \
     CHECKPOINT_BASE_UPLOAD_REPORT="$POSTTRAIN_UPLOAD_REPORT" \
     PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${output_name}-candidates" \
@@ -350,6 +350,13 @@ if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" \
     --base-model "$CONTINUAL_BASE" --base-revision "$CONTINUAL_REVISION" \
     --device cuda --dtype bfloat16 --local-files-only || exit 5
+else
+  run_stage "validate-reused-merge-$RUN_NAME" \
+    "${OFFLINE_ENV[@]}" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+    --adapter "$checkpoint" --output-dir "$MODEL_DIR" \
+    --base-model "$CONTINUAL_BASE" --base-revision "$CONTINUAL_REVISION" \
+    --dtype bfloat16 --local-files-only --validate-existing || exit 5
 fi
 
 model_sha="$(jq -r '.model.weights_sha256' "$MODEL_DIR/merge_report.json")"
@@ -411,7 +418,7 @@ run_stage "select-clean-$RUN_NAME" \
   --candidate-model "$MODEL_REL" || exit 6
 selected_scale_model="$(jq -r '.best.model // empty' "$SCALE_SELECTION")"
 selected_scale_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$SCALE_SELECTION")"
-if ! verified_private_report \
+if ! verified_public_report \
     "$SCALE_UPLOAD_REPORT" "$selected_scale_model" "$selected_scale_weights_sha"; then
   if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
     echo "[$(timestamp)] token file unavailable for required 1M private backup" >&2
@@ -422,13 +429,13 @@ if ! verified_private_report \
     "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
     --model-dir "$MODEL_DIR" --selection "$SCALE_SELECTION" \
     --training-manifest "$TRAINING_MANIFEST" \
-    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance1m-clean-winner-v1-private \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance1m-clean-winner-v1 \
     --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
-    --report-output "$SCALE_UPLOAD_REPORT" --upload || exit 6
+    --report-output "$SCALE_UPLOAD_REPORT" --upload --public || exit 6
 fi
-if ! verified_private_report \
+if ! verified_public_report \
     "$SCALE_UPLOAD_REPORT" "$selected_scale_model" "$selected_scale_weights_sha"; then
-  echo "[$(timestamp)] 1M private clean-winner remote verification is incomplete" >&2
+  echo "[$(timestamp)] 1M public clean-winner remote verification is incomplete" >&2
   exit 6
 fi
 if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
@@ -438,24 +445,11 @@ if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
   robustness_args=()
   [[ -s "$ROBUST_SUMMARY" ]] && \
     robustness_args+=(--robustness-summary "$ROBUST_SUMMARY")
-  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
-    echo "[$(timestamp)] no token file; private model upload skipped" >&2
-  elif retry_stage "publish-$RUN_NAME" 3 \
-    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
-    --model-dir "$MODEL_DIR" \
-    --sionic-summary "$SIONIC_SUMMARY" \
-    --official-summary "$OFFICIAL_SUMMARY" \
-    "${clean_args[@]}" \
-    "${robustness_args[@]}" \
-    --training-manifest "$TRAINING_MANIFEST" \
-    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-1m-v1-private-candidate \
-    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
-    run_stage "record-scale-1m-result" \
-      "$ROOT/scripts/commit_campaign_result.sh" \
-      --stage scale-1m --model "$MODEL_REL" \
-      --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-1m-v1-private-candidate \
-      --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
-  fi
+  run_stage "record-scale-1m-result" \
+    "$ROOT/scripts/commit_campaign_result.sh" \
+    --stage scale-1m --model "$MODEL_REL" \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance1m-clean-winner-v1 \
+    --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
 fi
 run_stage "record-clean-legal-results" "$ROOT/scripts/commit_clean_legal_results.sh" || true
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
@@ -471,7 +465,7 @@ GENERAL_SELECTION="$SCALE_SELECTION"
 GENERAL_BASE_UPLOAD_REPORT="$SCALE_UPLOAD_REPORT"
 if [[ "${ENABLE_RERANKER_KD_ABLATION:-1}" == 1 ]]; then
   GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json"
-  GENERAL_BASE_UPLOAD_REPORT="${GENERAL_SELECTION%/*}/private-clean-candidate-upload.json"
+  GENERAL_BASE_UPLOAD_REPORT="${GENERAL_SELECTION%/*}/public-clean-candidate-upload.json"
   run_stage "qwen3-reranker-listwise-kd-ablation" env \
     LOG_DIR="$ROOT/outputs/reranker-kd-20260717-frontier" \
     GENERAL_BASE_MODEL="$MODEL_DIR" \

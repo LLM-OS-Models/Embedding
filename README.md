@@ -11,7 +11,9 @@ Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 
 ## 한 줄 결론
 
 - 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
-- 현재 valid performance candidate는 **0개**다. 재시작으로 소실된 공개 data/model cache를 exact revision으로 복원했고, 2026-07-17 11:46 KST부터 Qwen clean-lineage 200K를 처음부터 다시 학습 중이다. 성공 종료 뒤 Comsat 200K → legal-guard multidomain 계보 비교 → last4 capacity 비교 → 1M → 타깃/법률 통합 적응까지 단일 직렬 queue가 이어받는다.
+- 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이며, 새 `Nemotron-3-Embed-8B-BF16@2b29550c`의 한국어 base 적합성 평가가 끝날 때까지 재개를 보류한다. Nemotron-3는 SQuADKorV1 `0.92032`로 Qwen 공개 reference `0.9063`과 Comsat `0.9168`을 먼저 넘었고 Sionic 9 전체를 resumable cache로 측정 중이다.
+- 현재 valid performance candidate는 **0개**다. Qwen 200K 직렬 queue는 종료 marker 없이 남아 polling하던 wrapper까지 정지 대상으로 분류했고, Nemotron-3 전체 평가가 base 결정을 내릴 때까지 학습은 재개하지 않는다. Nemotron이 clean selector에서도 우세하면 공개 재배포 가능한 데이터만 쓴 최단 적응으로 전환하고, 아니면 Qwen `checkpoint-1750`을 exact contract로 재개한다.
+- Hugging Face 산출물은 **학습/파생 데이터와 모델 모두 public이 기본**이다. 공개 repo에는 source revision·license·변환·dedup·benchmark overlap·모델 계보를 카드와 manifest로 함께 싣고 업로드 전후 visibility/file-set/SHA를 재검증한다. 권리 불명확·재배포 금지 source가 섞인 기존 performance track은 공개하지 않고 rights-safe 데이터로 다시 만든다. 점수 선택 오염을 막기 위한 고정 소규모 holdout만 비공개 예외다.
 - 본선은 `Qwen clean lineage`와 `Comsat Korean warm-start lineage`를 같은 200K 조건으로 비교하고, 승자 계보의 원본 base에서 동일 200K/token budget인 last4 partial-full challenger를 거친 뒤, 1M general → current-student wide ANN pool → Qwen reranker score-quantile KD/queue A/B → 400K target → 모든 stage의 single-best 대 동일-trajectory last-available-5 FP32 평균을 최종 legal/multidomain/robustness gate로 재선택하는 순서다.
 - checkpoint는 public score가 아니라 Grade-I legal 10K guard와 고정 비공개 finance/knowledge 1.9K에서 먼저 고릅니다. 기존 512 validation의 200K 전량 중복을 발견해 Qwen/Comsat 200K는 양쪽 모두 보존된 모든 checkpoint를 동일한 legal·multidomain·noise 조건으로 다시 고릅니다. 이후 1M/KD/전문가 run은 source-document-held-out 512 내부 신호와 last-available-5 FP32 평균을 같은 최종 gate에서 비교합니다. Sionic 9와 공식 Korean 6은 local winner에 final-once로 실행합니다.
 - Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
@@ -22,6 +24,9 @@ Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 
 새 성능 우선 판단과 재복구 순서는
 [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md), 기존
 전체 배경은 [요약 문서](docs/00_EXECUTIVE_SUMMARY.md)부터 읽으면 됩니다.
+새 Nemotron-3 비교와 중단 재개 명령은
+[Nemotron-3 한국어 base 결정](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)에
+고정합니다.
 
 ## 성능 보드 3종
 
@@ -97,7 +102,8 @@ row는 101개였다.
 > 역사적 실측을 뜻한다. 재시작 직후에는 `data/`, `outputs/`, 기존 `.venv-*`, model cache가
 > 없었으나, 현재 submodule 5개, 학습/검증 dataset 15개, comprehensive text용 dataset
 > 13개, core/teacher 4개와 외부 비교 모델 5개 cache, H100 학습 환경을 NFS에 exact 복원했다.
-> valid candidate는 아직 0이며 새 200K run이 active다.
+> valid candidate는 아직 0이다. Qwen 200K는 step 1875에서 중단됐고 Nemotron-3
+> full Sionic9 평가가 active다. 정확한 재개 지점과 명령은 docs/36에 있다.
 > cache/env/data/checkpoint는 모두 `/home/ubuntu/data/Embedding`의 NFS 아래에 둔다.
 
 | 항목 | 상태 | 위치 |
@@ -135,8 +141,8 @@ row는 101개였다.
 | runtime storage watchdog | workspace 500GiB/100만 inode, root 100GiB/20만 inode, `/tmp` 50GiB/10만 inode를 30초마다 검사. 2회 연속 실패 때만 시작 시 검증한 우리 campaign PGID에 TERM→30초→KILL; 다른 프로세스는 신호하지 않음 | [`watch_storage_headroom.sh`](scripts/watch_storage_headroom.sh) |
 | 200K production·capacity | 2026-07-17 11:46 KST Qwen 시작; 199,904행·3,123-step, 양쪽 shuffle off, offline/token-free. legacy validation loss는 선택에서 제외하고 Qwen/Comsat 양쪽의 모든 archived checkpoint를 같은 legal 10K·다영역 1.9K·robustness로 평가. 종료 뒤 계보 선택 → 승자 raw base last4 partial-full 200K → 1M/KD/전문가/수프/최종 선택을 자동 실행 | [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
 | last4 partial-full capacity challenger | Qwen/Comsat clean 승자 계보 하나만 동일 199,904행·3,123-step·global batch 64로 비교. 실제 microbatch 8/HN4 메모리 probe 실패 시 OOM 근거를 남기고 skip; 성공 시 상위 4 block+final norm 771.790M parameter update. input/completion log SHA와 exact base revision이 complete contract에 묶여야 package 가능 | [tuning strategy](experiments/070_tuning_strategy/) |
-| private checkpoint watcher / resume | 최초 repo의 잘못 선언된 train SHA를 발견해 commit `9ec6b86b`에서 superseded 처리. 올바른 SHA `8e2731ab…`의 private `-candidates-v2`에 step-250/500/750/1000/1250/1500/1750을 commits `7d3b3ed1`/`ade73a6a`/`fecf0c73`/`684a6807`/`38ae9b1d`/`82f3fd11`/`1b84bea2`로 재검증·보존했고 전 prefix allowlist/LFS/manifest exact. 후속 LoRA 자동 watcher+종료 reconciliation; 재시작은 complete optimizer checkpoint의 exact contract가 같을 때만 resume | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
-| private clean-winner full model | clean selector의 exact winner만 격리 staging에 hardlink/copy하고 모델 로딩 allowlist 밖 파일을 거부한다. 원본 모델은 변경하지 않으며 evidence의 로컬 절대경로·인식 가능한 credential을 제거한다. 업로드 뒤 private visibility, 전체 remote file set, 모든 safetensors LFS SHA/size와 모든 metadata SHA를 검증해야 다음 continual run이 시작된다 | [`publish_private_clean_candidate.py`](scripts/publish_private_clean_candidate.py) |
+| checkpoint watcher / resume | 기존 Qwen step-250…1750은 당시 정책대로 private 보존했다. 후속 run은 public checkpoint repo가 기본이며, allowlist 3파일·LFS/manifest SHA·요청 visibility를 commit 전후 검증한다. 재시작은 complete optimizer checkpoint의 exact contract가 같을 때만 resume | [checkpoint watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
+| public clean-winner full model | clean selector의 exact winner만 격리 staging에 hardlink/copy하고 모델 로딩 allowlist 밖 파일을 거부한다. 원본 모델은 변경하지 않으며 evidence의 로컬 절대경로·credential을 제거한다. 업로드 뒤 public visibility, 전체 remote file set, 모든 safetensors LFS SHA/size와 metadata SHA를 검증해야 다음 continual run이 시작된다 | [`publish_private_clean_candidate.py`](scripts/publish_private_clean_candidate.py) |
 | final evaluation/publication completion | 최종 local winner 한 모델에만 Sionic9→공식 Korean6→comprehensive7/414를 실행한다. 어느 평가·legal/multidomain/ranks evidence·training manifest·token-file·private upload·campaign-result push라도 실패하면 campaign은 완료 처리되지 않는다. 최종 모델도 격리 staging과 전체 remote file/LFS exact report를 통과해야 한다 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
 | clean-guard multidomain model selection | valid performance candidate 0; 법률 Grade-I 최고 `-0.005` guard → finance/knowledge macro 최고 `-0.002` → robustness `-0.002` → intrusion `+0.001`. public Sionic/official score는 selector 입력에서 제외하며 모든 stage에 mandatory gate로 실행 | [다영역 선택 계약](docs/35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md) |
 | text-only comprehensive diagnostic | 7 tasks·414 selected subsets; K-HATERS는 unsupported registered task, visual-document 5 assets는 modality 불일치로 명시 제외; public medium/high contamination diagnostic | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
@@ -188,6 +194,7 @@ row는 101개였다.
 34. [종합 최고 모델 선택·평가 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md)
 35. [2026-07-17 성능 최우선 frontier 방법론과 전면 복구 계획](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md)
 36. [고정 비공개 finance/knowledge 다영역 모델 선택 보드](docs/35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md)
+37. [Nemotron-3 한국어 base 결정·중단 재개](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)
 
 ## 실험 지도
 

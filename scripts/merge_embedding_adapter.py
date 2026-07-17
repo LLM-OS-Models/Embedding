@@ -119,6 +119,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--local-files-only", action="store_true")
     parser.add_argument(
+        "--validate-existing",
+        action="store_true",
+        help=(
+            "Do not merge; verify that an existing output is byte-bound to "
+            "the requested adapter, base, lineage, dtype, and model shards."
+        ),
+    )
+    parser.add_argument(
         "--keep-failed-staging",
         action="store_true",
         help="Keep the temporary output after a failed merge for debugging.",
@@ -165,6 +173,62 @@ def model_weights_sha256(root: Path) -> str:
             for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
                 digest.update(chunk)
     return digest.hexdigest()
+
+
+def same_model_reference(recorded: Any, requested: str) -> bool:
+    if not isinstance(recorded, str) or not recorded.strip():
+        return False
+    if recorded.rstrip("/") == requested.rstrip("/"):
+        return True
+    try:
+        return Path(recorded).expanduser().resolve() == Path(requested).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return False
+
+
+def validate_existing_merge(args: argparse.Namespace) -> dict[str, Any]:
+    """Fail closed unless an existing package is the exact requested merge."""
+
+    output = args.output_dir.expanduser().resolve()
+    report_path = output / "merge_report.json"
+    if not output.is_dir() or output.is_symlink() or not report_path.is_file():
+        raise FileNotFoundError("Existing merged artifact is incomplete or unsafe")
+    report = read_json(report_path)
+    if not isinstance(report, dict) or report.get("status") != "pass":
+        raise ValueError("Existing merge report did not pass")
+    assert_adapter_publishable(args.adapter, args.allow_disqualified_diagnostic)
+    adapter = validate_adapter(args.adapter.expanduser().resolve())
+    expected_adapter = {key: value for key, value in adapter.items() if key != "config"}
+    if report.get("adapter") != expected_adapter:
+        raise ValueError("Existing merge belongs to different adapter bytes or evidence")
+    validate_adapter_base_reference(
+        adapter["config"], args.base_model, args.base_revision
+    )
+    if not same_model_reference(report.get("base_model"), args.base_model):
+        raise ValueError("Existing merge belongs to a different base model")
+    if report.get("base_revision") != args.base_revision:
+        raise ValueError("Existing merge belongs to a different base revision")
+    if report.get("upstream_base_models") != resolve_base_lineage(
+        args.base_model, args.base_revision
+    ):
+        raise ValueError("Existing merge upstream lineage drifted")
+    merge = report.get("merge", {})
+    if merge.get("safe_merge") is not True or merge.get("requested_dtype") != args.dtype:
+        raise ValueError("Existing merge method/dtype contract drifted")
+    validate_sentence_transformers_contract(output)
+    actual_weights_sha = model_weights_sha256(output)
+    if report.get("model", {}).get("weights_sha256") != actual_weights_sha:
+        raise ValueError("Existing merged model shards drifted from merge evidence")
+    return {
+        "status": "pass",
+        "artifact_type": "validated-existing-embedding-merge",
+        "output_dir": str(output),
+        "adapter_weights_sha256": adapter["weights_sha256"],
+        "adapter_config_sha256": adapter["config_sha256"],
+        "model_weights_sha256": actual_weights_sha,
+        "base_model": report["base_model"],
+        "base_revision": report["base_revision"],
+    }
 
 
 def adapter_weight_path(adapter_dir: Path) -> Path:
@@ -760,6 +824,9 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
 def main() -> None:
     args = parse_args()
     assert_adapter_publishable(args.adapter, args.allow_disqualified_diagnostic)
+    if args.validate_existing:
+        print(json.dumps(validate_existing_merge(args), ensure_ascii=False, indent=2))
+        return
     output_dir = args.output_dir.expanduser().resolve()
     if output_dir.exists():
         raise FileExistsError(

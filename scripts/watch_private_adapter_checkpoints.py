@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and incrementally publish completed LoRA checkpoints privately.
+"""Validate and incrementally publish completed LoRA checkpoints.
 
 The remote commit is constructed from an explicit three-file allowlist.  Local
 trainer state is used only as a completion/validation sentinel and is never
@@ -154,6 +154,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", default=DEFAULT_RUN_ID)
     parser.add_argument("--training-data-sha256", default=DEFAULT_TRAIN_SHA256)
     parser.add_argument("--training-manifest-sha256")
+    parser.add_argument("--training-manifest-path", type=Path)
+    parser.add_argument("--base-license")
     parser.add_argument("--admission-report-sha256")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--settle-seconds", type=float, default=10.0)
@@ -165,7 +167,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--upload",
         action="store_true",
-        help="Create/check the private repo and upload; omitted means local validation only",
+        help="Create/check the requested repo and upload; omitted means local validation only",
+    )
+    parser.add_argument(
+        "--public",
+        action="store_true",
+        help="Publish checkpoints publicly; private remains the backward-compatible default",
     )
     parser.add_argument(
         "--no-local-archive",
@@ -739,6 +746,9 @@ def validate_checkpoint(
     training_data_sha256: str,
     training_manifest_sha256: str | None,
     admission_report_sha256: str | None,
+    public: bool = False,
+    base_license: str | None = None,
+    training_rights: dict[str, Any] | None = None,
     settle_seconds: float,
     sleep: Callable[[float], None] = time.sleep,
 ) -> ValidatedCheckpoint | None:
@@ -792,7 +802,9 @@ def validate_checkpoint(
             "schema_version": 1,
             "created_at_utc": utc_now(),
             "artifact_kind": "peft-lora-checkpoint-candidate",
-            "distribution": "private-candidate-only",
+            "distribution": (
+                "public-research-candidate" if public else "private-candidate-only"
+            ),
             "checkpoint": {"label": label, "step": step},
             "adapter": {
                 "weights": {
@@ -817,9 +829,14 @@ def validate_checkpoint(
             },
             "lineage": {
                 "run_id": run_id,
-                "base_model": {"id": base_model, "revision": base_revision},
+                "base_model": {
+                    "id": base_model,
+                    "revision": base_revision,
+                    "license": base_license,
+                },
                 "training_data_sha256": training_data_sha256,
                 "training_manifest_sha256": training_manifest_sha256,
+                "training_rights": training_rights,
                 "fa2_admission_report_sha256": admission_report_sha256,
             },
             "remote_allowlist": sorted(REMOTE_ALLOWLIST),
@@ -1014,10 +1031,18 @@ def state_lock(path: Path) -> Iterator[None]:
 
 
 class PrivateCandidateRemote:
-    def __init__(self, *, api: Any, repo_id: str, operation_add_cls: Any = None):
+    def __init__(
+        self,
+        *,
+        api: Any,
+        repo_id: str,
+        operation_add_cls: Any = None,
+        public: bool = False,
+    ):
         self.api = api
         self.repo_id = repo_id
         self.operation_add_cls = operation_add_cls
+        self.public = public
         self._private_checked = False
         self._head_sha: str | None = None
 
@@ -1029,9 +1054,12 @@ class PrivateCandidateRemote:
                 "remote_repo_failed",
                 f"private repository check failed ({type(error).__name__})",
             ) from None
-        if getattr(info, "private", None) is not True:
+        expected_private = not self.public
+        if getattr(info, "private", None) is not expected_private:
+            expected = "public" if self.public else "private"
             raise WatcherError(
-                "public_repo_refused", "refusing to upload because repository is not private"
+                "visibility_mismatch" if self.public else "public_repo_refused",
+                f"refusing to upload because repository is not confirmed {expected}",
             )
         sha = getattr(info, "sha", None)
         return sha if isinstance(sha, str) and COMMIT_OID_RE.fullmatch(sha) else None
@@ -1043,7 +1071,7 @@ class PrivateCandidateRemote:
             self.api.create_repo(
                 repo_id=self.repo_id,
                 repo_type="model",
-                private=True,
+                private=not self.public,
                 exist_ok=True,
             )
         except Exception as error:
@@ -1074,10 +1102,12 @@ class PrivateCandidateRemote:
                 revision=revision,
                 files_metadata=True,
             )
-            if getattr(info, "private", None) is not True:
+            if getattr(info, "private", None) is not (not self.public):
+                expected_visibility = "public" if self.public else "private"
                 raise WatcherError(
-                    "public_repo_refused",
-                    "refusing uploaded checkpoint because repository is not private",
+                    "visibility_mismatch" if self.public else "public_repo_refused",
+                    "refusing uploaded checkpoint because repository is not confirmed "
+                    f"{expected_visibility}",
                 )
             siblings = {
                 item.rfilename: item
@@ -1241,7 +1271,10 @@ class PrivateCandidateRemote:
                     "repo_id": self.repo_id,
                     "repo_type": "model",
                     "operations": operations,
-                    "commit_message": f"Add verified private candidate {checkpoint.label}",
+                    "commit_message": (
+                        f"Add verified {'public' if self.public else 'private'} candidate "
+                        f"{checkpoint.label}"
+                    ),
                     "commit_description": (
                         "Allowlist-only LoRA adapter checkpoint; no trainer or data artifacts"
                     ),
@@ -1366,6 +1399,9 @@ def scan_once(
                     training_data_sha256=args.training_data_sha256,
                     training_manifest_sha256=args.training_manifest_sha256,
                     admission_report_sha256=args.admission_report_sha256,
+                    public=getattr(args, "public", False),
+                    base_license=getattr(args, "base_license", None),
+                    training_rights=getattr(args, "training_rights", None),
                     settle_seconds=args.settle_seconds,
                     sleep=sleep,
                 )
@@ -1398,6 +1434,9 @@ def scan_once(
             training_data_sha256=args.training_data_sha256,
             training_manifest_sha256=args.training_manifest_sha256,
             admission_report_sha256=args.admission_report_sha256,
+            public=getattr(args, "public", False),
+            base_license=getattr(args, "base_license", None),
+            training_rights=getattr(args, "training_rights", None),
             settle_seconds=args.settle_seconds,
             sleep=sleep,
         )
@@ -1482,6 +1521,49 @@ def validate_cli(args: argparse.Namespace) -> None:
         raise WatcherError(
             "invalid_argument", "remote retry seconds must be in (0, 60]"
         )
+    if getattr(args, "public", False):
+        base_license = getattr(args, "base_license", None)
+        if not isinstance(base_license, str) or not base_license.strip():
+            raise WatcherError(
+                "invalid_argument", "public checkpoint repo requires --base-license"
+            )
+        manifest_path = getattr(args, "training_manifest_path", None)
+        if manifest_path is None or not manifest_path.is_file():
+            raise WatcherError(
+                "invalid_argument",
+                "public checkpoint repo requires --training-manifest-path",
+            )
+        try:
+            rights = load_small_json(
+                manifest_path,
+                max_bytes=64 * 1024 * 1024,
+                code="invalid_argument",
+            )
+        except WatcherError:
+            raise
+        if rights.get("release_eligible") is not True or rights.get("release_blockers"):
+            raise WatcherError(
+                "rights_blocked",
+                "training manifest is not approved for public redistribution",
+            )
+        if rights.get("visibility") != "public":
+            raise WatcherError(
+                "rights_blocked", "training manifest visibility is not public"
+            )
+        args.training_rights = sanitize_json_value(
+            {
+                "release_eligible": True,
+                "visibility": "public",
+                "use_policy": rights.get("use_policy"),
+                "license": rights.get(
+                    "source_licenses", rights.get("licenses", rights.get("license"))
+                ),
+                "source_datasets": rights.get("source_datasets", rights.get("sources")),
+                "benchmark_exposure": rights.get(
+                    "benchmark_exposure", rights.get("benchmark_adaptation")
+                ),
+            }
+        )
 
 
 def make_remote(args: argparse.Namespace) -> PrivateCandidateRemote | None:
@@ -1503,6 +1585,7 @@ def make_remote(args: argparse.Namespace) -> PrivateCandidateRemote | None:
         api=HfApi(token=token),
         repo_id=args.repo_id,
         operation_add_cls=CommitOperationAdd,
+        public=getattr(args, "public", False),
     )
 
 

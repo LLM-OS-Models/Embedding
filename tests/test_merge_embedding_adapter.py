@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/merge_embedding_adapter.py"
@@ -144,6 +145,64 @@ class ContractTests(unittest.TestCase):
                 weights_sha256="0" * 64,
                 config_sha256=config_sha,
             )
+
+    def test_existing_merge_reuse_is_bound_to_adapter_base_and_model_bytes(self) -> None:
+        root = self.make_model_dir()
+        (root / "model.safetensors").write_bytes(b"merged-model-weights")
+        adapter = root / "fixture-adapter"
+        adapter.mkdir()
+        (adapter / "adapter_model.safetensors").write_bytes(b"adapter-weights")
+        (adapter / "adapter_config.json").write_text(
+            json.dumps(
+                {
+                    "peft_type": "LORA",
+                    "r": 8,
+                    "target_modules": ["q_proj"],
+                    "base_model_name_or_path": merge.DEFAULT_BASE_MODEL,
+                }
+            ),
+            encoding="utf-8",
+        )
+        validated_adapter = merge.validate_adapter(adapter)
+        report = {
+            "status": "pass",
+            "base_model": merge.DEFAULT_BASE_MODEL,
+            "base_revision": merge.DEFAULT_BASE_REVISION,
+            "upstream_base_models": merge.resolve_base_lineage(
+                merge.DEFAULT_BASE_MODEL, merge.DEFAULT_BASE_REVISION
+            ),
+            "adapter": {
+                key: value
+                for key, value in validated_adapter.items()
+                if key != "config"
+            },
+            "model": {"weights_sha256": merge.model_weights_sha256(root)},
+            "merge": {
+                "safe_merge": True,
+                "requested_dtype": "bfloat16",
+                "dtype": "bfloat16",
+            },
+            "sentence_transformers_contract": {
+                "pooling": "last_token",
+                "normalize": True,
+            },
+        }
+        (root / "merge_report.json").write_text(
+            json.dumps(report), encoding="utf-8"
+        )
+        args = SimpleNamespace(
+            adapter=adapter,
+            output_dir=root,
+            base_model=merge.DEFAULT_BASE_MODEL,
+            base_revision=merge.DEFAULT_BASE_REVISION,
+            dtype="bfloat16",
+            allow_disqualified_diagnostic=False,
+        )
+        result = merge.validate_existing_merge(args)
+        self.assertEqual(result["model_weights_sha256"], report["model"]["weights_sha256"])
+        (adapter / "adapter_model.safetensors").write_bytes(b"different-adapter")
+        with self.assertRaisesRegex(ValueError, "different adapter"):
+            merge.validate_existing_merge(args)
 
 
 class ParityTests(unittest.TestCase):

@@ -1,5 +1,28 @@
 # Runbook
 
+## 2026-07-17 현재 재개 지점
+
+현재 GPU 작업은 Qwen 학습이 아니라 Nemotron-3 Sionic9 full 평가다. Qwen 200K는
+`1875/3123`에서 외부 종료됐고 exact-resumable 지점은 `checkpoint-1750`이다. 남아 있던
+`run_frontier_200k_pair_queue.sh` polling PGID는 다음 stage 오기동을 막기 위해 정상
+종료했다. Nemotron 평가의 exact restart command, cache와 Qwen legacy validation SHA는
+[`36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md`](36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)에
+고정한다.
+
+재개 순서는 다음과 같다.
+
+1. Nemotron-3 Sionic9 full summary를 끝낸다.
+2. legal v2 10K와 fixed multidomain 1.9K를 Nemotron/Qwen/Comsat에 같은 protocol로 잰다.
+3. raw Nemotron이 `0.7930`을 넘고 clean guard 안이면 rights-safe 공개 데이터의 짧은
+   target adaptation만 한다.
+4. 그렇지 않으면 Qwen `checkpoint-1750`을 원 legacy validation으로 exact resume한다.
+
+새 Hugging Face 산출물은 dataset·checkpoint·clean winner·final model 모두 public이
+기본이다. 공개 training manifest는 `release_eligible=true`, 빈 `release_blockers`, public
+visibility와 row별 `source/revision/license/redistribution_allowed=true`를 가져야 한다.
+모델은 pinned upstream과 base license가 모두 확인돼야 한다. 이 gate를 못 통과한 기존
+performance track은 공개 업로드하지 않는다. 고정 model-selection holdout만 비공개다.
+
 ## Pinned repositories
 
 | Repository | Commit | 용도 |

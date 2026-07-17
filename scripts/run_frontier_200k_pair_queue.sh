@@ -34,7 +34,7 @@ CAPACITY_EVAL_LOG="$ROOT/outputs/post-capacity-eval-20260717-frontier"
 CAPACITY_EVAL_SELECTION="$CAPACITY_EVAL_LOG/clean-first-selection.json"
 SCALE_LOG="$ROOT/outputs/scale-1m-20260717-frontier"
 KD_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json"
-KD_UPLOAD_REPORT="$ROOT/outputs/reranker-kd-20260717-frontier/private-clean-candidate-upload.json"
+KD_UPLOAD_REPORT="$ROOT/outputs/reranker-kd-20260717-frontier/public-clean-candidate-upload.json"
 LEGAL_LOG="$ROOT/outputs/legal-adaptation-20260717-frontier"
 FINAL_EVAL_LOG="$ROOT/outputs/final-frontier-selection-20260717"
 FINAL_EVAL_SELECTION="$FINAL_EVAL_LOG/clean-first-selection.json"
@@ -130,9 +130,10 @@ env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
   --run-id qwen3-embedding-8b-ko-performance200k-lora-r64 \
   --training-data-sha256 "$qwen_training_sha" \
   --training-manifest-sha256 "$qwen_manifest_sha" \
+  --training-manifest-path "$TRAIN_MANIFEST" --base-license apache-2.0 \
   --admission-report-sha256 "$qwen_admission_sha" \
   --poll-seconds 5 --settle-seconds 0 \
-  --remote-attempts 3 --remote-retry-seconds 15 --once --upload \
+  --remote-attempts 3 --remote-retry-seconds 15 --once --upload --public \
   >> "$QWEN_RUN/checkpoint-watcher-v2.log" 2>&1
 echo "[$(timestamp)] Qwen 200K completed; starting Comsat exact probe"
 
@@ -176,8 +177,9 @@ admission_sha="$(sha256sum "$COMSAT_ADMISSION" | awk '{print $1}')"
   --base-revision "$COMSAT_REVISION" \
   --run-id "$COMSAT_RUN_ID" \
   --training-manifest-sha256 "$training_manifest_sha" \
+  --training-manifest-path "$TRAIN_MANIFEST" --base-license cc-by-nc-4.0 \
   --admission-report-sha256 "$admission_sha" \
-  --poll-seconds 5 --settle-seconds 10 --upload \
+  --poll-seconds 5 --settle-seconds 10 --upload --public \
   >> "$COMSAT_RUN/checkpoint-watcher.log" 2>&1 &
 watcher_pid=$!
 cleanup() {
@@ -209,7 +211,7 @@ embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] starting clean-only Qwen/Comsat lineage comparison"
 env WAIT_PID= SELECTION_ONLY=1 LOG_DIR="$POST_EVAL_LOG" \
-  SELECTION_PRIVATE_REPO_ID=LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lineage-clean-winner-v1-private \
+  SELECTION_PUBLIC_REPO_ID=LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lineage-clean-winner-v1 \
   CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
   bash "$ROOT/scripts/run_post_training_eval_queue.sh"
 if [[ ! -s "$POST_EVAL_SELECTION" ]]; then
@@ -227,7 +229,7 @@ embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] selecting final 200K winner including capacity challenger"
 env WAIT_PID= SELECTION_ONLY=1 LOG_DIR="$CAPACITY_EVAL_LOG" \
-  SELECTION_PRIVATE_REPO_ID=LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-capacity-clean-winner-v1-private \
+  SELECTION_PUBLIC_REPO_ID=LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-capacity-clean-winner-v1 \
   CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
   bash "$ROOT/scripts/run_post_training_eval_queue.sh"
 if [[ ! -s "$CAPACITY_EVAL_SELECTION" ]]; then
@@ -248,7 +250,7 @@ fi
 kd_model="$(jq -r '.best.model // empty' "$KD_SELECTION")"
 kd_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$KD_SELECTION")"
 if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-    "$KD_UPLOAD_REPORT" 2>/dev/null || true)" != "private:true:true" \
+    "$KD_UPLOAD_REPORT" 2>/dev/null || true)" != "public:true:true" \
     || "$(jq -r '.model // empty' "$KD_UPLOAD_REPORT" 2>/dev/null || true)" != "$kd_model" \
     || "$(jq -r '.weights_sha256 // empty' "$KD_UPLOAD_REPORT" 2>/dev/null || true)" != "$kd_weights_sha" \
     || ! "$(jq -r '.commit_sha // empty' "$KD_UPLOAD_REPORT" 2>/dev/null || true)" \
@@ -284,7 +286,7 @@ if [[ ! -s "$FINAL_EVAL_SELECTION" ]]; then
   exit 30
 fi
 if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-    "$FINAL_PUBLICATION_REPORT" 2>/dev/null)" != "private:true:true" \
+    "$FINAL_PUBLICATION_REPORT" 2>/dev/null)" != "public:true:true" \
     || ! "$(jq -r '.commit_sha // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null)" \
        =~ ^[0-9a-f]{40}$ ]]; then
   echo "[$(timestamp)] final model publication completion evidence is invalid" >&2

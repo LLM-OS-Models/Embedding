@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and privately publish the exact reranker-KD training artifacts."""
+"""Validate and publish the exact reranker-KD training artifacts."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def validate_artifacts(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def dataset_card(validated: dict[str, Any]) -> str:
+def dataset_card(validated: dict[str, Any], *, public: bool = False) -> str:
     selection = validated["selection"]
     return f"""---
 language:
@@ -100,7 +100,7 @@ pretty_name: Korean Qwen3 Reranker Listwise KD Pilot
 
 # Korean Qwen3 Reranker Listwise KD Pilot
 
-성능 우선/non-commercial 연구용 private dataset이다. current 1M student의 wide ANN
+성능 우선/non-commercial 연구용 {"public" if public else "private"} dataset이다. current 1M student의 wide ANN
 candidate를 pinned Qwen3-Reranker-8B로 점수화하고, false-negative gate 뒤 teacher score
 rank-quantile을 보존했다.
 
@@ -129,12 +129,25 @@ def main() -> int:
     parser.add_argument("--requests", type=Path, required=True)
     parser.add_argument("--score-cache-dir", type=Path, required=True)
     parser.add_argument("--repo-id", required=True)
+    parser.add_argument(
+        "--public",
+        action="store_true",
+        help="Publish publicly after the same payload and lineage checks.",
+    )
     parser.add_argument("--upload", action="store_true")
     args = parser.parse_args()
     validated = validate_artifacts(args)
+    if args.public:
+        rights = read_object(args.manifest)
+        if rights.get("release_eligible") is not True:
+            raise ValueError("public KD dataset requires release_eligible=true")
+        if rights.get("release_blockers"):
+            raise ValueError("public KD dataset has unresolved release blockers")
+        if rights.get("visibility") != "public":
+            raise ValueError("public KD dataset manifest visibility is not public")
     report = {
         "repo_id": args.repo_id,
-        "visibility": "private",
+        "visibility": "public" if args.public else "private",
         "validated": True,
         "input_rows": validated["input_rows"],
         "output_rows": validated["output_rows"],
@@ -149,10 +162,15 @@ def main() -> int:
     from huggingface_hub import CommitOperationAdd, HfApi
 
     api = HfApi(token=token)
-    api.create_repo(args.repo_id, repo_type="dataset", private=True, exist_ok=True)
+    api.create_repo(
+        args.repo_id,
+        repo_type="dataset",
+        private=not args.public,
+        exist_ok=True,
+    )
     with tempfile.TemporaryDirectory() as temporary:
         card = Path(temporary) / "README.md"
-        card.write_text(dataset_card(validated), encoding="utf-8")
+        card.write_text(dataset_card(validated, public=args.public), encoding="utf-8")
         sources = {
             "README.md": card,
             "data/train.jsonl": args.train,
@@ -166,7 +184,7 @@ def main() -> int:
         }
         expected = expected_publication(sources)
         before = api.dataset_info(repo_id=args.repo_id, files_metadata=True)
-        require_dataset_visibility(before, public=False)
+        require_dataset_visibility(before, public=args.public)
         before_files = {item.rfilename for item in getattr(before, "siblings", [])}
         if before_files - set(expected) - PLATFORM_FILES:
             raise RuntimeError("KD repository contains unexpected pre-existing files")
@@ -178,7 +196,11 @@ def main() -> int:
             repo_id=args.repo_id,
             repo_type="dataset",
             operations=operations,
-            commit_message="Publish verified private Qwen3 reranker KD pilot",
+            commit_message=(
+                "Publish verified public Qwen3 reranker KD pilot"
+                if args.public
+                else "Publish verified private Qwen3 reranker KD pilot"
+            ),
         )
         commit_sha = getattr(commit, "oid", None)
         if not isinstance(commit_sha, str) or not COMMIT_RE.fullmatch(commit_sha):
@@ -188,7 +210,7 @@ def main() -> int:
             repo_id=args.repo_id,
             revision=commit_sha,
             expected=expected,
-            public=False,
+            public=args.public,
         )
         if expected_publication(sources) != expected:
             raise RuntimeError("KD source files changed during upload")

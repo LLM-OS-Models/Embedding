@@ -144,7 +144,8 @@ def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
     assert "comsat-embed-ko-8b-performance200k-lora-r64" in source
     assert "--base-model sionic-ai/comsat-embed-ko-8b-preview" in source
     assert "--base-revision a5cc22b651c1b2e51cdd8bf671774ae93584f0ab" in source
-    assert source.count('"${merge_base_args[@]}"') == 2
+    assert source.count('"${merge_base_args[@]}"') == 4
+    assert source.count("--validate-existing") >= 2
     assert "clean-first-selection.json" in source
     assert "average_lora_checkpoints.py" in source
     assert "--last-n 5 --minimum-checkpoints 2" in source
@@ -212,7 +213,7 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
     assert "SELECTION_ONLY=0" not in frontier
     assert 'POSTTRAIN_SELECTION="$CAPACITY_EVAL_SELECTION"' in frontier
     assert frontier.count("ENABLE_PUBLIC_INTERMEDIATE_EVAL=0") == 2
-    assert frontier.count("SELECTION_PRIVATE_REPO_ID=LLM-OS-Models2/") == 2
+    assert frontier.count("SELECTION_PUBLIC_REPO_ID=LLM-OS-Models2/") == 2
     assert frontier.count("embedding_require_storage_headroom") >= 8
 
     scale_source = SCALE_QUEUE.read_text(encoding="utf-8")
@@ -251,7 +252,7 @@ def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
         assert "EMBEDDING_OFFLINE=1" in source, queue
         assert "HF_TOKEN=\"$(sed" not in source, queue
         assert 'PUBLISH_HF_TOKEN_FILE="$ROOT/.env"' in source, queue
-        assert '--hf-token-file "$PUBLISH_HF_TOKEN_FILE"' in source, queue
+        assert "--upload --public" in source, queue
         # Dataset publishers load only the Hub credential inside a short
         # subshell after the training checkpoint is chosen.
         source_token = source.index(
@@ -291,14 +292,14 @@ def test_intermediate_queues_disable_public_evaluation_by_default() -> None:
         public_official = source.index("run_official", public_sionic)
         gate_end = source.index("\nfi", public_official)
         assert gate < public_sionic < public_official < gate_end, queue
-        publish_gate = source.index(
+        result_gate = source.index(
             'if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1', gate_end
         )
-        publisher = source.index("publish_best_embedding_model.py", publish_gate)
-        assert publish_gate < publisher, queue
+        assert "publish_best_embedding_model.py" not in source[result_gate:], queue
+        assert "commit_campaign_result.sh" in source[result_gate:], queue
 
 
-def test_future_lora_runs_upload_reconstructable_private_checkpoints() -> None:
+def test_future_lora_runs_upload_reconstructable_public_checkpoints() -> None:
     queues = (
         SCALE_QUEUE,
         ROOT / "scripts/run_reranker_kd_ablation_queue.sh",
@@ -309,6 +310,7 @@ def test_future_lora_runs_upload_reconstructable_private_checkpoints() -> None:
     for queue in queues:
         source = queue.read_text(encoding="utf-8")
         assert "ENABLE_PRIVATE_CHECKPOINT_WATCHER=1" in source, queue
+        assert "CHECKPOINT_REPO_PUBLIC=1" in source, queue
         assert "CHECKPOINT_TRAINING_MANIFEST=" in source, queue
         assert "CHECKPOINT_BASE_UPLOAD_REPORT=" in source, queue
         assert "PRIVATE_CHECKPOINT_REPO_ID=" in source, queue
@@ -319,7 +321,8 @@ def test_future_lora_runs_upload_reconstructable_private_checkpoints() -> None:
     swift = train.index('"$TRAIN_ENV/bin/swift" sft')
     reconciliation = train.index("--once --settle-seconds 0", swift)
     assert watcher < swift < reconciliation
-    assert "local continual base requires a verified private upload report" in train
+    assert "local continual base requires a verified public upload report" in train
+    assert "public:true:true" in train
     assert '"$report_weights_sha" != "$expected_base_sha"' in train
     assert '"$watcher_base_revision" =~ ^[0-9a-f]{40}$' in train
     assert train.count("-u HF_HUB_OFFLINE -u TRANSFORMERS_OFFLINE -u HF_DATASETS_OFFLINE") == 2
@@ -442,17 +445,31 @@ def test_all_training_entrypoints_fail_closed_on_text_strict_validation() -> Non
     assert "legacy eval-loss continual promotion is disabled" in pilot
 
 
-def test_queue_can_only_publish_the_clean_selected_private_candidate() -> None:
+def test_queue_can_only_publish_clean_selected_public_artifacts() -> None:
     source = QUEUE.read_text(encoding="utf-8")
     assert source.count("publish_best_embedding_model.py") == 1
-    assert "performance-v1-private-candidate" in source
+    assert "qwen3-embedding-8b-ko-performance-v1" in source
     assert "--comprehensive-summary" in source
     assert '"${multidomain_args[@]}"' in source
-    assert "--upload --public" not in source
+    assert source.count("--upload --public") == 2
+    assert '--release-approval "$PUBLIC_RELEASE_APPROVAL"' in source
     assert "public_benchmark_used_for_selection" not in source
 
 
-def test_private_full_model_lineage_requires_exact_remote_file_set() -> None:
+def test_campaign_never_reuses_a_boolean_only_merged_artifact() -> None:
+    for path in (
+        QUEUE,
+        SCALE_QUEUE,
+        ROOT / "scripts/run_reranker_kd_ablation_queue.sh",
+        ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+        ROOT / "scripts/run_legal_adaptation_queue.sh",
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert "--validate-existing" in source, path
+
+
+def test_public_full_model_lineage_requires_exact_remote_file_set() -> None:
     paths = (
         PILOT_TRAIN,
         QUEUE,
@@ -463,7 +480,10 @@ def test_private_full_model_lineage_requires_exact_remote_file_set() -> None:
         source = path.read_text(encoding="utf-8")
         assert "remote_manifest_exact" in source, path
         assert "remote_file_set_exact" in source, path
-        assert "private:true:true" in source, path
+        if path == PILOT_TRAIN:
+            assert "CHECKPOINT_REPO_PUBLIC" in source, path
+        else:
+            assert "public:true:true" in source, path
     post = QUEUE.read_text(encoding="utf-8")
     for code in (23, 24, 25, 26, 27, 28):
         assert f"exit {code}" in post
@@ -472,6 +492,6 @@ def test_private_full_model_lineage_requires_exact_remote_file_set() -> None:
     assert "final model publication completion evidence is invalid" in frontier
     assert "KD_UPLOAD_REPORT" in frontier
     assert "clean-selected general base backup is not exact" in frontier
-    assert "private clean-winner report does not bind the exact selection" in post
+    assert "clean-winner report does not bind the exact selection" in post
     assert "report_weights_sha" in post
     assert "report_commit" in post

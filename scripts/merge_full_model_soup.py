@@ -71,6 +71,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--output-dtype", choices=("bfloat16", "float32"), default="bfloat16")
     parser.add_argument("--torch-threads", type=int, default=4)
+    parser.add_argument(
+        "--validate-existing",
+        action="store_true",
+        help="Verify an existing soup against the exact source models and weights.",
+    )
     return parser.parse_args()
 
 
@@ -419,9 +424,77 @@ def build_soup(args: argparse.Namespace) -> dict[str, Any]:
         raise
 
 
+def validate_existing_soup(args: argparse.Namespace) -> dict[str, Any]:
+    sources = validate_sources(args.model, args.weight)
+    output = args.output_dir.expanduser().resolve()
+    report_path = output / REPORT_NAME
+    if not output.is_dir() or output.is_symlink() or not report_path.is_file():
+        raise FileNotFoundError("Existing soup artifact is incomplete or unsafe")
+    report = read_json(report_path)
+    if (
+        report.get("schema_version") != 2
+        or report.get("artifact_type") != ARTIFACT_TYPE
+        or report.get("status") != "pass"
+        or report.get("training_method") != "weighted-full-model-soup"
+    ):
+        raise ValueError("Existing soup report did not pass")
+    expected_sources = [
+        {
+            "model": str(source.root),
+            "weight": source.weight,
+            "weights_sha256": source.model_weights_sha256,
+            "evidence_file": source.evidence_path.name,
+            "evidence_sha256": source.evidence_sha256,
+            "upstream_base_models": source.upstream_base_models,
+        }
+        for source in sources
+    ]
+    if report.get("sources") != expected_sources:
+        raise ValueError("Existing soup belongs to different source model evidence")
+    expected_lineage = merge_lineages(
+        *(source.upstream_base_models for source in sources)
+    )
+    if report.get("upstream_base_models") != expected_lineage:
+        raise ValueError("Existing soup upstream lineage drifted")
+    soup = report.get("soup", {})
+    if (
+        soup.get("method") != "weighted_arithmetic_mean"
+        or not math.isclose(
+            float(soup.get("weight_sum", math.nan)), 1.0, rel_tol=0.0, abs_tol=1e-9
+        )
+        or soup.get("accumulation_dtype") != "float32"
+        or soup.get("output_floating_dtype") != args.output_dtype
+    ):
+        raise ValueError("Existing soup arithmetic/dtype contract drifted")
+    validate_sentence_transformers_contract(output)
+    _, output_shards = safetensors_layout(output)
+    output_sha = model_weights_sha256(output, output_shards)
+    if report.get("model", {}).get("weights_sha256") != output_sha:
+        raise ValueError("Existing soup model shards drifted from evidence")
+    recorded_shards = report.get("model", {}).get("shards", {})
+    actual_shards = {
+        name: {
+            "sha256": sha256_file(output / name),
+            "size_bytes": (output / name).stat().st_size,
+        }
+        for name in output_shards
+    }
+    if recorded_shards != actual_shards:
+        raise ValueError("Existing soup per-shard evidence drifted")
+    return {
+        "status": "pass",
+        "artifact_type": "validated-existing-full-model-soup",
+        "model_weights_sha256": output_sha,
+        "source_count": len(sources),
+        "output_dtype": args.output_dtype,
+    }
+
+
 def main() -> None:
     args = parse_args()
-    report = build_soup(args)
+    report = (
+        validate_existing_soup(args) if args.validate_existing else build_soup(args)
+    )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
 
 

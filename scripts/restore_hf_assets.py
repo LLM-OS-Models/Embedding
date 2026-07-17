@@ -272,6 +272,7 @@ MODELS = (
     ModelAsset("harrier", "microsoft/harrier-oss-v1-27b", "0c0fc62f6d8af9e8604cb818c412301b103a0093", "comparison"),
     ModelAsset("kalm", "tencent/KaLM-Embedding-Gemma3-12B-2511", "98c19ba34197906fbc93f6f1ef79402ca3a33956", "comparison"),
     ModelAsset("nemotron", "nvidia/llama-embed-nemotron-8b", "aa3b43a495a9b280d1bdb716da37c54bb495d630", "comparison"),
+    ModelAsset("nemotron3", "nvidia/Nemotron-3-Embed-8B-BF16", "2b29550c4ab0646bb6bb47032dda54ea11f6dfe2", "comparison"),
     ModelAsset("qwen-reranker-teacher", "Qwen/Qwen3-Reranker-8B", "77d193c791ed757ca307ee72715aa132723da912", "teacher"),
 )
 

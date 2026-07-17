@@ -64,6 +64,34 @@ def declared_output(manifest: dict[str, Any], role: str) -> dict[str, Any]:
     return value
 
 
+def validate_public_rights(manifest: dict[str, Any], provenance: Path) -> int:
+    if manifest.get("release_eligible") is not True:
+        raise ValueError("public dataset requires manifest.release_eligible=true")
+    if manifest.get("release_blockers"):
+        raise ValueError("public dataset manifest has unresolved release blockers")
+    if manifest.get("visibility") != "public":
+        raise ValueError("public dataset manifest visibility is not public")
+    rows = 0
+    with provenance.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError(f"provenance row {line_number} is not an object")
+            for field in ("source", "revision", "license"):
+                if not isinstance(row.get(field), str) or not row[field].strip():
+                    raise ValueError(
+                        f"public provenance row {line_number} has no {field}"
+                    )
+            if row.get("redistribution_allowed") is not True:
+                raise ValueError(
+                    f"public provenance row {line_number} is not redistribution-approved"
+                )
+            rows += 1
+    return rows
+
+
 def validate(args: argparse.Namespace) -> dict[str, Any]:
     if not args.repo_id.startswith("LLM-OS-Models2/"):
         raise ValueError("new derived datasets must use the LLM-OS-Models2 namespace")
@@ -83,6 +111,10 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     manifest = read_json(args.manifest)
+    if getattr(args, "public", False):
+        rights_rows = validate_public_rights(manifest, args.provenance)
+    else:
+        rights_rows = None
     rows = manifest.get("output_rows")
     if not isinstance(rows, int) or rows < 2:
         raise ValueError("Final manifest output_rows must be at least two")
@@ -119,6 +151,11 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
                 "sha256": sha256(args.mining_audit),
             }
     evidence["manifest"] = {"sha256": sha256(args.manifest)}
+    if rights_rows is not None:
+        evidence["public_rights"] = {
+            "rows": rights_rows,
+            "all_rows_redistribution_approved": True,
+        }
     if args.mining_manifest:
         evidence["mining_manifest"] = {"sha256": sha256(args.mining_manifest)}
     if args.quality_audit:

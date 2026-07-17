@@ -10,7 +10,7 @@ cd "$ROOT"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-combined-adaptation-20260712}"
 ENABLE_PUBLIC_INTERMEDIATE_EVAL="${ENABLE_PUBLIC_INTERMEDIATE_EVAL:-0}"
 GENERAL_SELECTION="${GENERAL_SELECTION:-$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json}"
-GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-${GENERAL_SELECTION%/*}/private-clean-candidate-upload.json}"
+GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-${GENERAL_SELECTION%/*}/public-clean-candidate-upload.json}"
 OUT_DIR="$ROOT/outputs/data/sionic-combined-target-v1"
 CURRICULUM="$OUT_DIR/train.multidomain.jsonl"
 PROVENANCE="$OUT_DIR/provenance.multidomain.jsonl"
@@ -170,7 +170,7 @@ train_combined() {
   echo "[$(timestamp)] combined training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$name" env \
     EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
-    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 CHECKPOINT_REPO_PUBLIC=1 \
     CHECKPOINT_TRAINING_MANIFEST="$MANIFEST" \
     CHECKPOINT_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${name}-candidates" \
@@ -235,6 +235,12 @@ if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
     "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" --base-model "$BASE_MODEL" \
     --base-revision "" --device cuda --dtype bfloat16 --local-files-only || exit 7
+else
+  run_stage validate-reused-combined-merge \
+    "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+    --adapter "$checkpoint" --output-dir "$MODEL_DIR" --base-model "$BASE_MODEL" \
+    --base-revision "" --dtype bfloat16 --local-files-only \
+    --validate-existing || exit 7
 fi
 model_sha="$(jq -r '.model.weights_sha256' "$MODEL_DIR/merge_report.json")"
 revision="model-${model_sha:0:12}"
@@ -262,22 +268,10 @@ done
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
 if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
     && -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
-  clean_args=()
-  [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
-  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
-    echo "[$(timestamp)] no token file; private combined model upload skipped" >&2
-  elif retry_stage publish-combined-model 3 \
-    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
-    --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
-    --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
-    --training-manifest "$MANIFEST" \
-    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
-    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
-    run_stage record-combined-result "$ROOT/scripts/commit_campaign_result.sh" \
-      --stage sionic-combined --model "$MODEL_REL" \
-      --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
-      --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
-  fi
+  run_stage record-combined-result "$ROOT/scripts/commit_campaign_result.sh" \
+    --stage sionic-combined --model "$MODEL_REL" \
+    --repo-id "LLM-OS-Models2/${RUN_NAME}-candidates" \
+    --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
 fi
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
   if ! wait "$DATA_UPLOAD_PID"; then

@@ -11,6 +11,7 @@ from scripts.publish_derived_training_dataset import (
     dataset_card,
     expected_publication,
     validate,
+    validate_public_rights,
     verify_remote_dataset,
 )
 
@@ -20,6 +21,31 @@ def digest(path: Path) -> str:
 
 
 class PublishDerivedTrainingDatasetTest(unittest.TestCase):
+    def test_public_rights_require_row_level_source_revision_and_license(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            provenance = Path(temporary) / "provenance.jsonl"
+            provenance.write_text(
+                json.dumps(
+                    {
+                        "source": "org/source",
+                        "revision": "a" * 40,
+                        "license": "cc-by-4.0",
+                        "redistribution_allowed": True,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "release_eligible": True,
+                "release_blockers": [],
+                "visibility": "public",
+            }
+            self.assertEqual(validate_public_rights(manifest, provenance), 1)
+            manifest["release_eligible"] = False
+            with self.assertRaisesRegex(ValueError, "release_eligible"):
+                validate_public_rights(manifest, provenance)
+
     def test_exact_files_and_quantile_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

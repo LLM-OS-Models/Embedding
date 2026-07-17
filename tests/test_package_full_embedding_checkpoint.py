@@ -7,9 +7,13 @@ from pathlib import Path
 import pytest
 
 from scripts.package_full_embedding_checkpoint import (
+    hash_model_files,
     sha256_file,
+    validate_existing_package,
     validate_training_contract,
+    write_sentence_transformers_contract,
 )
+from scripts.model_lineage import resolve_base_lineage
 
 
 BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
@@ -95,3 +99,50 @@ def test_capacity_training_contract_rejects_external_checkpoint(tmp_path: Path) 
     args.checkpoint = external
     with pytest.raises(ValueError, match="outside the contracted run directory"):
         validate_training_contract(args)
+
+
+def test_existing_full_package_is_bound_to_source_checkpoint_bytes(
+    tmp_path: Path,
+) -> None:
+    args, _, _ = build_contract(tmp_path)
+    checkpoint = args.checkpoint
+    (checkpoint / "model.safetensors").write_bytes(b"full-model-weights")
+    output = tmp_path / "packaged"
+    output.mkdir()
+    (output / "model.safetensors").write_bytes(b"full-model-weights")
+    (output / "config.json").write_text(
+        json.dumps(
+            {"hidden_size": 16, "architectures": ["Qwen3ForCausalLM"]}
+        ),
+        encoding="utf-8",
+    )
+    (output / "tokenizer_config.json").write_text(
+        json.dumps(
+            {
+                "padding_side": "left",
+                "eos_token": "<|im_end|>",
+                "pad_token": "<|endoftext|>",
+            }
+        ),
+        encoding="utf-8",
+    )
+    write_sentence_transformers_contract(output, 16)
+    report = {
+        "status": "pass",
+        "training_method": "partial-full-parameter-update",
+        "base_model": BASE_MODEL,
+        "base_revision": BASE_REVISION,
+        "upstream_base_models": resolve_base_lineage(BASE_MODEL, BASE_REVISION),
+        "source_checkpoint": str(checkpoint.resolve()),
+        "training_contract": validate_training_contract(args),
+        "model": {"weights_sha256": hash_model_files(output)},
+    }
+    (output / "full_tuning_report.json").write_text(
+        json.dumps(report), encoding="utf-8"
+    )
+    args.output_dir = output
+    validated = validate_existing_package(args)
+    assert validated["model_weights_sha256"] == report["model"]["weights_sha256"]
+    (checkpoint / "model.safetensors").write_bytes(b"changed-source")
+    with pytest.raises(ValueError, match="source checkpoint shards"):
+        validate_existing_package(args)

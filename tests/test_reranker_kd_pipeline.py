@@ -30,7 +30,8 @@ def test_kd_queue_runs_filter_kl_and_queue_ablation_before_target_adaptation() -
     assert "compile_reranker_kd_dataset.py" in kd
     assert "select_best_clean_model.py" in kd
     assert "publish_private_clean_candidate.py" in kd
-    assert "qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1-private" in kd
+    assert "qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1" in kd
+    assert "--upload --public" in kd
     assert '--hf-token-file "$ROOT/.env"' in kd
     assert "GENERAL_TRAINING_MANIFEST" in kd
     assert "evaluate_sionic9.py" not in kd

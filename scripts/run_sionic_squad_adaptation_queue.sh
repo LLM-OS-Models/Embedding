@@ -14,7 +14,7 @@ cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 ENABLE_PUBLIC_INTERMEDIATE_EVAL="${ENABLE_PUBLIC_INTERMEDIATE_EVAL:-0}"
 GENERAL_SELECTION="${GENERAL_SELECTION:-$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json}"
-GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-${GENERAL_SELECTION%/*}/private-clean-candidate-upload.json}"
+GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-${GENERAL_SELECTION%/*}/public-clean-candidate-upload.json}"
 TARGET_KIND="${TARGET_KIND:-squad}"
 TARGET_PHASE="${TARGET_PHASE:-sionic_squad_train_60k}"
 TARGET_DATA_REL="${TARGET_DATA_REL:-outputs/data/performance-v1/sionic-squad-train-60k}"
@@ -31,8 +31,6 @@ TARGET_EVAL_BATCH_SIZE="${TARGET_EVAL_BATCH_SIZE:-4}"
 TARGET_SOURCE_DATASET="${TARGET_SOURCE_DATASET:-LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k}"
 DERIVED_REPO="${DERIVED_REPO:-LLM-OS-Models2/korean-embedding-sionic-squad-quantile-hn7-replay-v1}"
 DERIVED_TITLE="${DERIVED_TITLE:-Korean Sionic SQuAD Quantile HN7 with General Replay}"
-MODEL_REPO="${MODEL_REPO:-LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-squad-target-adapted-v1}"
-PRIVATE_MODEL_REPO="${PRIVATE_MODEL_REPO:-${MODEL_REPO}-private-candidate}"
 CAMPAIGN_STAGE="${CAMPAIGN_STAGE:-sionic-squad-target}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-${TARGET_KIND}-adaptation-20260712}"
 DATA_DIR="$ROOT/$TARGET_DATA_REL"
@@ -233,7 +231,7 @@ train_target() {
   echo "[$(timestamp)] ${TARGET_KIND} training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$output_name" env \
     EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
-    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 CHECKPOINT_REPO_PUBLIC=1 \
     CHECKPOINT_TRAINING_MANIFEST="$CURRICULUM_MANIFEST" \
     CHECKPOINT_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${output_name}-candidates" \
@@ -305,6 +303,12 @@ if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" --base-model "$MINING_MODEL" \
     --base-revision "$MINING_REVISION" --device cuda --dtype bfloat16 \
     --local-files-only || exit 9
+else
+  run_stage "validate-reused-${TARGET_KIND}-merge" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+    --adapter "$checkpoint" --output-dir "$MODEL_DIR" --base-model "$MINING_MODEL" \
+    --base-revision "$MINING_REVISION" --dtype bfloat16 --local-files-only \
+    --validate-existing || exit 9
 fi
 
 model_sha="$(jq -r '.model.weights_sha256' "$MODEL_DIR/merge_report.json")"
@@ -334,22 +338,10 @@ CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
 
 if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
     && -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
-  clean_args=()
-  [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
-  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
-    echo "[$(timestamp)] no token file; private ${TARGET_KIND} model upload skipped" >&2
-  elif retry_stage "publish-${TARGET_KIND}-target-model" 3 \
-    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
-    --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
-    --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
-    --training-manifest "$CURRICULUM_MANIFEST" \
-    --repo-id "$PRIVATE_MODEL_REPO" \
-    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
-    run_stage "record-${TARGET_KIND}-target-result" "$ROOT/scripts/commit_campaign_result.sh" \
-      --stage "$CAMPAIGN_STAGE" --model "$MODEL_REL" \
-      --repo-id "$PRIVATE_MODEL_REPO" \
-      --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
-  fi
+  run_stage "record-${TARGET_KIND}-target-result" "$ROOT/scripts/commit_campaign_result.sh" \
+    --stage "$CAMPAIGN_STAGE" --model "$MODEL_REL" \
+    --repo-id "LLM-OS-Models2/${RUN_NAME}-candidates" \
+    --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
 fi
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
   if ! wait "$DATA_UPLOAD_PID"; then

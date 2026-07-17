@@ -14,6 +14,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
 BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 ENABLE_PRIVATE_CHECKPOINT_WATCHER="${ENABLE_PRIVATE_CHECKPOINT_WATCHER:-0}"
+CHECKPOINT_REPO_PUBLIC="${CHECKPOINT_REPO_PUBLIC:-0}"
 CHECKPOINT_TRAINING_MANIFEST="${CHECKPOINT_TRAINING_MANIFEST:-}"
 CHECKPOINT_BASE_UPLOAD_REPORT="${CHECKPOINT_BASE_UPLOAD_REPORT:-}"
 PRIVATE_CHECKPOINT_REPO_ID="${PRIVATE_CHECKPOINT_REPO_ID:-LLM-OS-Models2/${RUN_NAME}-candidates}"
@@ -22,6 +23,10 @@ AUTO_RESUME_FROM_LATEST_CHECKPOINT="${AUTO_RESUME_FROM_LATEST_CHECKPOINT:-1}"
 if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" != 0 \
     && "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" != 1 ]]; then
   echo "ENABLE_PRIVATE_CHECKPOINT_WATCHER must be 0 or 1" >&2
+  exit 2
+fi
+if [[ "$CHECKPOINT_REPO_PUBLIC" != 0 && "$CHECKPOINT_REPO_PUBLIC" != 1 ]]; then
+  echo "CHECKPOINT_REPO_PUBLIC must be 0 or 1" >&2
   exit 2
 fi
 if [[ "$AUTO_RESUME_FROM_LATEST_CHECKPOINT" != 0 \
@@ -208,7 +213,7 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
   watcher_base_revision="$BASE_REVISION"
   if [[ "$BASE_MODEL" == /* ]]; then
     if [[ ! -s "$CHECKPOINT_BASE_UPLOAD_REPORT" ]]; then
-      echo "local continual base requires a verified private upload report" >&2
+      echo "local continual base requires a verified public upload report" >&2
       exit 2
     fi
     report_contract="$(jq -r \
@@ -218,6 +223,7 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
     report_weights_sha="$(jq -r '.weights_sha256 // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
     watcher_base_model="$(jq -r '.repo_id // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
     watcher_base_revision="$(jq -r '.commit_sha // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
+    watcher_base_license="$(jq -r '[.upstream_base_models[]?.license // empty] | unique | join(",")' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
     base_evidence=""
     for name in merge_report.json full_tuning_report.json soup_report.json; do
       if [[ -s "$BASE_MODEL/$name" ]]; then
@@ -233,7 +239,7 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
       exit 2
     fi
     expected_base_sha="$(jq -r '.model.weights_sha256 // empty' "$base_evidence" 2>/dev/null)"
-    if [[ "$report_contract" != private:true:true \
+    if [[ "$report_contract" != public:true:true \
         || "$watcher_base_model" != LLM-OS-Models2/* \
         || ! "$watcher_base_revision" =~ ^[0-9a-f]{40}$ \
         || ! "$report_weights_sha" =~ ^[0-9a-f]{64}$ \
@@ -249,6 +255,14 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
   fi
   training_data_sha="$(sha256sum "$TRAIN_FILE" | awk '{print $1}')"
   training_manifest_sha="$(sha256sum "$CHECKPOINT_TRAINING_MANIFEST" | awk '{print $1}')"
+  watcher_base_license="${watcher_base_license:-${BASE_LICENSE:-}}"
+  if [[ -z "$watcher_base_license" ]]; then
+    case "$watcher_base_model" in
+      Qwen/Qwen3-Embedding-8B) watcher_base_license="apache-2.0" ;;
+      sionic-ai/comsat-embed-ko-8b-preview) watcher_base_license="cc-by-nc-4.0" ;;
+      nvidia/Nemotron-3-Embed-8B-BF16) watcher_base_license="OpenMDW-1.1" ;;
+    esac
+  fi
   checkpoint_watcher_args=(
     "$ROOT/scripts/watch_private_adapter_checkpoints.py"
     --watch-dir "$OUTPUT_DIR"
@@ -258,9 +272,14 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
     --run-id "$RUN_NAME"
     --training-data-sha256 "$training_data_sha"
     --training-manifest-sha256 "$training_manifest_sha"
+    --training-manifest-path "$CHECKPOINT_TRAINING_MANIFEST"
+    --base-license "$watcher_base_license"
     --poll-seconds 5 --settle-seconds 10
     --remote-attempts 3 --remote-retry-seconds 15 --upload
   )
+  if [[ "$CHECKPOINT_REPO_PUBLIC" == 1 ]]; then
+    checkpoint_watcher_args+=(--public)
+  fi
   admission_report="${BACKEND_ADMISSION_VERIFIED_REPORT:-${BACKEND_SDPA_VERIFIED_REPORT:-}}"
   if [[ -n "$admission_report" && -s "$admission_report" ]]; then
     checkpoint_watcher_args+=(

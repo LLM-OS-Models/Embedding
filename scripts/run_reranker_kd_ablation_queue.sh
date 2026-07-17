@@ -21,7 +21,7 @@ KD_AUDIT="$DATA_DIR/train.reranker-quantile-kd15.audit.jsonl"
 KD_MANIFEST="$DATA_DIR/train.reranker-quantile-kd15.manifest.json"
 SELECTION="$LOG_DIR/clean-first-selection.json"
 GENERAL_TRAINING_MANIFEST="${GENERAL_TRAINING_MANIFEST:-$ROOT/outputs/data/performance-v1/performance-1m/homogeneous-b16.manifest.json}"
-GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-$ROOT/outputs/scale-1m-20260717-frontier/private-clean-candidate-upload.json}"
+GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-$ROOT/outputs/scale-1m-20260717-frontier/public-clean-candidate-upload.json}"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
 MULTIDOMAIN_OUT="$ROOT/outputs/evaluation/multidomain-selection"
@@ -55,7 +55,7 @@ run_stage() {
   return "$status"
 }
 
-verified_private_report() {
+verified_public_report() {
   local report="$1" expected_model="$2" expected_weights_sha="$3"
   local contract report_model report_weights_sha report_commit
   contract="$(jq -r \
@@ -64,7 +64,7 @@ verified_private_report() {
   report_model="$(jq -r '.model // empty' "$report" 2>/dev/null || true)"
   report_weights_sha="$(jq -r '.weights_sha256 // empty' "$report" 2>/dev/null || true)"
   report_commit="$(jq -r '.commit_sha // empty' "$report" 2>/dev/null || true)"
-  [[ "$contract" == "private:true:true" \
+  [[ "$contract" == "public:true:true" \
       && "$report_model" == "$expected_model" \
       && "$report_weights_sha" == "$expected_weights_sha" \
       && "$report_commit" =~ ^[0-9a-f]{40}$ ]]
@@ -131,6 +131,7 @@ if [[ ! -s "$KD_MANIFEST" ]]; then
     "$UTILITY_PYTHON" "$ROOT/scripts/compile_reranker_kd_dataset.py" \
     --requests "$REQUESTS" --score-cache-dir "$SCORE_DIR" \
     --output "$KD_TRAIN" --audit "$KD_AUDIT" --manifest "$KD_MANIFEST" \
+    --source-manifest "$GENERAL_TRAINING_MANIFEST" \
     --candidate-pool-size "$CANDIDATES_PER_QUERY" \
     --negatives-per-query "$NEGATIVES_PER_QUERY" \
     --positive-relative-ratio .95 --absolute-positive-margin .02 \
@@ -156,15 +157,15 @@ if [[ -f "$ROOT/.env" ]]; then
         --train "$KD_TRAIN" --audit "$KD_AUDIT" --manifest "$KD_MANIFEST" \
         --requests "$REQUESTS" --score-cache-dir "$SCORE_DIR" \
         --repo-id LLM-OS-Models2/korean-embedding-qwen3-reranker-kd-pilot-v1 \
-        --upload && exit 0
+        --upload --public && exit 0
       (( attempt == 3 )) || sleep 15
     done
     exit 1
-  ) >"$LOG_DIR/private-dataset-upload.log" 2>&1 &
+  ) >"$LOG_DIR/public-dataset-upload.log" 2>&1 &
   DATA_UPLOAD_PID=$!
-  echo "[$(timestamp)] private KD dataset upload started pid=$DATA_UPLOAD_PID"
+  echo "[$(timestamp)] public KD dataset upload started pid=$DATA_UPLOAD_PID"
 else
-  echo "[$(timestamp)] .env unavailable for required private KD dataset upload" >&2
+  echo "[$(timestamp)] .env unavailable for required public KD dataset upload" >&2
   exit 7
 fi
 
@@ -227,7 +228,7 @@ for variant in "${variants[@]}"; do
     embedding_require_storage_headroom /tmp 50 100000
     run_stage "train-$label" env \
       EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 AUTO_SELECT_FA2=0 \
-      ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 \
+      ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 CHECKPOINT_REPO_PUBLIC=1 \
       CHECKPOINT_TRAINING_MANIFEST="$KD_MANIFEST" \
       CHECKPOINT_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
       PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${run_name}-candidates" \
@@ -256,6 +257,12 @@ for variant in "${variants[@]}"; do
       --adapter "$checkpoint" --output-dir "$merged" \
       --base-model "$BASE_MODEL" --base-revision "" \
       --device cuda --dtype bfloat16 --local-files-only || continue
+  else
+    run_stage "validate-reused-merge-$label" "${OFFLINE_ENV[@]}" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+      --adapter "$checkpoint" --output-dir "$merged" \
+      --base-model "$BASE_MODEL" --base-revision "" \
+      --dtype bfloat16 --local-files-only --validate-existing || continue
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
   revision="model-${weights_sha:0:12}"
@@ -310,7 +317,7 @@ run_stage select-clean-reranker-kd-winner \
   --output "$SELECTION" --disqualification-root "$ROOT/outputs" \
   "${candidate_args[@]}" || exit 6
 
-MODEL_UPLOAD_REPORT="$LOG_DIR/private-clean-candidate-upload.json"
+MODEL_UPLOAD_REPORT="$LOG_DIR/public-clean-candidate-upload.json"
 selected_model_rel="$(jq -r '.best.model // empty' "$SELECTION")"
 selected_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$SELECTION")"
 if ! verified_private_report \
@@ -330,31 +337,31 @@ if ! verified_private_report \
       exit 7
     else
       embedding_require_storage_headroom "$ROOT" 500 1000000
-      run_stage "publish-private-clean-selected-kd-winner" \
+      run_stage "publish-public-clean-selected-kd-winner" \
         env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
         "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
         --model-dir "$selected_model" --selection "$SELECTION" \
         --training-manifest "$selected_training_manifest" \
-        --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1-private \
+        --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1 \
         --hf-token-file "$ROOT/.env" --report-output "$MODEL_UPLOAD_REPORT" \
-        --upload >"$LOG_DIR/private-model-upload.log" 2>&1 || exit 7
+        --upload --public >"$LOG_DIR/public-model-upload.log" 2>&1 || exit 7
     fi
   else
     echo "[$(timestamp)] selected KD winner is unavailable for private backup" >&2
     exit 7
   fi
 fi
-if ! verified_private_report \
+if ! verified_public_report \
     "$MODEL_UPLOAD_REPORT" "$selected_model_rel" "$selected_weights_sha"; then
-  echo "[$(timestamp)] KD winner private remote verification is incomplete" >&2
+  echo "[$(timestamp)] KD winner public remote verification is incomplete" >&2
   exit 7
 fi
 
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
   if wait "$DATA_UPLOAD_PID"; then
-    echo "[$(timestamp)] private KD dataset upload complete"
+    echo "[$(timestamp)] public KD dataset upload complete"
   else
-    echo "[$(timestamp)] private KD dataset upload failed; see upload log" >&2
+    echo "[$(timestamp)] public KD dataset upload failed; see upload log" >&2
     exit 7
   fi
 fi

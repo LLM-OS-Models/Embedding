@@ -104,8 +104,11 @@ build_soup() {
   local label="$1"; shift
   local output="$ROOT/artifacts/models/$label"
   if [[ -s "$output/soup_report.json" ]]; then
-    echo "[$(timestamp)] reuse completed soup: $label"
-    return 0
+    run_stage "validate-reused-$label" \
+      "$PYTHON" "$ROOT/scripts/merge_full_model_soup.py" \
+      "$@" --output-dir "$output" --output-dtype bfloat16 \
+      --torch-threads "${SOUP_TORCH_THREADS:-4}" --validate-existing
+    return $?
   fi
   embedding_require_storage_headroom "$ROOT" 500 1000000
   embedding_require_storage_headroom /tmp 50 100000

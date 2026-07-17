@@ -14,11 +14,13 @@ from pathlib import Path
 
 try:
     from merge_embedding_adapter import (
+        same_model_reference,
         validate_sentence_transformers_contract,
         write_sentence_transformers_contract,
     )
 except ModuleNotFoundError:
     from scripts.merge_embedding_adapter import (
+        same_model_reference,
         validate_sentence_transformers_contract,
         write_sentence_transformers_contract,
     )
@@ -44,6 +46,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
     parser.add_argument("--base-revision", default=DEFAULT_BASE_REVISION)
     parser.add_argument("--training-contract", type=Path)
+    parser.add_argument(
+        "--validate-existing",
+        action="store_true",
+        help="Verify an existing package against the exact source checkpoint/contract.",
+    )
     return parser.parse_args()
 
 
@@ -124,6 +131,53 @@ def validate_training_contract(args: argparse.Namespace) -> dict | None:
     return {
         "path": str(contract_path),
         "sha256": sha256_file(contract_path),
+    }
+
+
+def validate_existing_package(args: argparse.Namespace) -> dict:
+    output = args.output_dir.expanduser().resolve()
+    report_path = output / "full_tuning_report.json"
+    if not output.is_dir() or output.is_symlink() or not report_path.is_file():
+        raise FileNotFoundError("Existing full-model package is incomplete or unsafe")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(report, dict)
+        or report.get("status") != "pass"
+        or report.get("training_method") != "partial-full-parameter-update"
+    ):
+        raise ValueError("Existing full-model package report did not pass")
+    checkpoint = args.checkpoint.expanduser().resolve()
+    try:
+        recorded_checkpoint = Path(str(report.get("source_checkpoint", ""))).resolve()
+    except (OSError, RuntimeError) as error:
+        raise ValueError("Existing package source checkpoint is invalid") from error
+    if recorded_checkpoint != checkpoint:
+        raise ValueError("Existing package belongs to a different source checkpoint")
+    training_contract = validate_training_contract(args)
+    if report.get("training_contract") != training_contract:
+        raise ValueError("Existing package training contract drifted")
+    if not same_model_reference(report.get("base_model"), args.base_model):
+        raise ValueError("Existing package belongs to a different base model")
+    if report.get("base_revision") != args.base_revision:
+        raise ValueError("Existing package belongs to a different base revision")
+    if report.get("upstream_base_models") != resolve_base_lineage(
+        args.base_model, args.base_revision
+    ):
+        raise ValueError("Existing package upstream lineage drifted")
+    validate_sentence_transformers_contract(output)
+    output_sha = hash_model_files(output)
+    if report.get("model", {}).get("weights_sha256") != output_sha:
+        raise ValueError("Existing package model shards drifted from evidence")
+    if hash_model_files(checkpoint) != output_sha:
+        raise ValueError("Existing package no longer matches source checkpoint shards")
+    return {
+        "status": "pass",
+        "artifact_type": "validated-existing-full-model-package",
+        "source_checkpoint": str(checkpoint),
+        "model_weights_sha256": output_sha,
+        "training_contract_sha256": (
+            training_contract["sha256"] if training_contract is not None else None
+        ),
     }
 
 
@@ -250,6 +304,9 @@ def main() -> None:
     args = parse_args()
     checkpoint = args.checkpoint.resolve()
     output = args.output_dir.resolve()
+    if args.validate_existing:
+        print(json.dumps(validate_existing_package(args), ensure_ascii=False, indent=2))
+        return
     if output.exists():
         raise FileExistsError(f"Output already exists: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)

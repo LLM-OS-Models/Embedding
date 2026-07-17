@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Publish one clean-selected merged model as a strictly private candidate.
+"""Publish one clean-selected merged model with exact visibility verification.
 
 This publisher exists for intermediate KD/general winners that must be backed
 up before public-benchmark final-once evaluation.  It accepts only the exact
 winner of the clean-first Grade-I selector, binds model shards and evaluation
-evidence by SHA-256, rejects trainer/credential artifacts, and verifies private
-Hub visibility both before and after upload.
+evidence by SHA-256, rejects trainer/credential artifacts, and verifies the
+requested Hub visibility both before and after upload.
 """
 
 from __future__ import annotations
@@ -50,6 +50,11 @@ except ImportError:  # pragma: no cover - direct script execution fallback
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_TYPE = "private-clean-selected-embedding-candidate"
+KNOWN_BASE_LICENSES = {
+    "Qwen/Qwen3-Embedding-8B": "apache-2.0",
+    "sionic-ai/comsat-embed-ko-8b-preview": "cc-by-nc-4.0",
+    "nvidia/Nemotron-3-Embed-8B-BF16": "OpenMDW-1.1",
+}
 FORBIDDEN_FILE_NAMES = {
     ".env",
     "optimizer.pt",
@@ -128,6 +133,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-id", required=True)
     parser.add_argument("--hf-token-file", type=Path)
     parser.add_argument("--report-output", type=Path)
+    parser.add_argument(
+        "--public",
+        action="store_true",
+        help="Publish a public candidate; private remains available for holdout-sensitive runs.",
+    )
     parser.add_argument("--upload", action="store_true")
     return parser.parse_args()
 
@@ -312,6 +322,18 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
         raise FileNotFoundError("Selection or training manifest is missing")
     selection = read_json(selection_path)
     training_manifest = read_json(training_manifest_path)
+    if getattr(args, "public", False):
+        if training_manifest.get("release_eligible") is not True:
+            raise ValueError(
+                "Public candidate requires training_manifest.release_eligible=true"
+            )
+        if training_manifest.get("release_blockers"):
+            raise ValueError("Public candidate training manifest has release blockers")
+        if training_manifest.get("visibility") in {
+            "private",
+            "private-noncommercial-performance-track",
+        }:
+            raise ValueError("Private training data lineage cannot be published publicly")
     if selection.get("schema_version") != 1 or selection.get("policy_id") != POLICY_ID:
         raise ValueError("Unexpected clean-selection policy")
     if selection.get("public_benchmark_used_for_selection") is not False:
@@ -355,6 +377,20 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
     evidence = read_json(evidence_path)
     if evidence.get("status") != "pass":
         raise ValueError("Model safe-merge evidence did not pass")
+    if getattr(args, "public", False):
+        upstream = evidence.get("upstream_base_models")
+        if not isinstance(upstream, list) or not upstream:
+            raise ValueError("Public candidate has no upstream base-model lineage")
+        for item in upstream:
+            if not isinstance(item, dict) or any(
+                not isinstance(item.get(key), str) or not item[key].strip()
+                for key in ("model", "revision")
+            ):
+                raise ValueError(
+                    "Public candidate upstream base requires model and revision"
+                )
+            if item["model"] not in KNOWN_BASE_LICENSES:
+                raise ValueError("Public candidate upstream base license is not audited")
     contract = evidence.get("sentence_transformers_contract", {})
     if contract.get("pooling") != "last_token" or contract.get("normalize") is not True:
         raise ValueError("SentenceTransformers contract drifted")
@@ -379,6 +415,7 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
         "robustness": robustness,
         "evidence_path": evidence_path,
         "evidence_name": evidence_path.name,
+        "model_evidence": evidence,
         "weights_sha256": actual_sha,
         "revision": expected_revision,
     }
@@ -387,15 +424,31 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
 def build_card(args: argparse.Namespace, validated: dict[str, Any]) -> str:
     clean = validated["clean"]
     robustness = validated["robustness"]
+    public = bool(getattr(args, "public", False))
+    visibility = "public" if public else "private"
+    visibility_ko = "공개" if public else "비공개"
+    training = validated.get("training_manifest")
+    if not isinstance(training, dict):
+        training = read_json(validated["training_manifest_path"])
+    model_evidence = validated.get("model_evidence")
+    if not isinstance(model_evidence, dict):
+        model_evidence = read_json(validated["evidence_path"])
+    upstream = [
+        {**row, "license": KNOWN_BASE_LICENSES.get(row.get("model"), "unknown")}
+        for row in model_evidence.get("upstream_base_models", [])
+    ]
+    licenses = training.get("source_licenses", training.get("licenses", training.get("license", "see training manifest")))
+    exposure = training.get("benchmark_exposure", training.get("benchmark_adaptation", "see training manifest"))
     return f"""---
 library_name: sentence-transformers
 pipeline_tag: sentence-similarity
-private_candidate: true
+candidate_visibility: {visibility}
+license: other
 ---
 
 # {args.repo_id.split('/', 1)[1]}
 
-비공개 연구용 중간 후보입니다. public leaderboard 점수로 선택하지 않았고, Grade-I
+{visibility_ko} 연구용 중간 후보입니다. public leaderboard 점수로 선택하지 않았고, Grade-I
 source-document-held-out retrieval과 대화형 noise robustness만으로 선택했습니다.
 
 - selection policy: `{POLICY_ID}`
@@ -404,6 +457,11 @@ source-document-held-out retrieval과 대화형 noise robustness만으로 선택
 - clean NDCG@10: `{clean['clean_ndcg_at_10']:.8f}`
 - robustness floor NDCG@10: `{robustness['robustness_floor_ndcg_at_10']:.8f}`
 - maximum noise intrusion@10: `{robustness['max_noise_intrusion_at_10']:.8f}`
+- upstream base lineage: `{json.dumps(upstream, ensure_ascii=False, sort_keys=True)}`
+- training data licenses: `{json.dumps(licenses, ensure_ascii=False, sort_keys=True)}`
+- training use policy: `{training.get('use_policy', 'see training manifest')}`
+- benchmark exposure: `{json.dumps(exposure, ensure_ascii=False, sort_keys=True)}`
+- public redistribution review: `{training.get('release_eligible') is True}`
 
 이 artifact는 intermediate backup이며 Sionic 9/공식 Korean v1 최종 성능 주장이 아닙니다.
 학습 manifest, clean selection, summary와 rank evidence는 `evaluation/clean_selection/`에
@@ -446,14 +504,25 @@ def prepare_publication(
     bound_files = publication_files(publication_dir)
     manifest = {
         "schema_version": 1,
-        "artifact_type": ARTIFACT_TYPE,
+        "artifact_type": (
+            "public-clean-selected-embedding-candidate"
+            if getattr(args, "public", False)
+            else ARTIFACT_TYPE
+        ),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "visibility": "private",
+        "visibility": "public" if getattr(args, "public", False) else "private",
         "repo_id": args.repo_id,
         "model": {
             "path": validated["model_rel"],
             "revision": validated["revision"],
             "weights_sha256": validated["weights_sha256"],
+            "upstream_base_models": [
+                {**row, "license": KNOWN_BASE_LICENSES.get(row.get("model"), "unknown")}
+                for row in (
+                    validated.get("model_evidence")
+                    or read_json(validated["evidence_path"])
+                ).get("upstream_base_models", [])
+            ],
             "evidence": {
                 "file": validated["evidence_name"],
                 "sha256": sha256(publication_dir / validated["evidence_name"]),
@@ -561,14 +630,14 @@ def main() -> None:
     validated = validate_candidate(args)
     staging_parent = validated["model_dir"].parent
     with tempfile.TemporaryDirectory(
-        prefix=f".{validated['model_dir'].name}.private-publish-", dir=staging_parent
+        prefix=f".{validated['model_dir'].name}.candidate-publish-", dir=staging_parent
     ) as temporary:
         publication_dir = Path(temporary)
         manifest_path = prepare_publication(args, validated, publication_dir)
         expected_files = publication_files(publication_dir)
         report: dict[str, Any] = {
             "repo_id": args.repo_id,
-            "visibility": "private",
+            "visibility": "public" if args.public else "private",
             "model": validated["model_rel"],
             "revision": validated["revision"],
             "weights_sha256": validated["weights_sha256"],
@@ -586,9 +655,12 @@ def main() -> None:
             # Explicit checks surround upload_large_folder; a pre-existing public
             # repo with this name is rejected instead of silently changing it.
             api.create_repo(
-                repo_id=args.repo_id, repo_type="model", private=True, exist_ok=True
+                repo_id=args.repo_id,
+                repo_type="model",
+                private=not args.public,
+                exist_ok=True,
             )
-            require_remote_visibility(api, args.repo_id, public=False)
+            require_remote_visibility(api, args.repo_id, public=args.public)
             pre_info = api.model_info(repo_id=args.repo_id, files_metadata=True)
             pre_files = {item.rfilename for item in pre_info.siblings}
             unexpected_preexisting = pre_files - set(expected_files) - {".gitattributes"}
@@ -601,11 +673,11 @@ def main() -> None:
                 repo_id=args.repo_id,
                 repo_type="model",
                 folder_path=publication_dir,
-                private=True,
+                private=not args.public,
                 num_workers=1,
                 print_report_every=60,
             )
-            require_remote_visibility(api, args.repo_id, public=False)
+            require_remote_visibility(api, args.repo_id, public=args.public)
             info = api.model_info(repo_id=args.repo_id, files_metadata=True)
             verify_remote_publication(
                 api=api,
@@ -613,6 +685,7 @@ def main() -> None:
                 revision=info.sha,
                 token=token,
                 expected=expected_files,
+                expected_private=not args.public,
             )
             if model_weights_sha256(validated["model_dir"]) != validated["weights_sha256"]:
                 raise RuntimeError("Source model changed during private upload")

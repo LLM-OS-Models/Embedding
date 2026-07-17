@@ -270,6 +270,11 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--audit", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument(
+        "--source-manifest",
+        type=Path,
+        help="Training-source rights manifest inherited by the derived KD dataset.",
+    )
     parser.add_argument("--candidate-pool-size", type=int, default=200)
     parser.add_argument("--negatives-per-query", type=int, default=15)
     parser.add_argument("--positive-relative-ratio", type=float, default=0.95)
@@ -295,10 +300,30 @@ def main() -> int:
     counters = atomic_jsonl_pair(
         args.requests, score_path, args.output, args.audit, policy
     )
+    source_rights: dict[str, Any] = {}
+    if args.source_manifest is not None:
+        source_rights = json.loads(args.source_manifest.read_text(encoding="utf-8"))
+        if not isinstance(source_rights, dict):
+            raise ValueError("source manifest must be a JSON object")
+    release_eligible = bool(source_rights.get("release_eligible") is True)
+    release_blockers = list(source_rights.get("release_blockers") or [])
+    if not release_eligible and not release_blockers:
+        release_blockers = ["source training manifest is not public-release eligible"]
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "artifact_type": "qwen3_reranker_listwise_embedding_kd_dataset",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "release_eligible": release_eligible,
+        "release_blockers": release_blockers,
+        "visibility": "public" if release_eligible else "private",
+        "source_training_manifest": (
+            {
+                "path": str(args.source_manifest),
+                "sha256": sha256_file(args.source_manifest),
+            }
+            if args.source_manifest is not None
+            else None
+        ),
         "teacher": {
             "model": scorer.MODEL_ID,
             "revision": scorer.MODEL_REVISION,

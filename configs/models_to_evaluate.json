@@ -583,6 +583,70 @@
         "sionic_card_9": null,
         "mteb_korean_live": null
       }
+    },
+    {
+      "id": "nvidia/Nemotron-3-Embed-8B-BF16",
+      "queue_order": 8,
+      "snapshots": {
+        "hub_current_revision": "2b29550c4ab0646bb6bb47032dda54ea11f6dfe2",
+        "mteb_registry_revision": null,
+        "sionic9_local_revision": "2b29550c4ab0646bb6bb47032dda54ea11f6dfe2",
+        "mteb_korean_local_revision": "2b29550c4ab0646bb6bb47032dda54ea11f6dfe2",
+        "revision_audit": "Release-day Hub snapshot pinned and anonymously restored. No MTEB Korean v1 registry wrapper was available at audit time."
+      },
+      "encoder_contract": {
+        "architecture": "Ministral3Model",
+        "attention": "bidirectional",
+        "pooling": "masked_mean",
+        "normalization": "l2",
+        "embedding_dimension": 4096,
+        "padding_side": "left",
+        "trust_remote_code": false
+      },
+      "lengths": {
+        "config_max_position_embeddings": 262144,
+        "tokenizer_model_max_length": 32768,
+        "model_card_max_tokens": 32768,
+        "sionic9_effective_max_tokens": 8192,
+        "mteb_registry_meta_max_tokens": null,
+        "mteb_registered_loader_max_seq_length": null,
+        "mteb_korean_local_max_tokens": 8192
+      },
+      "native_prompts": {
+        "query": "query: ",
+        "document": "passage: ",
+        "mteb_registered_template": null,
+        "mteb_registered_behavior": "No pinned registered wrapper; use saved SentenceTransformers query/document prompts for native inference."
+      },
+      "execution": {
+        "sionic9": {
+          "supported": true,
+          "prompt_contract": "protocol_fixed_prompt",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 64
+        },
+        "mteb_korean_v1": {
+          "supported": false,
+          "loader": null,
+          "prompt_contract": "pending pinned MTEB registry integration",
+          "attention_backend": "flash_attention_2",
+          "batch_size": 64,
+          "blocked_reason": "No pinned official Korean-v1 model wrapper was available on the 2026-07-17 release-day audit."
+        }
+      },
+      "vllm": {
+        "model_card_support": true,
+        "model_card_min_version": "0.21.0",
+        "current_project_runner_support": false,
+        "required_version": "0.21.0 or NVIDIA-tested 0.25.0 for /v2/embed",
+        "alternate_revision": null,
+        "status": "card-supported; local parity and resumable-cache gates pending",
+        "trust_remote_code": false
+      },
+      "reference_only": {
+        "sionic_card_9": null,
+        "mteb_korean_live": null
+      }
     }
   ]
 }

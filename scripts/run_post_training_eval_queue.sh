@@ -13,10 +13,11 @@ UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 SELECTION_ONLY="${SELECTION_ONLY:-0}"
-SELECTION_PRIVATE_REPO_ID="${SELECTION_PRIVATE_REPO_ID:-}"
+SELECTION_PUBLIC_REPO_ID="${SELECTION_PUBLIC_REPO_ID:-${SELECTION_PRIVATE_REPO_ID:-}}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
-SELECTION_UPLOAD_REPORT="${SELECTION_UPLOAD_REPORT:-$LOG_DIR/private-clean-candidate-upload.json}"
+SELECTION_UPLOAD_REPORT="${SELECTION_UPLOAD_REPORT:-$LOG_DIR/public-clean-candidate-upload.json}"
 FINAL_PUBLICATION_REPORT="${FINAL_PUBLICATION_REPORT:-$LOG_DIR/final-publication-report.json}"
+PUBLIC_RELEASE_APPROVAL="${PUBLIC_RELEASE_APPROVAL:-$LOG_DIR/public-release-approval.json}"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain-contract-v1"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain-contract-v1"
 COMPREHENSIVE_OUT="$ROOT/outputs/evaluation/comprehensive-text-v1-posttrain"
@@ -368,6 +369,13 @@ for run_name in "${RUNS[@]}"; do
         --adapter "$candidate_checkpoint" --output-dir "$merged" \
         "${merge_base_args[@]}" \
         --device cuda --dtype bfloat16 --local-files-only || continue
+    else
+      run_stage "validate-reused-merge-$evaluation_label" \
+        "${OFFLINE_ENV[@]}" \
+        "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+        --adapter "$candidate_checkpoint" --output-dir "$merged" \
+        "${merge_base_args[@]}" --dtype bfloat16 --local-files-only \
+        --validate-existing || continue
     fi
     weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
     revision="model-${weights_sha:0:12}"
@@ -406,6 +414,13 @@ for run_name in "${RUNS[@]}"; do
       --adapter "$average_adapter" --output-dir "$average_merged" \
       "${merge_base_args[@]}" \
       --device cuda --dtype bfloat16 --local-files-only || continue
+  else
+    run_stage "validate-reused-average-merge-$run_name" \
+      "${OFFLINE_ENV[@]}" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+      --adapter "$average_adapter" --output-dir "$average_merged" \
+      "${merge_base_args[@]}" --dtype bfloat16 --local-files-only \
+      --validate-existing || continue
   fi
   average_weights_sha="$(jq -r '.model.weights_sha256' "$average_merged/merge_report.json")"
   average_revision="model-${average_weights_sha:0:12}"
@@ -453,6 +468,13 @@ for run_name in "${FULL_RUNS[@]}"; do
       --base-model "$base_model" --base-revision "$base_revision" \
       --training-contract "$training_contract" \
       --device cuda --dtype bfloat16 --attn-implementation flash_attention_2 || continue
+  else
+    run_stage "validate-reused-full-package-$run_name" \
+      "${OFFLINE_ENV[@]}" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/package_full_embedding_checkpoint.py" \
+      --checkpoint "$checkpoint" --output-dir "$packaged" \
+      --base-model "$base_model" --base-revision "$base_revision" \
+      --training-contract "$training_contract" --validate-existing || continue
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$packaged/full_tuning_report.json")"
   revision="model-${weights_sha:0:12}"
@@ -496,17 +518,17 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
     echo "[$(timestamp)] selection-only run produced no clean selection" >&2
     exit 20
   fi
-  if [[ -n "$SELECTION_PRIVATE_REPO_ID" ]]; then
+  if [[ -n "$SELECTION_PUBLIC_REPO_ID" ]]; then
     best_model="$(jq -r '.best.model // empty' "$SELECTION")"
     best_abs="$ROOT/$best_model"
     training_manifest="$(resolve_training_manifest "$best_model" 2>/dev/null)" || \
       training_manifest=""
     if [[ -z "$best_model" || ! -d "$best_abs" || ! -s "$training_manifest" ]]; then
-      echo "[$(timestamp)] clean winner or training manifest unavailable for private backup" >&2
+      echo "[$(timestamp)] clean winner or training manifest unavailable for public backup" >&2
       exit 21
     fi
     if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
-      echo "[$(timestamp)] Hugging Face token file unavailable for required private backup" >&2
+      echo "[$(timestamp)] Hugging Face token file unavailable for required public backup" >&2
       exit 21
     fi
     retry_stage "publish-selection-only-clean-winner" 3 \
@@ -514,12 +536,12 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
       "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
       --model-dir "$best_abs" --selection "$SELECTION" \
       --training-manifest "$training_manifest" \
-      --repo-id "$SELECTION_PRIVATE_REPO_ID" \
+      --repo-id "$SELECTION_PUBLIC_REPO_ID" \
       --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
-      --report-output "$SELECTION_UPLOAD_REPORT" --upload || exit 21
+      --report-output "$SELECTION_UPLOAD_REPORT" --upload --public || exit 21
     if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-        "$SELECTION_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
-      echo "[$(timestamp)] private clean-winner upload report failed verification" >&2
+        "$SELECTION_UPLOAD_REPORT" 2>/dev/null)" != "public:true:true" ]]; then
+      echo "[$(timestamp)] public clean-winner upload report failed verification" >&2
       exit 21
     fi
     best_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$SELECTION")"
@@ -529,10 +551,10 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
     if [[ "$report_model" != "$best_model" \
         || "$report_weights_sha" != "$best_weights_sha" \
         || ! "$report_commit" =~ ^[0-9a-f]{40}$ ]]; then
-      echo "[$(timestamp)] private clean-winner report does not bind the exact selection" >&2
+      echo "[$(timestamp)] public clean-winner report does not bind the exact selection" >&2
       exit 21
     fi
-    echo "[$(timestamp)] selection-only clean winner privately preserved"
+    echo "[$(timestamp)] selection-only clean winner publicly preserved"
   fi
   echo "[$(timestamp)] selection-only run complete; public evaluation and public-score publication skipped"
   exit 0
@@ -596,10 +618,14 @@ else
   robustness_args=(--robustness-summary "$robustness_summary")
   multidomain_args=(--multidomain-summary "$multidomain_summary")
   if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
-    echo "[$(timestamp)] Hugging Face token file is required for final private publication" >&2
+    echo "[$(timestamp)] Hugging Face token file is required for final public publication" >&2
     exit 27
   fi
-  retry_stage "publish-best-private-candidate" 3 \
+  if [[ ! -s "$PUBLIC_RELEASE_APPROVAL" ]]; then
+    echo "[$(timestamp)] exact rights-safe public release approval is required" >&2
+    exit 27
+  fi
+  retry_stage "publish-best-public-model" 3 \
     "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$best_abs" \
     --sionic-summary "$sionic_summary" \
@@ -609,26 +635,27 @@ else
     "${clean_args[@]}" \
     "${robustness_args[@]}" \
     "${multidomain_args[@]}" \
-    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
+    --release-approval "$PUBLIC_RELEASE_APPROVAL" \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1 \
     --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
-    --report-output "$FINAL_PUBLICATION_REPORT" --upload || exit 27
+    --report-output "$FINAL_PUBLICATION_REPORT" --upload --public || exit 27
   report_contract="$(jq -r \
     '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
     "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
   report_model="$(jq -r '.model_dir // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
   report_weights_sha="$(jq -r '.weights_sha256 // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
   report_commit="$(jq -r '.commit_sha // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
-  if [[ "$report_contract" != "private:true:true" \
+  if [[ "$report_contract" != "public:true:true" \
       || "$report_model" != "$best_model" \
       || "$report_weights_sha" != "$weights_sha" \
       || ! "$report_commit" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "[$(timestamp)] final private publication report failed exact verification" >&2
+    echo "[$(timestamp)] final public publication report failed exact verification" >&2
     exit 27
   fi
   run_stage "record-pilot-best-result" \
     "$ROOT/scripts/commit_campaign_result.sh" \
     --stage pilot-best --model "$best_model" \
-    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1 \
     --sionic-summary "$sionic_summary" --official-summary "$official_summary" || exit 28
 fi
 
