@@ -28,7 +28,7 @@ except ModuleNotFoundError:
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATASET = ROOT / "outputs/evaluation/legal-source-heldout-i-v1-shards12-15"
+DEFAULT_DATASET = ROOT / "outputs/evaluation/legal-source-heldout-i-v2-text-strict"
 QUERY_PROMPT = (
     "Instruct: Given a Korean web search query, retrieve relevant passages "
     "that answer the query\nQuery: "
@@ -85,9 +85,11 @@ def validate_dataset(dataset: Path) -> tuple[list[dict], list[dict], dict[str, s
         "selected_positive_hash_overlap_with_benchmark",
         "selected_source_candidate_id_overlap_with_training",
         "selected_source_document_sha256_overlap_with_training",
+        "selected_query_hash_overlap_with_training_text",
+        "selected_positive_hash_overlap_with_training_text",
     )
     if manifest.get("status") != "complete" or any(assertions.get(key) != 0 for key in required_zero):
-        raise ValueError("Dataset manifest did not pass leakage assertions")
+        raise ValueError("Text-strict dataset manifest did not pass leakage assertions")
     queries = read_jsonl(dataset / "queries.jsonl")
     corpus = read_jsonl(dataset / "corpus.jsonl")
     qrels = read_jsonl(dataset / "qrels.jsonl")
@@ -140,7 +142,7 @@ def main() -> None:
     effective_batch = min(args.batch_size, 96) if evaluation_dtype == "float32" else args.batch_size
     attention = effective_attention(args.attn_implementation, evaluation_dtype)
     cache_namespace = (
-        f"{args.model}@{revision}|legal-source-heldout-i-v1|manifest={sha256(dataset / 'manifest.json')}|"
+        f"{args.model}@{revision}|legal-source-heldout-i-v2-text-strict|manifest={sha256(dataset / 'manifest.json')}|"
         f"max={args.max_length}|batch={effective_batch}|attn={attention}|dtype={evaluation_dtype}|"
         f"prompt={hashlib.sha256(QUERY_PROMPT.encode()).hexdigest()}"
     )
@@ -223,7 +225,7 @@ def main() -> None:
             handle.write(json.dumps({"query_id": query_id, "positive_rank": rank}) + "\n")
     summary = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "protocol_id": "legal-source-document-heldout-i-v1",
+        "protocol_id": "legal-source-document-heldout-i-v2-text-strict",
         "model": args.model,
         "requested_revision": revision,
         "dataset": {

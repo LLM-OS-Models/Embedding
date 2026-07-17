@@ -25,7 +25,7 @@ class SummarizeLegalHoldoutTests(unittest.TestCase):
                 (path / "summary.json").write_text(
                     json.dumps(
                         {
-                            "protocol_id": "legal-source-document-heldout-i-v1",
+                            "protocol_id": "legal-source-document-heldout-i-v2-text-strict",
                             "model": "Qwen/Qwen3-Embedding-8B",
                             "created_at_utc": f"2026-01-0{index + 1}T00:00:00Z",
                             "metrics": {
@@ -47,7 +47,7 @@ class SummarizeLegalHoldoutTests(unittest.TestCase):
             robust_path.write_text(
                 json.dumps(
                     {
-                        "protocol_id": "legal-conversational-noise-i-v1",
+                        "protocol_id": "legal-conversational-noise-i-v2-text-strict",
                         "model": "Qwen/Qwen3-Embedding-8B",
                         "created_at_utc": "2026-01-03T00:00:00Z",
                         "conditions": {

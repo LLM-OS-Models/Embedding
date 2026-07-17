@@ -13,7 +13,7 @@ cd "$ROOT"
 
 LINEAGE_SELECTION="${LINEAGE_SELECTION:-$ROOT/outputs/post-training-eval-20260717-frontier/clean-first-selection.json}"
 TRAIN_FILE="$ROOT/outputs/data/performance-v1/ablation-200k/train.homogeneous-b16.jsonl"
-VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
+VAL_FILE="$ROOT/outputs/data/validation/legal-source-heldout-i-v2-text-strict-512/validation.jsonl"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/capacity-ablation-20260717-frontier}"
 mkdir -p "$LOG_DIR"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1

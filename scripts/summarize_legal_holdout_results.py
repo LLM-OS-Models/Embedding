@@ -27,7 +27,7 @@ def load_rows(root: Path) -> list[dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     for path in root.rglob("summary.json"):
         value = json.loads(path.read_text(encoding="utf-8"))
-        if value.get("protocol_id") != "legal-source-document-heldout-i-v1":
+        if value.get("protocol_id") != "legal-source-document-heldout-i-v2-text-strict":
             continue
         model = str(value.get("model", ""))
         if not model or not isinstance(value.get("metrics"), dict):
@@ -52,7 +52,7 @@ def load_robustness_rows(root: Path) -> dict[str, dict[str, Any]]:
         return latest
     for path in root.rglob("summary.json"):
         value = json.loads(path.read_text(encoding="utf-8"))
-        if value.get("protocol_id") != "legal-conversational-noise-i-v1":
+        if value.get("protocol_id") != "legal-conversational-noise-i-v2-text-strict":
             continue
         model = str(value.get("model", ""))
         conditions = value.get("conditions", {})
@@ -128,9 +128,9 @@ def main() -> None:
     report = {
         "schema_version": 1,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "protocol_id": "legal-source-document-heldout-i-v1",
+        "protocol_id": "legal-source-document-heldout-i-v2-text-strict",
         "models": rows,
-        "robustness_protocol_id": "legal-conversational-noise-i-v1",
+        "robustness_protocol_id": "legal-conversational-noise-i-v2-text-strict",
         "robustness_models": list(robustness.values()),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

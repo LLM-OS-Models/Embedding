@@ -11,6 +11,7 @@ SOUP_QUEUE = ROOT / "scripts/run_model_soup_queue.sh"
 CAPACITY_QUEUE = ROOT / "scripts/run_capacity_ablation_queue.sh"
 CAPACITY_TRAIN = ROOT / "experiments/070_tuning_strategy/train_quality.sh"
 CAPACITY_PROBE = ROOT / "experiments/070_tuning_strategy/probe_memory.sh"
+COMMON_RUNTIME = ROOT / "scripts/common_runtime.sh"
 
 
 def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
@@ -85,6 +86,9 @@ def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
     assert "qwen3-embedding-8b-ko-performance200k-last4" in source
     assert "comsat-embed-ko-8b-performance200k-last4" in source
     assert "capacity_run_manifest.json" in source
+    assert "list_validated_adapter_checkpoints.py" in source
+    assert "contaminated_validation=1" in source
+    assert '"artifacts/models/${run_name}-${checkpoint_label}-clean-candidate-merged"' in source
 
 
 def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
@@ -206,6 +210,18 @@ def test_campaign_queues_resolve_an_available_training_runtime() -> None:
         source = queue.read_text(encoding="utf-8")
         assert "embedding_resolve_train_runtime" in source, queue
         assert ".venv-train/bin/python" not in source, queue
+
+
+def test_all_training_entrypoints_fail_closed_on_text_strict_validation() -> None:
+    runtime = COMMON_RUNTIME.read_text(encoding="utf-8")
+    assert "embedding_require_clean_validation()" in runtime
+    assert "legal-source-heldout-i-v2-text-strict-training-validation" in runtime
+    assert 'actual_sha="$(sha256sum "$validation"' in runtime
+    for path in (CAPACITY_TRAIN, ROOT / "experiments/020_hard_negative/train_pilot_lora_r64.sh", ROOT / "experiments/080_f2_recipe/train_pilot_f2_dual_lora_r64.sh"):
+        source = path.read_text(encoding="utf-8")
+        assert 'embedding_require_clean_validation "$VAL_FILE"' in source, path
+    pilot = (ROOT / "experiments/020_hard_negative/train_pilot_lora_r64.sh").read_text(encoding="utf-8")
+    assert "legacy eval-loss continual promotion is disabled" in pilot
 
 
 def test_queue_can_only_publish_the_clean_selected_private_candidate() -> None:

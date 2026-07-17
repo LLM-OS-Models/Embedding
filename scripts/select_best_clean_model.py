@@ -15,6 +15,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -22,8 +23,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_ID = "clean-first-grade-i-near-tie-robustness-v1"
-CLEAN_PROTOCOL_ID = "legal-source-document-heldout-i-v1"
-ROBUSTNESS_PROTOCOL_ID = "legal-conversational-noise-i-v1"
+CLEAN_PROTOCOL_ID = "legal-source-document-heldout-i-v2-text-strict"
+ROBUSTNESS_PROTOCOL_ID = "legal-conversational-noise-i-v2-text-strict"
 EXPECTED_SCORE_CONTRACT = (
     "exact float32 normalized dot; TF32 disabled; rank ties by corpus ID ascending"
 )
@@ -113,6 +114,9 @@ def model_run_name(model: str) -> str | None:
     for suffix in ("-best-merged", "-best-full"):
         if name.endswith(suffix):
             return name[: -len(suffix)]
+    checkpoint = re.fullmatch(r"(.+)-checkpoint-[1-9][0-9]*-clean-candidate-merged", name)
+    if checkpoint:
+        return checkpoint.group(1)
     return None
 
 

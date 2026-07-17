@@ -1,5 +1,12 @@
 # 진행 현황, 병목과 다음 의사결정
 
+> **2026-07-17 validation 정정:** legacy 512 validation의 query-positive 512/512가
+> active ordered 200K train 안에도 존재함을 확인했다. 아래 과거 `held-out loss`, best,
+> promotion 서술은 당시 운영 기록이지 clean 성능 근거가 아니다. active Qwen은 완주하되
+> 모든 archived checkpoint를 독립 Grade-I legal 10K에서 다시 선택하며, 이후 Comsat,
+> capacity, 1M, KD, specialist run은 새 source-document-held-out 512를 사용한다. 정확한
+> 감사와 교체 계약은 [validation 누수 정정 문서](35_VALIDATION_LEAKAGE_CORRECTION_2026-07-17.md)를 따른다.
+
 기준일: 2026-07-17 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
 
 > 2026-07-15 production과 local checkpoint는 재시작으로 소실됐다. 공개 data/model을 exact

@@ -10,7 +10,7 @@ if [[ "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
 fi
 DATA_DIR="${DATA_DIR:-$ROOT/data/processed/ko_triplet_pilot_10k}"
 TRAIN_FILE="${TRAIN_FILE:-$DATA_DIR/train.hn-qwen3-r095-n4.jsonl}"
-VAL_FILE="${VAL_FILE:-$DATA_DIR/validation.hn-qwen3-r095-n4.jsonl}"
+VAL_FILE="${VAL_FILE:-$ROOT/outputs/data/validation/legal-source-heldout-i-v2-text-strict-512/validation.jsonl}"
 RUN_NAME="${RUN_NAME:-qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT/outputs/$RUN_NAME}"
 PLUGIN="$ROOT/experiments/080_f2_recipe/f2_dual_loss_plugin.py"
@@ -25,6 +25,7 @@ for path in "$TRAIN_FILE" "$VAL_FILE" "$PLUGIN"; do
     exit 2
   fi
 done
+embedding_require_clean_validation "$VAL_FILE"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"

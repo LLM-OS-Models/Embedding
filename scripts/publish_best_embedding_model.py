@@ -393,11 +393,11 @@ def validate_public_release_approval(
             args.comprehensive_summary.resolve(),
         ),
         "clean": (
-            "legal-source-document-heldout-i-v1",
+            "legal-source-document-heldout-i-v2-text-strict",
             args.clean_summary.resolve(),
         ),
         "robustness": (
-            "legal-conversational-noise-i-v1",
+            "legal-conversational-noise-i-v2-text-strict",
             args.robustness_summary.resolve(),
         ),
     }
@@ -538,7 +538,7 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
             expected_weights_sha256=model_evidence["model"]["weights_sha256"],
         )
     if clean is not None:
-        if clean.get("protocol_id") != "legal-source-document-heldout-i-v1":
+        if clean.get("protocol_id") != "legal-source-document-heldout-i-v2-text-strict":
             raise ValueError("Unexpected clean legal protocol")
         if resolved_local_model(clean.get("model")) != model_dir:
             raise ValueError(
@@ -552,7 +552,7 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         if dataset.get("independence_grade") != "I" or dataset.get("not_grade") != "Z":
             raise ValueError("Clean legal independence evidence is invalid")
     if robustness is not None:
-        if robustness.get("protocol_id") != "legal-conversational-noise-i-v1":
+        if robustness.get("protocol_id") != "legal-conversational-noise-i-v2-text-strict":
             raise ValueError("Unexpected conversational noise protocol")
         if resolved_local_model(robustness.get("model")) != model_dir:
             raise ValueError("Robustness summary belongs to a different model artifact")

@@ -8,7 +8,7 @@ MODE="${1:-}"
 TRAIN_ENV="${TRAIN_ENV:-$EMBEDDING_TRAIN_ENV}"
 SWIFT="$TRAIN_ENV/bin/swift"
 TRAIN_FILE="${TRAIN_FILE:-$ROOT/outputs/data/performance-v1/ablation-200k/train.homogeneous-b16.jsonl}"
-VAL_FILE="${VAL_FILE:-$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl}"
+VAL_FILE="${VAL_FILE:-$ROOT/outputs/data/validation/legal-source-heldout-i-v2-text-strict-512/validation.jsonl}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
 BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
@@ -27,6 +27,7 @@ fi
 for path in "$TRAIN_FILE" "$VAL_FILE"; do
   [[ -s "$path" ]] || { echo "missing dataset: $path" >&2; exit 4; }
 done
+embedding_require_clean_validation "$VAL_FILE"
 
 embedding_configure_hf_access
 embedding_require_storage_headroom "$ROOT" \

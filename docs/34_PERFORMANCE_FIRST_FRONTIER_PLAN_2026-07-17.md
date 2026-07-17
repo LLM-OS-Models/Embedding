@@ -1,5 +1,11 @@
 # 2026-07-17 성능 최우선 임베딩 방법론과 전면 복구 계획
 
+> **Validation correction:** legacy 512 query-positive pair가 active 200K에 512/512
+> 포함돼 active Qwen의 eval loss는 완료/finite 신호로만 사용한다. 모든 archived
+> checkpoint는 legal v2 text-strict 10K에서 재선택하고, Comsat 이후 run은 v2에서 파생한
+> 독립 512를 사용한다. 세부 감사는
+> [validation 정정 문서](35_VALIDATION_LEAKAGE_CORRECTION_2026-07-17.md)를 따른다.
+
 기준일: **2026-07-17 (Asia/Seoul)**
 
 ## 결론
@@ -42,7 +48,7 @@ data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다
 | Git | 복구/방법론/capacity/soup/runtime storage guard 변경을 `origin/main`에 지속 push; credential은 one-shot helper에서만 사용 |
 | submodule | 4개 모두 pinned commit으로 복원 완료 |
 | 로컬 data/cache/output | 이전 checkpoint는 없음. 13개 pinned dataset, core/teacher 8B 4개, 법률 312,581문서를 exact 복원·검증 |
-| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 192/192 통과 |
+| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 200/200 통과 |
 | valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K와 나머지 frontier campaign 직렬 queue 대기 |
 | GPU | H100 80GB 1장, Qwen production 100% utilization |
 | NFS | `/home/ubuntu/data`, 49TB 중 48TB 가용, 사용률 3%, inode 1% |

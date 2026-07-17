@@ -292,22 +292,56 @@ for run_name in "${RUNS[@]}"; do
       )
       ;;
   esac
-  merged_rel="artifacts/models/${run_name}-best-merged"
-  merged="$ROOT/$merged_rel"
-  if [[ ! -s "$merged/merge_report.json" ]]; then
-    run_stage "merge-$run_name" \
-      "${OFFLINE_ENV[@]}" \
-      "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
-      --adapter "$checkpoint" --output-dir "$merged" \
-      "${merge_base_args[@]}" \
-      --device cuda --dtype bfloat16 --local-files-only || continue
-  fi
-  weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
-  revision="model-${weights_sha:0:12}"
-  candidate_args+=(--candidate-model "$merged_rel")
-  if run_clean_with_fallback "$run_name" "$merged_rel" "$revision"; then
-    run_robustness_with_fallback "$run_name" "$merged_rel" "$revision" || true
-  fi
+  # The legacy 50K/200K Qwen runs used a 512-row validation file later proven
+  # to overlap the 200K curriculum.  Its eval_loss can identify a finite,
+  # complete checkpoint but must never choose model quality.  Evaluate every
+  # integrity-checked checkpoint from the exact Trainer version on the
+  # independent 10K Grade-I board instead.  The active production watcher
+  # retains that complete adapter history outside Trainer save_total_limit.
+  checkpoint_candidates=("$checkpoint")
+  contaminated_validation=0
+  case "$run_name" in
+    qwen3-embedding-8b-ko-performance50k-lora-r64|\
+    qwen3-embedding-8b-ko-performance50k-lora-r64-b8|\
+    qwen3-embedding-8b-ko-performance200k-lora-r64|\
+    qwen3-embedding-8b-ko-performance200k-lora-r64-b8)
+      contaminated_validation=1
+      mapfile -t checkpoint_candidates < <(
+        "$UTILITY_PYTHON" "$ROOT/scripts/list_validated_adapter_checkpoints.py" \
+          --run-dir "$run_dir" --anchor-checkpoint "$checkpoint" --print-paths
+      )
+      if (( ${#checkpoint_candidates[@]} == 0 )); then
+        echo "[$(timestamp)] contaminated run has no validated checkpoint history: $run_name" >&2
+        continue
+      fi
+      ;;
+  esac
+
+  for candidate_checkpoint in "${checkpoint_candidates[@]}"; do
+    if (( contaminated_validation )); then
+      checkpoint_label="${candidate_checkpoint##*/}"
+      merged_rel="artifacts/models/${run_name}-${checkpoint_label}-clean-candidate-merged"
+      evaluation_label="${run_name}-${checkpoint_label}-clean-candidate"
+    else
+      merged_rel="artifacts/models/${run_name}-best-merged"
+      evaluation_label="$run_name"
+    fi
+    merged="$ROOT/$merged_rel"
+    if [[ ! -s "$merged/merge_report.json" ]]; then
+      run_stage "merge-$evaluation_label" \
+        "${OFFLINE_ENV[@]}" \
+        "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+        --adapter "$candidate_checkpoint" --output-dir "$merged" \
+        "${merge_base_args[@]}" \
+        --device cuda --dtype bfloat16 --local-files-only || continue
+    fi
+    weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
+    revision="model-${weights_sha:0:12}"
+    candidate_args+=(--candidate-model "$merged_rel")
+    if run_clean_with_fallback "$evaluation_label" "$merged_rel" "$revision"; then
+      run_robustness_with_fallback "$evaluation_label" "$merged_rel" "$revision" || true
+    fi
+  done
 
   # Compare the internally best checkpoint with an FP32 arithmetic mean of up
   # to the latest five checkpoints from the same exact Trainer version.  Older

@@ -82,6 +82,36 @@ embedding_require_storage_headroom() {
   fi
 }
 
+embedding_require_clean_validation() {
+  local validation="$1"
+  local manifest="${2:-$(dirname "$validation")/manifest.json}"
+  local declared_sha actual_sha declared_rows actual_rows
+  [[ -s "$validation" && -s "$manifest" ]] || {
+    echo "clean validation artifact is missing" >&2
+    return 1
+  }
+  [[ "$(jq -r '.status // empty' "$manifest")" == complete \
+      && "$(jq -r '.artifact_id // empty' "$manifest")" == \
+        legal-source-heldout-i-v2-text-strict-training-validation \
+      && "$(jq -r '.assertions.source_holdout_contract_verified // false' "$manifest")" == true \
+      && "$(jq -r '.assertions.selected_query_training_text_overlap // -1' "$manifest")" == 0 \
+      && "$(jq -r '.assertions.selected_positive_training_text_overlap // -1' "$manifest")" == 0 \
+      && "$(jq -r '.assertions.selected_negative_training_text_overlap // -1' "$manifest")" == 0 \
+      && "$(jq -r '.assertions.selected_source_document_training_provenance_overlap // -1' "$manifest")" == 0 ]] || {
+    echo "clean validation leakage contract failed" >&2
+    return 1
+  }
+  declared_sha="$(jq -r '.files["validation.jsonl"].sha256 // empty' "$manifest")"
+  declared_rows="$(jq -r '.files["validation.jsonl"].rows // -1' "$manifest")"
+  actual_sha="$(sha256sum "$validation" | awk '{print $1}')"
+  actual_rows="$(wc -l < "$validation")"
+  [[ "$declared_sha" == "$actual_sha" && "$declared_rows" == 512 \
+      && "$actual_rows" == 512 ]] || {
+    echo "clean validation file hash or row contract failed" >&2
+    return 1
+  }
+}
+
 embedding_resolve_train_runtime() {
   local requested="${TRAIN_ENV:-}" candidate
   EMBEDDING_TRAIN_ENV=

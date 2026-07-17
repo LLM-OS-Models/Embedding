@@ -39,7 +39,7 @@ except ModuleNotFoundError:
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL_ID = "legal-conversational-noise-i-v1"
+PROTOCOL_ID = "legal-conversational-noise-i-v2-text-strict"
 NOISE_RATIOS = (0.0, 0.01, 0.05)
 NOISE_TEMPLATES = (
     "[시스템 메타데이터]\n세션 ID: {token}\n상태: 처리 완료\nassistant: 알겠습니다. 추가 질문이 있으면 말씀해 주세요.",
@@ -174,7 +174,7 @@ def main() -> None:
     # corpus embeddings are cache hits. Raw queries and noise remain distinct
     # because the exact input strings are part of each cache key.
     cache_namespace = (
-        f"{args.model}@{revision}|legal-source-heldout-i-v1|manifest={manifest_hash}|"
+        f"{args.model}@{revision}|legal-source-heldout-i-v2-text-strict|manifest={manifest_hash}|"
         f"max={args.max_length}|batch={effective_batch}|attn={attention}|dtype={evaluation_dtype}|"
         f"prompt={hashlib.sha256(QUERY_PROMPT.encode()).hexdigest()}"
     )

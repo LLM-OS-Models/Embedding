@@ -278,6 +278,93 @@ def load_training_exclusions(
     return candidate_ids, document_hashes, repositories, metadata
 
 
+def training_message_content(value: Any, field: str, line_number: int) -> str:
+    if not isinstance(value, list) or len(value) != 1:
+        raise ValueError(f"line {line_number}: {field} must contain one message")
+    message = value[0]
+    if (
+        not isinstance(message, dict)
+        or message.get("role") != "user"
+        or not isinstance(message.get("content"), str)
+    ):
+        raise ValueError(f"line {line_number}: invalid {field} message")
+    return message["content"]
+
+
+def training_nested_contents(value: Any, field: str, line_number: int) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"line {line_number}: {field} must be a non-empty list")
+    return [
+        training_message_content(group, f"{field}[{index}]", line_number)
+        for index, group in enumerate(value)
+    ]
+
+
+def semantic_query_body(value: str) -> str:
+    stripped = value.strip()
+    if stripped.startswith("Instruct:") and "Query:" in stripped:
+        return stripped.rpartition("Query:")[2].strip()
+    return stripped
+
+
+def scan_training_text_intersections(
+    paths: Sequence[Path],
+    candidate_hashes: set[str],
+    normalization: Mapping[str, Any],
+) -> tuple[set[str], dict[str, Any]]:
+    blocked: set[str] = set()
+    files: list[dict[str, Any]] = []
+    expected_fields = {"messages", "positive_messages", "negative_messages"}
+    for path in paths:
+        resolved = path.resolve()
+        if not resolved.is_file():
+            raise FileNotFoundError(resolved)
+        rows = 0
+        role_occurrences: Counter[str] = Counter()
+        matched_role_occurrences: Counter[str] = Counter()
+        matched: set[str] = set()
+        for line_number, row in read_jsonl(resolved):
+            if set(row) != expected_fields:
+                raise ValueError(f"{resolved}:{line_number}: strict training schema violation")
+            query = training_message_content(row["messages"], "messages", line_number)
+            positives = training_nested_contents(
+                row["positive_messages"], "positive_messages", line_number
+            )
+            negatives = training_nested_contents(
+                row["negative_messages"], "negative_messages", line_number
+            )
+            values = [
+                ("query_full", query),
+                ("query_body", semantic_query_body(query)),
+                *(("positive", value) for value in positives),
+                *(("negative", value) for value in negatives),
+            ]
+            for role, value in values:
+                role_occurrences[role] += 1
+                digest = normalized_sha256(value, normalization)
+                if digest in candidate_hashes:
+                    matched_role_occurrences[role] += 1
+                    matched.add(digest)
+            rows += 1
+        blocked.update(matched)
+        files.append(
+            {
+                "path": relative_path(resolved),
+                "bytes": resolved.stat().st_size,
+                "rows": rows,
+                "sha256": sha256_file(resolved),
+                "checked_role_occurrences": dict(sorted(role_occurrences.items())),
+                "matched_role_occurrences": dict(sorted(matched_role_occurrences.items())),
+                "matched_unique_candidate_text_hashes": len(matched),
+            }
+        )
+    return blocked, {
+        "normalization": dict(normalization),
+        "files": files,
+        "candidate_hash_intersections": len(blocked),
+    }
+
+
 def initialize_database(connection: sqlite3.Connection) -> None:
     connection.execute("PRAGMA journal_mode=OFF")
     connection.execute("PRAGMA synchronous=OFF")
@@ -483,7 +570,8 @@ def title_from_positive(positive: str, provenance: dict[str, Any], query: str) -
 
 def source_balanced_selection(
     connection: sqlite3.Connection,
-    blocked_hashes: set[str],
+    benchmark_blocked_hashes: set[str],
+    training_blocked_hashes: set[str],
     target_size: int,
     maximum_per_document: int,
     required_sources: Sequence[str],
@@ -534,10 +622,16 @@ def source_balanced_selection(
                 query_hash = payload["normalized_query_sha256"]
                 positive_hash = payload["normalized_positive_sha256"]
                 document_hash = payload["source_document_sha256"]
-                if query_hash in blocked_hashes:
+                if query_hash in training_blocked_hashes:
+                    skips["training_exact_query_hash"] += 1
+                    continue
+                if positive_hash in training_blocked_hashes:
+                    skips["training_exact_positive_hash"] += 1
+                    continue
+                if query_hash in benchmark_blocked_hashes:
                     skips["benchmark_exact_query_hash"] += 1
                     continue
-                if positive_hash in blocked_hashes:
+                if positive_hash in benchmark_blocked_hashes:
                     skips["benchmark_exact_positive_hash"] += 1
                     continue
                 if query_hash in seen_queries:
@@ -558,14 +652,20 @@ def source_balanced_selection(
                 break
         if not progress and len(exhausted) < len(available_sources):
             raise RuntimeError("selection made no progress without exhausting all source cursors")
+    missing_selected_sources = sorted(set(required_sources) - set(source_counts))
     metadata = {
-        "status": "complete" if len(selected) == target_size else "shortfall",
+        "status": (
+            "complete"
+            if len(selected) == target_size and not missing_selected_sources
+            else "shortfall_or_missing_required_repository"
+        ),
         "selected_rows": len(selected),
         "selected_unique_source_documents": len(document_counts),
         "selected_repository_counts": dict(sorted(source_counts.items())),
         "selection_skips": dict(sorted(skips.items())),
         "available_repositories": available_sources,
         "exhausted_repositories": sorted(exhausted),
+        "missing_selected_repositories": missing_selected_sources,
     }
     return selected, metadata
 
@@ -592,20 +692,28 @@ def stable_output_ids(payload: dict[str, Any]) -> tuple[str, str]:
     return query_id, corpus_id
 
 
-def selection_reason() -> str:
-    return (
+def selection_reason(training_text_exclusion: bool) -> str:
+    reason = (
         "source-native structural pair; entire source_document_sha256 absent from training; "
         "source_candidate_id absent from training; normalized query/positive SHA-256 absent "
         "from pinned benchmark exact blocklists; seeded source-balanced stable-rank selection"
     )
+    if training_text_exclusion:
+        reason = reason.replace(
+            "; normalized query/positive SHA-256 absent from pinned benchmark",
+            "; normalized query/positive SHA-256 absent from every declared training role; "
+            "normalized query/positive SHA-256 absent from pinned benchmark",
+        )
+    return reason
 
 
 def write_dataset(
     staging: Path,
     selected: Sequence[dict[str, Any]],
     config: dict[str, Any],
+    training_text_exclusion: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    reason = selection_reason()
+    reason = selection_reason(training_text_exclusion)
     source_counts: Counter[str] = Counter()
     revisions: dict[str, set[str]] = defaultdict(set)
     dates: dict[str, list[str]] = defaultdict(list)
@@ -699,6 +807,7 @@ def base_manifest(
     seed: int,
     training: dict[str, Any],
     candidates: dict[str, Any],
+    training_text: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -720,12 +829,14 @@ def base_manifest(
         },
         "inputs": {
             "training_provenance": training,
+            "training_text": training_text,
             "candidate_sources": candidates,
         },
         "claims": {
             "allowed": "same-repository whole-source-document-held-out legal/public retrieval (grade I)",
             "forbidden": "unseen-source, clean zero-shot, or grade Z",
             "relevance": "source-native structural relation, not an independent human relevance judgment",
+            "training_text_exclusion": "exact normalized query/positive hashes are absent from every role in each declared training JSONL",
             "benchmark_exclusion": "exact normalized SHA-256 only; this does not claim semantic or near-duplicate exclusion",
         },
     }
@@ -802,8 +913,17 @@ def command_build(args: argparse.Namespace) -> int:
                 train_documents,
                 seed,
             )
+            training_text_blocked, training_text_meta = scan_training_text_intersections(
+                args.training_data, candidate_hashes, normalization
+            )
             manifest = base_manifest(
-                args.config, config, target_size, seed, training_meta, candidate_meta
+                args.config,
+                config,
+                target_size,
+                seed,
+                training_meta,
+                candidate_meta,
+                training_text_meta,
             )
             eligible_before = candidate_meta["counters"].get(
                 "eligible_before_benchmark_exact_exclusion", 0
@@ -839,6 +959,7 @@ def command_build(args: argparse.Namespace) -> int:
             selected, selection_meta = source_balanced_selection(
                 connection,
                 blocked_hashes,
+                training_text_blocked,
                 target_size,
                 int(config["defaults"]["maximum_pairs_per_source_document"]),
                 required_sources,
@@ -850,7 +971,7 @@ def command_build(args: argparse.Namespace) -> int:
                 "normalization": normalization,
             }
             manifest["selection"] = selection_meta
-            if len(selected) < target_size:
+            if len(selected) < target_size or selection_meta.get("status") != "complete":
                 manifest["counts"] = {
                     "eligible_before_benchmark_exact_exclusion": eligible_before,
                     "selected_after_all_exclusions": len(selected),
@@ -870,7 +991,9 @@ def command_build(args: argparse.Namespace) -> int:
                 return 2
             staging = prepare_destination(args.output_dir, args.overwrite)
             try:
-                files, source_summary = write_dataset(staging, selected, config)
+                files, source_summary = write_dataset(
+                    staging, selected, config, bool(args.training_data)
+                )
                 selected_ids = {row["id"] for row in selected}
                 selected_documents = {row["source_document_sha256"] for row in selected}
                 selected_query_hashes = {row["normalized_query_sha256"] for row in selected}
@@ -890,6 +1013,12 @@ def command_build(args: argparse.Namespace) -> int:
                     "selected_positive_hash_overlap_with_benchmark": len(
                         selected_positive_hashes & blocked_hashes
                     ),
+                    "selected_query_hash_overlap_with_training_text": len(
+                        selected_query_hashes & training_text_blocked
+                    ),
+                    "selected_positive_hash_overlap_with_training_text": len(
+                        selected_positive_hashes & training_text_blocked
+                    ),
                     "selected_unique_query_hashes": len(selected_query_hashes),
                     "selected_unique_positive_hashes": len(selected_positive_hashes),
                     "selected_unique_source_documents": len(selected_documents),
@@ -904,6 +1033,7 @@ def command_build(args: argparse.Namespace) -> int:
                     for key, value in assertions.items()
                     if (
                         key.endswith("overlap_with_training")
+                        or key.endswith("overlap_with_training_text")
                         or key.endswith("overlap_with_benchmark")
                     )
                     if value != 0
@@ -1090,6 +1220,25 @@ def command_verify(args: argparse.Namespace) -> int:
     if not (len(queries) == len(corpus) == qrel_count == row_count):
         raise ValueError("query/corpus/qrel/provenance row counts differ")
     candidate_hashes = query_hashes | positive_hashes
+    training_text_blocked, training_text_meta = scan_training_text_intersections(
+        args.training_data, candidate_hashes, normalization
+    )
+    declared_training_text = manifest.get("inputs", {}).get("training_text", {})
+    identity_fields = ("path", "bytes", "rows", "sha256")
+    declared_training_identities = [
+        {key: row.get(key) for key in identity_fields}
+        for row in declared_training_text.get("files", [])
+    ]
+    actual_training_identities = [
+        {key: row.get(key) for key in identity_fields}
+        for row in training_text_meta.get("files", [])
+    ]
+    if declared_training_identities != actual_training_identities:
+        raise ValueError("training text inputs differ from the build manifest")
+    if query_hashes & training_text_blocked:
+        raise AssertionError("training exact query hash leaked")
+    if positive_hashes & training_text_blocked:
+        raise AssertionError("training exact positive hash leaked")
     blocked, block_meta = scan_benchmark_intersections(
         blocklist_root, config, candidate_hashes
     )
@@ -1135,6 +1284,8 @@ def command_verify(args: argparse.Namespace) -> int:
         "unique_source_candidate_ids": len(candidate_ids),
         "training_source_candidate_overlap": len(candidate_ids & train_ids),
         "training_source_document_overlap": len(document_hashes & train_documents),
+        "training_query_text_overlap": len(query_hashes & training_text_blocked),
+        "training_positive_text_overlap": len(positive_hashes & training_text_blocked),
         "benchmark_query_hash_overlap": len(query_hashes & blocked),
         "benchmark_positive_hash_overlap": len(positive_hashes & blocked),
         "benchmark_hash_files_scanned": len(block_meta["files"]),
@@ -1153,6 +1304,7 @@ def build_parser() -> argparse.ArgumentParser:
     build = subparsers.add_parser("build")
     build.add_argument("--candidate", type=Path, action="append", default=[])
     build.add_argument("--training-provenance", type=Path)
+    build.add_argument("--training-data", type=Path, action="append", default=[])
     build.add_argument("--blocklist-root", type=Path)
     build.add_argument("--output-dir", type=Path, required=True)
     build.add_argument("--work-dir", type=Path)
@@ -1162,6 +1314,7 @@ def build_parser() -> argparse.ArgumentParser:
     build.set_defaults(function=command_build)
     verify = subparsers.add_parser("verify")
     verify.add_argument("--training-provenance", type=Path)
+    verify.add_argument("--training-data", type=Path, action="append", default=[])
     verify.add_argument("--blocklist-root", type=Path)
     verify.add_argument("--output-dir", type=Path, required=True)
     verify.set_defaults(function=command_verify)

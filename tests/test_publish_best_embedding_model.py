@@ -108,10 +108,10 @@ class PublishBestModelTests(unittest.TestCase):
                     "protocol_id": COMPREHENSIVE_TEXT_PROTOCOL_ID
                 },
                 "clean": {
-                    "protocol_id": "legal-source-document-heldout-i-v1"
+                    "protocol_id": "legal-source-document-heldout-i-v2-text-strict"
                 },
                 "robustness": {
-                    "protocol_id": "legal-conversational-noise-i-v1"
+                    "protocol_id": "legal-conversational-noise-i-v2-text-strict"
                 },
             }
             paths["training"].write_text(json.dumps(training))
@@ -677,7 +677,7 @@ class PublishBestModelTests(unittest.TestCase):
             clean.write_text(
                 json.dumps(
                     {
-                        "protocol_id": "legal-source-document-heldout-i-v1",
+                        "protocol_id": "legal-source-document-heldout-i-v2-text-strict",
                         "model": str(model),
                         "requested_revision": "model-" + model_sha[:12],
                         "dataset": {"independence_grade": "I", "not_grade": "Z"},
@@ -705,7 +705,7 @@ class PublishBestModelTests(unittest.TestCase):
             robustness.write_text(
                 json.dumps(
                     {
-                        "protocol_id": "legal-conversational-noise-i-v1",
+                        "protocol_id": "legal-conversational-noise-i-v2-text-strict",
                         "model": str(model),
                         "requested_revision": "model-" + model_sha[:12],
                         "dataset": {"independence_grade": "I", "not_grade": "Z"},
@@ -801,12 +801,12 @@ class PublishBestModelTests(unittest.TestCase):
                             },
                             "clean": {
                                 "status": "pass",
-                                "protocol_id": "legal-source-document-heldout-i-v1",
+                                "protocol_id": "legal-source-document-heldout-i-v2-text-strict",
                                 "summary_sha256": file_sha(clean),
                             },
                             "robustness": {
                                 "status": "pass",
-                                "protocol_id": "legal-conversational-noise-i-v1",
+                                "protocol_id": "legal-conversational-noise-i-v2-text-strict",
                                 "summary_sha256": file_sha(robustness),
                             },
                         },

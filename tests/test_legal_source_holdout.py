@@ -210,6 +210,59 @@ class LegalSourceHoldoutTest(unittest.TestCase):
             )
             self.assertFalse((output / "queries.jsonl").exists())
 
+    def test_declared_training_text_is_excluded_from_selection(self) -> None:
+        candidates = {row["id"]: row for row in read_jsonl(CANDIDATES)}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            blocklist = root / "blocklist"
+            self.make_blocklist(blocklist)
+            training_text = root / "training.jsonl"
+            blocked = candidates["fixture-adm-003"]
+            strict = {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "Instruct: retrieve\nQuery: " + blocked["query"],
+                    }
+                ],
+                "positive_messages": [[{"role": "user", "content": "unrelated positive"}]],
+                "negative_messages": [[{"role": "user", "content": "unrelated negative"}]],
+            }
+            training_text.write_text(
+                json.dumps(strict, ensure_ascii=False, separators=(",", ":")) + "\n",
+                encoding="utf-8",
+            )
+            output = root / "blocked-text"
+            result = self.run_cli(
+                "build",
+                "--candidate",
+                str(CANDIDATES),
+                "--training-provenance",
+                str(TRAINING),
+                "--training-data",
+                str(training_text),
+                "--blocklist-root",
+                str(blocklist),
+                "--target-size",
+                "4",
+                "--work-dir",
+                str(root),
+                "--output-dir",
+                str(output),
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                manifest["status"], "blocked_insufficient_post_decontamination_candidates"
+            )
+            self.assertEqual(
+                manifest["selection"]["selection_skips"]["training_exact_query_hash"], 1
+            )
+            self.assertEqual(
+                manifest["inputs"]["training_text"]["candidate_hash_intersections"], 1
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

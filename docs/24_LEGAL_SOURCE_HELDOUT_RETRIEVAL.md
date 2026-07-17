@@ -1,5 +1,12 @@
 # Korean legal/public source-held-out retrieval v1
 
+> **2026-07-17 정정:** v1은 source-document SHA overlap은 0이지만, 서로 다른 원문
+> 문서에 중복 수록된 동일 법률 text 때문에 legal 250K와 query/positive exact text가
+> 같은 98행이 있었다. v1 수치와 공개 artifact는 역사 기록으로 유지하되 최종 모델
+> 선택에는 쓰지 않는다. 현재 canonical board는 모든 선언 학습 JSONL 역할의 normalized
+> exact text까지 제외한
+> [`v2 text-strict 계약`](35_VALIDATION_LEAKAGE_CORRECTION_2026-07-17.md)이다.
+
 기준: **2026-07-12**  
 설정: [`configs/legal_source_holdout_v1.json`](../configs/legal_source_holdout_v1.json)  
 생성·검증기: [`scripts/build_legal_source_holdout.py`](../scripts/build_legal_source_holdout.py)  

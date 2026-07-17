@@ -19,7 +19,8 @@ COMSAT_REVISION="a5cc22b651c1b2e51cdd8bf671774ae93584f0ab"
 COMSAT_ADMISSION_KEY="comsat-performance200k-lora-r64"
 TRAIN_FILE="$ROOT/outputs/data/performance-v1/ablation-200k/train.homogeneous-b16.jsonl"
 TRAIN_MANIFEST="$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json"
-VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
+VAL_FILE="$ROOT/outputs/data/validation/legal-source-heldout-i-v2-text-strict-512/validation.jsonl"
+VAL_MANIFEST="$ROOT/outputs/data/validation/legal-source-heldout-i-v2-text-strict-512/manifest.json"
 QUEUE_LOG="$ROOT/outputs/frontier-200k-pair-queue.log"
 POST_EVAL_LOG="$ROOT/outputs/post-training-eval-20260717-frontier"
 POST_EVAL_SELECTION="$POST_EVAL_LOG/clean-first-selection.json"
@@ -61,6 +62,18 @@ if [[ -z "$qwen_logging" ]] || ! rg -q '"3123/3123"' "$qwen_logging"; then
   exit 11
 fi
 echo "[$(timestamp)] Qwen 200K completed; starting Comsat exact probe"
+
+if [[ ! -s "$VAL_FILE" || ! -s "$VAL_MANIFEST" ]] \
+    || [[ "$(jq -r '.status' "$VAL_MANIFEST")" != complete ]] \
+    || [[ "$(jq -r '.artifact_id' "$VAL_MANIFEST")" != legal-source-heldout-i-v2-text-strict-training-validation ]] \
+    || [[ "$(jq -r '.assertions.source_holdout_contract_verified' "$VAL_MANIFEST")" != true ]] \
+    || [[ "$(jq -r '.assertions.selected_query_training_text_overlap' "$VAL_MANIFEST")" != 0 ]] \
+    || [[ "$(jq -r '.assertions.selected_positive_training_text_overlap' "$VAL_MANIFEST")" != 0 ]] \
+    || [[ "$(jq -r '.assertions.selected_negative_training_text_overlap' "$VAL_MANIFEST")" != 0 ]] \
+    || [[ "$(jq -r '.assertions.selected_source_document_training_provenance_overlap' "$VAL_MANIFEST")" != 0 ]]; then
+  echo "[$(timestamp)] clean Grade-I Trainer validation contract is unavailable" >&2
+  exit 11
+fi
 
 env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
   HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
