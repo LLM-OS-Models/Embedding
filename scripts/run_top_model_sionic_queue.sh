@@ -12,13 +12,15 @@ LOG_DIR="${LOG_DIR:-$ROOT/outputs/top-model-eval-20260711}"
 mkdir -p "$OUT" "$OFFICIAL_OUT" "$LOG_DIR"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
-fi
+# Every model and evaluation dataset in this queue is public.  Do not retain a
+# shared-machine credential, and prevent huggingface_hub from silently using a
+# token saved by another process for anonymous read requests.
+unset HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACE_HUB_TOKEN
+export HF_HUB_DISABLE_IMPLICIT_TOKEN=1
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
+failures=()
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 
@@ -48,10 +50,16 @@ if [[ ! -s "$QWEN_OFFICIAL_SUMMARY" ]]; then
   done
 fi
 if [[ -s "$QWEN_OFFICIAL_SUMMARY" ]]; then
-  "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/compare_local_mteb_korean.py" \
-    --summary "$QWEN_OFFICIAL_SUMMARY" \
-    --output "$OFFICIAL_OUT/qwen-live-comparison.json" && \
-    "$ROOT/scripts/commit_qwen_official_result.sh" || true
+  if "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/compare_local_mteb_korean.py" \
+      --summary "$QWEN_OFFICIAL_SUMMARY" \
+      --output "$OFFICIAL_OUT/qwen-live-comparison.json" && \
+      "$ROOT/scripts/commit_qwen_official_result.sh"; then
+    :
+  else
+    failures+=("Qwen official Korean v1 report")
+  fi
+else
+  failures+=("Qwen official Korean v1 evaluation")
 fi
 
 mapfile -t models < <(jq -r '.models | sort_by(.queue_order)[] | select(.execution.sionic9.supported == true) | .id' "$CONFIG")
@@ -84,7 +92,16 @@ for model in "${models[@]}"; do
       break
     fi
   done
-  (( success == 1 )) || echo "[$(timestamp)] FAILED all batches model=$model"
+  if (( success != 1 )); then
+    echo "[$(timestamp)] FAILED all batches model=$model"
+    failures+=("$model")
+  fi
 done
 
+if (( ${#failures[@]} > 0 )); then
+  printf '[%s] top-model queue incomplete:' "$(timestamp)"
+  printf ' %s' "${failures[@]}"
+  printf '\n'
+  exit 1
+fi
 echo "[$(timestamp)] top-model Sionic queue complete"

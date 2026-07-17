@@ -13,6 +13,7 @@ CAPACITY_TRAIN = ROOT / "experiments/070_tuning_strategy/train_quality.sh"
 CAPACITY_PROBE = ROOT / "experiments/070_tuning_strategy/probe_memory.sh"
 COMMON_RUNTIME = ROOT / "scripts/common_runtime.sh"
 PILOT_TRAIN = ROOT / "experiments/020_hard_negative/train_pilot_lora_r64.sh"
+TOP_MODEL_QUEUE = ROOT / "scripts/run_top_model_sionic_queue.sh"
 
 
 def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
@@ -59,6 +60,18 @@ def test_queue_uses_safe_batches_and_token_free_offline_evaluation() -> None:
         index = source.index(evaluator)
         invocation = source[max(0, index - 180) : index + 250]
         assert '"${OFFLINE_ENV[@]}"' in invocation
+
+
+def test_top_model_queue_is_anonymous_and_fails_closed() -> None:
+    source = TOP_MODEL_QUEUE.read_text(encoding="utf-8")
+    assert "unset HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACE_HUB_TOKEN" in source
+    assert "HF_HUB_DISABLE_IMPLICIT_TOKEN=1" in source
+    assert 'source "$ROOT/.env"' not in source
+    assert "sed -n 's/^HF_TOKEN=" not in source
+    assert 'failures+=("$model")' in source
+    assert 'failures+=("Qwen official Korean v1 evaluation")' in source
+    assert "top-model queue incomplete" in source
+    assert "exit 1" in source
 
 
 def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
