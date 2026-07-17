@@ -91,7 +91,14 @@ def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
     assert "comsat-embed-ko-8b-performance200k-last4" in source
     assert "capacity_run_manifest.json" in source
     assert "list_validated_adapter_checkpoints.py" in source
-    assert "contaminated_validation=1" in source
+    assert "archive_wide_clean_selection=1" in source
+    archive_case = source.index("archive_wide_clean_selection=0")
+    archive_loop = source.index(
+        'for candidate_checkpoint in "${checkpoint_candidates[@]}"', archive_case
+    )
+    archive_policy = source[archive_case:archive_loop]
+    assert "qwen3-embedding-8b-ko-performance200k-lora-r64" in archive_policy
+    assert "comsat-embed-ko-8b-performance200k-lora-r64" in archive_policy
     assert '"artifacts/models/${run_name}-${checkpoint_label}-clean-candidate-merged"' in source
 
 

@@ -272,3 +272,10 @@ clean·broad·multilingual 회귀가 실제로 좋아질 때만 다음 scale에 
 어느 단계에서도 실패하면 결과를 숨기거나 public score로 이전 checkpoint를 다시 고르지
 않는다. valid candidate가 계속 0이면 그 사실을 유지하고, 실패 축을 개선하는 다음
 controlled ablation으로 넘어간다.
+
+200K 계보 비교에서는 탐색 폭도 대칭으로 고정한다. corrected validation 512는 clean 10K의
+source-document-held-out 균형 부분집합이므로 학습과는 분리돼 있지만 clean 10K와 서로 독립인
+두 평가판은 아니다. 따라서 Qwen과 Comsat 양쪽 모두 private archive의 무결성 검증된 모든
+checkpoint를 같은 clean 10K와 paired noise 6조건에서 평가한다. 이후 1M/KD/전문가 stage는
+corrected 512 내부 신호로 single checkpoint를 정하고, 동일 trajectory의 last-available-5
+FP32 평균을 추가 후보로 만들어 clean-first 비교해 평가 비용과 checkpoint 탐색 편향을 제한한다.

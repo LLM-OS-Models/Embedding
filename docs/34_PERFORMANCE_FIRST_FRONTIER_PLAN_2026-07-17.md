@@ -480,6 +480,13 @@ source/output shard SHA, key/shape/dtype/finite와 weight 합을 fail-closed 검
 soup 성능 결과는 없고, adaptive/greedy coefficient 탐색은 일반-domain clean dev 확장 전까지
 보류한다.
 
+200K Qwen/Comsat base 대결의 checkpoint 탐색 폭은 동일하게 고정한다. corrected 512는
+전체 clean 10K에서 source-document-held-out으로 뽑은 균형 부분집합이므로 train과는 exact
+분리됐지만 clean 10K와 독립된 별도 corpus는 아니다. 이에 두 200K run 모두 private
+archive의 무결성 검증된 모든 checkpoint를 동일 clean 10K와 paired noise 6조건으로
+재평가한다. 이후 1M/KD/전문가 run은 corrected 512로 single checkpoint를 정하고 같은
+trajectory의 last-available-5 FP32 평균만 추가해 clean-first 비교한다.
+
 frontier 끝단에도 같은 queue를 재호출해 전 stage의 single-best/평균 후보를 한 번 더
 clean-first 선택하도록 연결했다. 따라서 “평균 코드는 있지만 200K에만 쓰이는” 상태는
 아니다. 최종 clean winner에만 Sionic 9/공식 Korean/comprehensive evaluation과 private

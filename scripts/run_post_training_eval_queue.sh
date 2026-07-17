@@ -297,31 +297,35 @@ for run_name in "${RUNS[@]}"; do
   esac
   # The legacy 50K/200K Qwen runs used a 512-row validation file later proven
   # to overlap the 200K curriculum.  Its eval_loss can identify a finite,
-  # complete checkpoint but must never choose model quality.  Evaluate every
-  # integrity-checked checkpoint from the exact Trainer version on the
-  # independent 10K Grade-I board instead.  The active production watcher
-  # retains that complete adapter history outside Trainer save_total_limit.
+  # complete checkpoint but must never choose model quality.  For the 200K
+  # lineage contest, evaluate Comsat with the same archive-wide search width so
+  # that corrected-512 checkpoint choice cannot give either base an asymmetric
+  # advantage.  Every integrity-checked checkpoint from the exact Trainer
+  # version is evaluated on the same independent 10K Grade-I board.  The
+  # private watchers retain that adapter history outside save_total_limit.
   checkpoint_candidates=("$checkpoint")
-  contaminated_validation=0
+  archive_wide_clean_selection=0
   case "$run_name" in
     qwen3-embedding-8b-ko-performance50k-lora-r64|\
     qwen3-embedding-8b-ko-performance50k-lora-r64-b8|\
     qwen3-embedding-8b-ko-performance200k-lora-r64|\
-    qwen3-embedding-8b-ko-performance200k-lora-r64-b8)
-      contaminated_validation=1
+    qwen3-embedding-8b-ko-performance200k-lora-r64-b8|\
+    comsat-embed-ko-8b-performance200k-lora-r64|\
+    comsat-embed-ko-8b-performance200k-lora-r64-b8)
+      archive_wide_clean_selection=1
       mapfile -t checkpoint_candidates < <(
         "$UTILITY_PYTHON" "$ROOT/scripts/list_validated_adapter_checkpoints.py" \
           --run-dir "$run_dir" --anchor-checkpoint "$checkpoint" --print-paths
       )
       if (( ${#checkpoint_candidates[@]} == 0 )); then
-        echo "[$(timestamp)] contaminated run has no validated checkpoint history: $run_name" >&2
+        echo "[$(timestamp)] archive-wide run has no validated checkpoint history: $run_name" >&2
         continue
       fi
       ;;
   esac
 
   for candidate_checkpoint in "${checkpoint_candidates[@]}"; do
-    if (( contaminated_validation )); then
+    if (( archive_wide_clean_selection )); then
       checkpoint_label="${candidate_checkpoint##*/}"
       merged_rel="artifacts/models/${run_name}-${checkpoint_label}-clean-candidate-merged"
       evaluation_label="${run_name}-${checkpoint_label}-clean-candidate"
