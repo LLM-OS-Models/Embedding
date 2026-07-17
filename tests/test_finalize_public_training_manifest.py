@@ -83,6 +83,10 @@ class FinalizePublicTrainingManifestTest(unittest.TestCase):
             )
             manifest = build(args)
             self.assertEqual(manifest["output_rows"], 2)
+            self.assertEqual(manifest["training_track"], "rights-safe-release")
+            self.assertEqual(
+                manifest["use_policy"], "public-redistributable-training"
+            )
             self.assertEqual(validate_public_rights(manifest, provenance), 2)
             broken = json.loads(overlap.read_text())
             broken["unique_retrieval_corpus_matches"] = 1

@@ -138,6 +138,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "visibility": "public",
         "release_eligible": True,
         "release_blockers": [],
+        "training_track": "rights-safe-release",
+        "use_policy": "public-redistributable-training",
         "dataset_license": source.get("dataset_license", "other"),
         "output_rows": rows,
         "batch_size": latest.get("batch_size"),

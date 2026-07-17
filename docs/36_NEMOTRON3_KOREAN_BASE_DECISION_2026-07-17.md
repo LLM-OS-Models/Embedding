@@ -182,6 +182,9 @@ Qwen 원 run의 exact validation은
   `scripts/finalize_public_training_manifest.py`가 마지막 transform SHA, 모든 row의
   source/revision/license, 최종 benchmark-overlap audit를 다시 결합한다. 이 gate를 통과한
   manifest만 public model trainer와 uploader가 받는다.
+- 최종 manifest는 `training_track=rights-safe-release`와
+  `use_policy=public-redistributable-training`을 명시해 최종 public model publisher의
+  권리 gate와 동일한 계약을 사용한다.
 - 재배포가 허용된 학습 데이터와 derived dataset은 기본 public이다.
 - dataset card에 upstream repository/revision, license, row별 source/provenance, 변환,
   dedup과 benchmark-overlap 감사를 기록한다.
