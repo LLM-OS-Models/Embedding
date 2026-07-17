@@ -108,6 +108,13 @@ multidomain macro `0.010`, finance·knowledge 각 domain `0.015`이며 reference
 Qwen/Comsat 중 높은 값이다. raw deficit이 `0.020` 이내이고 clean guard를 통과할 때만
 짧은 Nemotron LoRA로 역전을 시도한다.
 
+장기 평가 종료 뒤 실제 backward가 지연되지 않도록
+`scripts/run_nemotron3_post_decision_probe.sh`를 base-decision PID에 연결한다. 이 wrapper는
+결정 JSON을 다시 생성·검증하고 Nemotron 채택/단기 적응 결정일 때만 offline 1-step LoRA를
+실행한다. `trainer_state.json`, `optimizer.pt`, `scheduler.pt`가 모두 있는
+`checkpoint-1`을 확인해야 probe pass marker를 쓴다. 다른 결정이면 이유를 marker로 남기고
+Qwen 경로를 침범하지 않는다.
+
 1. Nemotron-3 raw macro가 `> 0.7930`이고 clean selector가 Qwen/Comsat 대비 guard 안이면
    Nemotron-3를 즉시 성능 기준 모델로 채택한다.
 2. raw macro는 이기지만 특정 한국어 target이 약하면 전체 200K 재학습보다 그 task의
