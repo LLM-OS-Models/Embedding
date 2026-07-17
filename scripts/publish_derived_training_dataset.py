@@ -7,9 +7,14 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
+
+
+COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+PLATFORM_FILES = {".gitattributes"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +65,8 @@ def declared_output(manifest: dict[str, Any], role: str) -> dict[str, Any]:
 
 
 def validate(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.repo_id.startswith("LLM-OS-Models2/"):
+        raise ValueError("new derived datasets must use the LLM-OS-Models2 namespace")
     paths = [args.train, args.provenance, args.manifest]
     if args.mining_manifest:
         paths.append(args.mining_manifest)
@@ -158,6 +165,70 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def require_dataset_visibility(info: Any, *, public: bool) -> None:
+    expected_private = not public
+    if getattr(info, "private", None) is not expected_private:
+        expected = "public" if public else "private"
+        raise RuntimeError(f"dataset repository is not exactly {expected}")
+
+
+def remote_lfs_identity(item: Any) -> tuple[str | None, int | None]:
+    lfs = getattr(item, "lfs", None)
+    if isinstance(lfs, dict):
+        return lfs.get("sha256"), lfs.get("size")
+    return getattr(lfs, "sha256", None), getattr(lfs, "size", None)
+
+
+def verify_remote_dataset(
+    *,
+    api: Any,
+    repo_id: str,
+    revision: str,
+    expected: dict[str, dict[str, Any]],
+    public: bool,
+) -> None:
+    """Verify one immutable dataset commit and every uploaded payload byte."""
+
+    if not COMMIT_RE.fullmatch(revision):
+        raise RuntimeError("dataset upload returned no immutable commit SHA")
+    info = api.dataset_info(
+        repo_id=repo_id, revision=revision, files_metadata=True
+    )
+    require_dataset_visibility(info, public=public)
+    siblings = {item.rfilename: item for item in getattr(info, "siblings", [])}
+    remote_files = set(siblings)
+    expected_files = set(expected)
+    if expected_files - remote_files or remote_files - expected_files - PLATFORM_FILES:
+        raise RuntimeError("remote dataset file set differs from the upload allowlist")
+    for name, evidence in expected.items():
+        item = siblings[name]
+        remote_sha, remote_size = remote_lfs_identity(item)
+        if remote_sha is not None or remote_size is not None:
+            if remote_sha != evidence["sha256"] or remote_size != evidence["size_bytes"]:
+                raise RuntimeError(f"remote dataset LFS object mismatch: {name}")
+            continue
+        downloaded = Path(
+            api.hf_hub_download(
+                repo_id=repo_id,
+                filename=name,
+                repo_type="dataset",
+                revision=revision,
+            )
+        )
+        if (
+            downloaded.stat().st_size != evidence["size_bytes"]
+            or sha256(downloaded) != evidence["sha256"]
+        ):
+            raise RuntimeError(f"remote dataset metadata mismatch: {name}")
+
+
+def expected_publication(sources: dict[str, Path]) -> dict[str, dict[str, Any]]:
+    return {
+        name: {"sha256": sha256(path), "size_bytes": path.stat().st_size}
+        for name, path in sources.items()
+    }
+
+
 def dataset_card(args: argparse.Namespace, validated: dict[str, Any]) -> str:
     sources = "\n".join(
         f"- https://huggingface.co/datasets/{value}" for value in args.source_dataset
@@ -253,55 +324,52 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         card = Path(temporary) / "README.md"
         card.write_text(dataset_card(args, validated), encoding="utf-8")
-        operations = [
-            CommitOperationAdd(path_in_repo="README.md", path_or_fileobj=card),
-            CommitOperationAdd(
-                path_in_repo="data/train.jsonl", path_or_fileobj=args.train
-            ),
-            CommitOperationAdd(
-                path_in_repo="metadata/provenance.jsonl",
-                path_or_fileobj=args.provenance,
-            ),
-            CommitOperationAdd(
-                path_in_repo="metadata/final_manifest.json",
-                path_or_fileobj=args.manifest,
-            ),
-        ]
+        sources = {
+            "README.md": card,
+            "data/train.jsonl": args.train,
+            "metadata/provenance.jsonl": args.provenance,
+            "metadata/final_manifest.json": args.manifest,
+        }
         if args.mining_manifest:
-            operations.append(
-                CommitOperationAdd(
-                    path_in_repo="metadata/mining_manifest.json",
-                    path_or_fileobj=args.mining_manifest,
-                )
-            )
+            sources["metadata/mining_manifest.json"] = args.mining_manifest
         if args.mining_audit:
-            operations.append(
-                CommitOperationAdd(
-                    path_in_repo="metadata/mining_audit.jsonl",
-                    path_or_fileobj=args.mining_audit,
-                )
-            )
+            sources["metadata/mining_audit.jsonl"] = args.mining_audit
         if args.quality_audit:
-            operations.append(
-                CommitOperationAdd(
-                    path_in_repo="metadata/training_data_quality_audit.json",
-                    path_or_fileobj=args.quality_audit,
-                )
-            )
+            sources["metadata/training_data_quality_audit.json"] = args.quality_audit
         if args.benchmark_overlap_audit:
-            operations.append(
-                CommitOperationAdd(
-                    path_in_repo="metadata/benchmark_overlap_audit.json",
-                    path_or_fileobj=args.benchmark_overlap_audit,
-                )
-            )
+            sources["metadata/benchmark_overlap_audit.json"] = args.benchmark_overlap_audit
+        expected = expected_publication(sources)
+        before = api.dataset_info(repo_id=args.repo_id, files_metadata=True)
+        require_dataset_visibility(before, public=args.public)
+        before_files = {item.rfilename for item in getattr(before, "siblings", [])}
+        if before_files - set(expected) - PLATFORM_FILES:
+            raise RuntimeError("dataset repository contains unexpected pre-existing files")
+        operations = [
+            CommitOperationAdd(path_in_repo=name, path_or_fileobj=path)
+            for name, path in sources.items()
+        ]
         commit = api.create_commit(
             repo_id=args.repo_id,
             repo_type="dataset",
             operations=operations,
             commit_message="Publish exact quantile-hard-negative training curriculum",
         )
+        commit_sha = getattr(commit, "oid", None)
+        if not isinstance(commit_sha, str) or not COMMIT_RE.fullmatch(commit_sha):
+            raise RuntimeError("dataset upload returned no immutable commit SHA")
+        verify_remote_dataset(
+            api=api,
+            repo_id=args.repo_id,
+            revision=commit_sha,
+            expected=expected,
+            public=args.public,
+        )
+        if expected_publication(sources) != expected:
+            raise RuntimeError("source dataset files changed during upload")
     report["commit_url"] = commit.commit_url
+    report["commit_sha"] = commit_sha
+    report["remote_file_set_exact"] = True
+    report["remote_payload_hashes_exact"] = True
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

@@ -17,6 +17,13 @@ if str(ROOT) not in sys.path:
 
 from scripts import cache_qwen3_reranker_scores as scorer
 from scripts.compile_reranker_kd_dataset import sha256_file
+from scripts.publish_derived_training_dataset import (
+    COMMIT_RE,
+    PLATFORM_FILES,
+    expected_publication,
+    require_dataset_visibility,
+    verify_remote_dataset,
+)
 from scripts.validate_embedding_jsonl import validate as validate_embedding_jsonl
 
 
@@ -143,25 +150,29 @@ def main() -> int:
 
     api = HfApi(token=token)
     api.create_repo(args.repo_id, repo_type="dataset", private=True, exist_ok=True)
-    if api.repo_info(args.repo_id, repo_type="dataset").private is not True:
-        raise RuntimeError("refusing to upload KD artifacts to a non-private repository")
     with tempfile.TemporaryDirectory() as temporary:
         card = Path(temporary) / "README.md"
         card.write_text(dataset_card(validated), encoding="utf-8")
+        sources = {
+            "README.md": card,
+            "data/train.jsonl": args.train,
+            "metadata/audit.jsonl": args.audit,
+            "metadata/manifest.json": args.manifest,
+            "metadata/requests.jsonl": args.requests,
+            "metadata/scores.jsonl": args.score_cache_dir / scorer.SCORES_NAME,
+            "metadata/score_cache_manifest.json": (
+                args.score_cache_dir / scorer.MANIFEST_NAME
+            ),
+        }
+        expected = expected_publication(sources)
+        before = api.dataset_info(repo_id=args.repo_id, files_metadata=True)
+        require_dataset_visibility(before, public=False)
+        before_files = {item.rfilename for item in getattr(before, "siblings", [])}
+        if before_files - set(expected) - PLATFORM_FILES:
+            raise RuntimeError("KD repository contains unexpected pre-existing files")
         operations = [
-            CommitOperationAdd(path_in_repo="README.md", path_or_fileobj=card),
-            CommitOperationAdd(path_in_repo="data/train.jsonl", path_or_fileobj=args.train),
-            CommitOperationAdd(path_in_repo="metadata/audit.jsonl", path_or_fileobj=args.audit),
-            CommitOperationAdd(path_in_repo="metadata/manifest.json", path_or_fileobj=args.manifest),
-            CommitOperationAdd(path_in_repo="metadata/requests.jsonl", path_or_fileobj=args.requests),
-            CommitOperationAdd(
-                path_in_repo="metadata/scores.jsonl",
-                path_or_fileobj=args.score_cache_dir / scorer.SCORES_NAME,
-            ),
-            CommitOperationAdd(
-                path_in_repo="metadata/score_cache_manifest.json",
-                path_or_fileobj=args.score_cache_dir / scorer.MANIFEST_NAME,
-            ),
+            CommitOperationAdd(path_in_repo=name, path_or_fileobj=path)
+            for name, path in sources.items()
         ]
         commit = api.create_commit(
             repo_id=args.repo_id,
@@ -169,9 +180,22 @@ def main() -> int:
             operations=operations,
             commit_message="Publish verified private Qwen3 reranker KD pilot",
         )
-    if api.repo_info(args.repo_id, repo_type="dataset").private is not True:
-        raise RuntimeError("KD repository visibility changed after upload")
+        commit_sha = getattr(commit, "oid", None)
+        if not isinstance(commit_sha, str) or not COMMIT_RE.fullmatch(commit_sha):
+            raise RuntimeError("KD upload returned no immutable commit SHA")
+        verify_remote_dataset(
+            api=api,
+            repo_id=args.repo_id,
+            revision=commit_sha,
+            expected=expected,
+            public=False,
+        )
+        if expected_publication(sources) != expected:
+            raise RuntimeError("KD source files changed during upload")
     report["commit_url"] = commit.commit_url
+    report["commit_sha"] = commit_sha
+    report["remote_file_set_exact"] = True
+    report["remote_payload_hashes_exact"] = True
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 

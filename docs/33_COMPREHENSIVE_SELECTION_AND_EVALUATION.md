@@ -290,3 +290,8 @@ dataset Models2 upload도 campaign 필수 산출물이다. 개별 queue의 micro
 실패하거나 background upload가 재시도 뒤 실패하면 그 사실을 성공으로 삼키지 않는다.
 여섯 모델과 general의 eligible local parent가 모두 있어야 사전 고정한 일곱 full-weight soup를
 전부 만들고 최종 selector로 넘어간다.
+
+dataset upload의 성공은 Hub API가 commit 응답을 반환했다는 뜻만이 아니다. Models2 namespace와
+요청한 public/private visibility, immutable 40-hex commit의 전체 file allowlist, 모든 LFS
+SHA/size, 내려받은 metadata SHA를 원본과 다시 대조한다. upload 도중 로컬 source가 바뀌어도
+실패하며, 이 remote verification이 끝나야 background job이 0으로 종료한다.

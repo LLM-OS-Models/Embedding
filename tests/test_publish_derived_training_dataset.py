@@ -7,7 +7,12 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from scripts.publish_derived_training_dataset import dataset_card, validate
+from scripts.publish_derived_training_dataset import (
+    dataset_card,
+    expected_publication,
+    validate,
+    verify_remote_dataset,
+)
 
 
 def digest(path: Path) -> str:
@@ -88,7 +93,7 @@ class PublishDerivedTrainingDatasetTest(unittest.TestCase):
                 mining_audit=audit,
                 quality_audit=quality,
                 benchmark_overlap_audit=overlap,
-                repo_id="org/fixture",
+                repo_id="LLM-OS-Models2/fixture",
                 title="Fixture",
                 source_dataset=["org/source"],
             )
@@ -106,6 +111,82 @@ class PublishDerivedTrainingDatasetTest(unittest.TestCase):
             mining.write_text(json.dumps(mining_payload))
             with self.assertRaisesRegex(ValueError, "score_rank_quantiles"):
                 validate(args)
+
+    def test_remote_commit_verifies_file_set_visibility_and_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            readme = root / "README.md"
+            train = root / "train.jsonl"
+            readme.write_text("fixture\n", encoding="utf-8")
+            train.write_text("{}\n{}\n", encoding="utf-8")
+            sources = {"README.md": readme, "data/train.jsonl": train}
+            expected = expected_publication(sources)
+
+            class FakeApi:
+                def __init__(self) -> None:
+                    self.extra = False
+                    self.private = False
+                    self.corrupt_lfs = False
+
+                def dataset_info(self, **_kwargs):
+                    train_sha = expected["data/train.jsonl"]["sha256"]
+                    if self.corrupt_lfs:
+                        train_sha = "0" * 64
+                    siblings = [
+                        SimpleNamespace(rfilename="README.md", lfs=None),
+                        SimpleNamespace(
+                            rfilename="data/train.jsonl",
+                            lfs={
+                                "sha256": train_sha,
+                                "size": expected["data/train.jsonl"]["size_bytes"],
+                            },
+                        ),
+                        SimpleNamespace(rfilename=".gitattributes", lfs=None),
+                    ]
+                    if self.extra:
+                        siblings.append(SimpleNamespace(rfilename="stale.bin", lfs=None))
+                    return SimpleNamespace(private=self.private, siblings=siblings)
+
+                def hf_hub_download(self, **kwargs):
+                    return str(sources[kwargs["filename"]])
+
+            api = FakeApi()
+            verify_remote_dataset(
+                api=api,
+                repo_id="LLM-OS-Models2/fixture",
+                revision="a" * 40,
+                expected=expected,
+                public=True,
+            )
+            api.corrupt_lfs = True
+            with self.assertRaisesRegex(RuntimeError, "LFS object mismatch"):
+                verify_remote_dataset(
+                    api=api,
+                    repo_id="LLM-OS-Models2/fixture",
+                    revision="a" * 40,
+                    expected=expected,
+                    public=True,
+                )
+            api.corrupt_lfs = False
+            api.extra = True
+            with self.assertRaisesRegex(RuntimeError, "file set"):
+                verify_remote_dataset(
+                    api=api,
+                    repo_id="LLM-OS-Models2/fixture",
+                    revision="a" * 40,
+                    expected=expected,
+                    public=True,
+                )
+            api.extra = False
+            api.private = True
+            with self.assertRaisesRegex(RuntimeError, "not exactly public"):
+                verify_remote_dataset(
+                    api=api,
+                    repo_id="LLM-OS-Models2/fixture",
+                    revision="a" * 40,
+                    expected=expected,
+                    public=True,
+                )
 
 
 if __name__ == "__main__":
