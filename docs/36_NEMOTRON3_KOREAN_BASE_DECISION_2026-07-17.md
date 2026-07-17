@@ -54,6 +54,11 @@ probe는 Sionic 병렬 평가가 GPU에서 내려간 직후 실행한다.
 2-step 이상 실제 run은 `--eval`과 `--eval-manifest`가 필수다. evaluator manifest의 JSONL
 SHA, source-holdout 검증, query/positive/negative/source-document training overlap 0을 확인한
 뒤 save step마다 eval loss를 기록해 public checkpoint watcher의 completion gate와 맞춘다.
+`scripts/run_nemotron3_public_lora_training.sh`는 승인된 decision과 최종 mined public manifest를
+다시 확인하고 trainer와 public watcher를 함께 실행한다. 기본 300 step, effective cached batch
+32, mini-batch 2, save/eval 50 step이며 각 완결 checkpoint를
+`LLM-OS-Models2/nemotron3-ko-public-lora-r16-checkpoints`에 public으로 검증·업로드한다. trainer
+종료 뒤 watcher `--once`를 한 번 더 실행해 마지막 checkpoint 누락을 막는다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를
