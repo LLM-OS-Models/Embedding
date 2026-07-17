@@ -66,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-row-cosine", type=float, default=0.9999)
     parser.add_argument("--max-pairwise-score-difference", type=float, default=0.002)
     parser.add_argument("--contract-only", action="store_true")
+    parser.add_argument("--validate-existing", action="store_true")
     return parser.parse_args()
 
 
@@ -257,6 +258,27 @@ def merge(args: argparse.Namespace, validated: dict[str, Any], staging: Path) ->
     return report
 
 
+def validate_existing(args: argparse.Namespace, validated: dict[str, Any]) -> dict[str, Any]:
+    output = args.output_dir.resolve()
+    report_path = output / "merge_report.json"
+    if not output.is_dir() or not report_path.is_file():
+        raise FileNotFoundError("Existing Nemotron merge is incomplete")
+    report = read_object(report_path)
+    if report.get("status") != "pass":
+        raise ValueError("Existing Nemotron merge report did not pass")
+    validate_embedding_contract(output)
+    if report.get("adapter", {}).get("weights_sha256") != validated["adapter_info"]["weights_sha256"]:
+        raise ValueError("Existing merge belongs to different adapter weights")
+    if report.get("selection", {}).get("report_sha256") != validated["selection_sha256"]:
+        raise ValueError("Existing merge belongs to a different selection")
+    if report.get("training_manifest", {}).get("sha256") != validated["manifest_sha256"]:
+        raise ValueError("Existing merge belongs to a different training manifest")
+    actual_weights = model_weights_sha256(output)
+    if report.get("model", {}).get("weights_sha256") != actual_weights:
+        raise ValueError("Existing merged model weights drifted")
+    return report
+
+
 def main() -> None:
     args = parse_args()
     validated = validate_inputs(args)
@@ -274,6 +296,9 @@ def main() -> None:
                 indent=2,
             )
         )
+        return
+    if args.validate_existing:
+        print(json.dumps(validate_existing(args, validated), ensure_ascii=False, indent=2))
         return
     output = args.output_dir.resolve()
     if output.exists():

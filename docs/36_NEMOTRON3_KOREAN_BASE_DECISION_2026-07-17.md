@@ -109,6 +109,11 @@ multidomain macro `-0.010`, finance/knowledge 각각 `-0.015`, Sionic strict `>0
 authorization basis로 기록하지만, exact merged weight·rights-safe manifest·final gate와
 Sionic/공식6/comprehensive/clean/robustness summary SHA가 모두 일치할 때만 지정 public
 repo에 대한 machine-readable approval을 만든다.
+`scripts/run_nemotron3_post_training_release.sh`는 public training pipeline marker를 기다린 뒤
+selector → 중단 재개 가능한 merge 검증 → legal/multidomain → Sionic strict gate → 공식6 →
+comprehensive → robustness → exact approval → `LLM-OS-Models2/nemotron3-embed-8b-ko-public-v1`
+공개 업로드와 원격 visibility/file-set/manifest 검증까지 직렬 실행한다. 어느 stage든 실패하면
+release-complete marker를 쓰지 않는다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를
