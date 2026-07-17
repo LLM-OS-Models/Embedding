@@ -129,6 +129,17 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
     assert '"$ROOT/.venv-hf-tools/bin/python"' not in frontier
 
 
+def test_frontier_waits_for_qwen_wrapper_exit_before_comsat_probe() -> None:
+    frontier = FRONTIER_QUEUE.read_text(encoding="utf-8")
+    step_gate = frontier.index('rg -q \'"3123/3123"\'')
+    wrapper_wait = frontier.index("while qwen_wrapper_alive", step_gate)
+    comsat_probe = frontier.index("starting Comsat exact probe", wrapper_wait)
+    assert step_gate < wrapper_wait < comsat_probe
+    assert 'QWEN_TRAIN_PID="${QWEN_TRAIN_PID:-}"' in frontier
+    assert '"/proc/$QWEN_TRAIN_PID/cmdline"' in frontier
+    assert "train_pilot_lora_r64.sh*" in frontier
+
+
 def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
     queues = (
         SCALE_QUEUE,

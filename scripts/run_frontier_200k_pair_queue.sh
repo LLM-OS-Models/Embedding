@@ -12,6 +12,7 @@ cd "$ROOT"
 
 QWEN_RUN="$ROOT/outputs/qwen3-embedding-8b-ko-performance200k-lora-r64"
 QWEN_LOG="$QWEN_RUN/train.log"
+QWEN_TRAIN_PID="${QWEN_TRAIN_PID:-}"
 COMSAT_RUN_ID="comsat-embed-ko-8b-performance200k-lora-r64"
 COMSAT_RUN="$ROOT/outputs/$COMSAT_RUN_ID"
 COMSAT_MODEL="sionic-ai/comsat-embed-ko-8b-preview"
@@ -40,6 +41,18 @@ timestamp() {
   date '+%Y-%m-%d %H:%M:%S %Z'
 }
 
+qwen_wrapper_alive() {
+  local command
+  [[ -n "$QWEN_TRAIN_PID" && -r "/proc/$QWEN_TRAIN_PID/cmdline" ]] || return 1
+  command="$(tr '\0' ' ' < "/proc/$QWEN_TRAIN_PID/cmdline")"
+  [[ "$command" == *experiments/020_hard_negative/train_pilot_lora_r64.sh* ]]
+}
+
+if [[ -n "$QWEN_TRAIN_PID" && ! "$QWEN_TRAIN_PID" =~ ^[1-9][0-9]*$ ]]; then
+  echo "QWEN_TRAIN_PID must be a positive integer" >&2
+  exit 2
+fi
+
 echo "[$(timestamp)] waiting for Qwen 200K completion"
 heartbeat=0
 while ! rg -q '\[INFO:swift\] End time of running main:' "$QWEN_LOG" 2>/dev/null; do
@@ -60,6 +73,10 @@ qwen_logging="$(find "$QWEN_RUN" -mindepth 2 -maxdepth 2 -type f \
 if [[ -z "$qwen_logging" ]] || ! rg -q '"3123/3123"' "$qwen_logging"; then
   echo "[$(timestamp)] Qwen end marker found without step 3123 evidence" >&2
   exit 11
+fi
+if [[ -n "$QWEN_TRAIN_PID" ]]; then
+  echo "[$(timestamp)] Qwen end marker verified; waiting for wrapper pid=$QWEN_TRAIN_PID"
+  while qwen_wrapper_alive; do sleep 2; done
 fi
 echo "[$(timestamp)] Qwen 200K completed; starting Comsat exact probe"
 
