@@ -20,6 +20,7 @@ KD_TRAIN="$DATA_DIR/train.reranker-quantile-kd15.jsonl"
 KD_AUDIT="$DATA_DIR/train.reranker-quantile-kd15.audit.jsonl"
 KD_MANIFEST="$DATA_DIR/train.reranker-quantile-kd15.manifest.json"
 SELECTION="$LOG_DIR/clean-first-selection.json"
+GENERAL_TRAINING_MANIFEST="${GENERAL_TRAINING_MANIFEST:-$ROOT/outputs/data/performance-v1/performance-1m/homogeneous-b16.manifest.json}"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
 REQUEST_ROWS="${KD_REQUEST_ROWS:-10000}"
@@ -253,6 +254,41 @@ run_stage select-clean-reranker-kd-winner \
   "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
   --output "$SELECTION" --disqualification-root "$ROOT/outputs" \
   "${candidate_args[@]}" || exit 6
+
+MODEL_UPLOAD_STATUS="$LOG_DIR/private-model-upload-status.json"
+if [[ -f "$ROOT/.env" \
+    && "$(jq -r '.status // empty' "$MODEL_UPLOAD_STATUS" 2>/dev/null)" != complete ]]; then
+  selected_model_rel="$(jq -r '.best.model // empty' "$SELECTION")"
+  selected_model="$ROOT/$selected_model_rel"
+  if [[ -n "$selected_model_rel" && -s "$selected_model/merge_report.json" ]]; then
+    selected_training_manifest="$KD_MANIFEST"
+    if [[ "$selected_model_rel" == "$base_rel" ]]; then
+      selected_training_manifest="$GENERAL_TRAINING_MANIFEST"
+    fi
+    if [[ ! -s "$selected_training_manifest" ]]; then
+      echo "[$(timestamp)] selected model training manifest is unavailable; upload skipped" >&2
+    else
+      embedding_require_storage_headroom "$ROOT" 500 1000000
+      (
+        status_tmp="$MODEL_UPLOAD_STATUS.tmp.$$"
+        if env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
+          "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
+          --model-dir "$selected_model" --selection "$SELECTION" \
+          --training-manifest "$selected_training_manifest" \
+          --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1-private \
+          --hf-token-file "$ROOT/.env" --upload; then
+          printf '{"status":"complete"}\n' > "$status_tmp"
+        else
+          printf '{"status":"failed"}\n' > "$status_tmp"
+        fi
+        mv "$status_tmp" "$MODEL_UPLOAD_STATUS"
+      ) >"$LOG_DIR/private-model-upload.log" 2>&1 &
+      MODEL_UPLOAD_PID=$!
+      printf '%s\n' "$MODEL_UPLOAD_PID" > "$LOG_DIR/private-model-upload.pid"
+      echo "[$(timestamp)] private clean-selected model upload started pid=$MODEL_UPLOAD_PID"
+    fi
+  fi
+fi
 
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
   if wait "$DATA_UPLOAD_PID"; then

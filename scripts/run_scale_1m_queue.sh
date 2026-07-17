@@ -373,6 +373,7 @@ if [[ "${ENABLE_RERANKER_KD_ABLATION:-1}" == 1 ]]; then
   run_stage "qwen3-reranker-listwise-kd-ablation" env \
     LOG_DIR="$ROOT/outputs/reranker-kd-20260717-frontier" \
     GENERAL_BASE_MODEL="$MODEL_DIR" \
+    GENERAL_TRAINING_MANIFEST="$TRAINING_MANIFEST" \
     bash "$ROOT/scripts/run_reranker_kd_ablation_queue.sh" || true
 fi
 

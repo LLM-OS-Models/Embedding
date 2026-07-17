@@ -29,6 +29,10 @@ def test_kd_queue_runs_filter_kl_and_queue_ablation_before_target_adaptation() -
     assert "KD_RERANKER_BATCH_SIZE:-8" in kd
     assert "compile_reranker_kd_dataset.py" in kd
     assert "select_best_clean_model.py" in kd
+    assert "publish_private_clean_candidate.py" in kd
+    assert "qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1-private" in kd
+    assert '--hf-token-file "$ROOT/.env"' in kd
+    assert "GENERAL_TRAINING_MANIFEST" in kd
     assert "evaluate_sionic9.py" not in kd
     assert "evaluate_mteb_korean_v1.py" not in kd
 
@@ -37,6 +41,7 @@ def test_kd_queue_runs_filter_kl_and_queue_ablation_before_target_adaptation() -
     target_index = scale.index("sionic-retrieval-train-family-adaptation", kd_index)
     assert kd_index < target_index
     assert 'GENERAL_BASE_MODEL="$MODEL_DIR"' in scale
+    assert 'GENERAL_TRAINING_MANIFEST="$TRAINING_MANIFEST"' in scale
 
 
 def test_every_target_queue_resolves_the_clean_selected_general_base() -> None:

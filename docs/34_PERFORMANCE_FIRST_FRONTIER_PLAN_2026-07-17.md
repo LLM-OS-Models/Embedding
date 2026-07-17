@@ -42,7 +42,7 @@ data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다
 | Git | 복구/방법론/queue/environment/storage guard 4개 commit을 `origin/main@eade122`까지 push 완료; credential은 one-shot helper에서만 사용 |
 | submodule | 4개 모두 pinned commit으로 복원 완료 |
 | 로컬 data/cache/output | 이전 checkpoint는 없음. 13개 pinned dataset, core/teacher 8B 4개, 법률 312,581문서를 exact 복원·검증 |
-| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 174/174 통과 |
+| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 177/177 통과 |
 | valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K와 나머지 frontier campaign 직렬 queue 대기 |
 | GPU | H100 80GB 1장, Qwen production 100% utilization |
 | NFS | `/home/ubuntu/data`, 49TB 중 48TB 가용, 사용률 3%, inode 1% |
@@ -378,6 +378,10 @@ normalized score, input SHA를 저장한다.
 - exact KD train/audit/request/score artifacts는 SHA/row/admissibility를 다시 확인하고
   `LLM-OS-Models2/korean-embedding-qwen3-reranker-kd-pilot-v1` private dataset으로 background
   upload한다.
+- clean selector의 exact winner는 model shard SHA, merge parity, clean/robustness summary+ranks,
+  selection policy, 실제 training manifest를 다시 결속하고 optimizer/credential을 차단한 뒤
+  `LLM-OS-Models2/qwen3-embedding-8b-ko-reranker-kd-clean-winner-v1-private`에 worker 1개로
+  background upload한다. public benchmark 결과가 없는 intermediate backup임을 카드에 명시한다.
 
 구현 진입점은 `scripts/run_reranker_kd_ablation_queue.sh`, loss는
 `scripts/listwise_distillation.py`, Swift plugin은
