@@ -58,6 +58,9 @@ MANIFEST_NAME = "candidate_manifest.json"
 COMPLETION_SENTINEL = "trainer_state.json"
 REMOTE_ALLOWLIST = frozenset({WEIGHTS_NAME, CONFIG_NAME, MANIFEST_NAME})
 ALLOWED_TENSOR_DTYPES = frozenset({"F16", "BF16", "F32"})
+RETRYABLE_REMOTE_CODES = frozenset(
+    {"remote_repo_failed", "remote_recovery_failed", "remote_upload_failed"}
+)
 
 # Pinned to the fields understood by the installed PEFT 0.19 line.  Unknown
 # fields are omitted instead of risking accidental path or secret disclosure.
@@ -154,6 +157,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--admission-report-sha256")
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--settle-seconds", type=float, default=10.0)
+    parser.add_argument("--remote-attempts", type=int, default=3)
+    parser.add_argument("--remote-retry-seconds", type=float, default=15.0)
     parser.add_argument(
         "--once", action="store_true", help="Scan once instead of watching continuously"
     )
@@ -1178,6 +1183,49 @@ def checkpoint_state_record(
     }
 
 
+def publish_with_retry(
+    remote: PrivateCandidateRemote,
+    checkpoint: ValidatedCheckpoint,
+    *,
+    attempts: int,
+    retry_seconds: float,
+    sleep: Callable[[float], None] = time.sleep,
+) -> tuple[str | None, bool, str | None]:
+    """Publish exactly once, retrying only transient remote failures."""
+
+    for attempt in range(1, attempts + 1):
+        try:
+            recovered_manifest_sha = remote.recover_existing(checkpoint)
+            recovered = recovered_manifest_sha is not None
+            commit_oid = None
+            if not recovered:
+                try:
+                    commit_oid = remote.upload(checkpoint)
+                except WatcherError as error:
+                    # A commit may have succeeded remotely while the response was
+                    # lost. Reconcile the immutable remote manifest before retrying.
+                    if error.code != "remote_upload_failed":
+                        raise
+                    recovered_manifest_sha = remote.recover_existing(checkpoint)
+                    if recovered_manifest_sha is None:
+                        raise
+                    recovered = True
+            return commit_oid, recovered, recovered_manifest_sha
+        except WatcherError as error:
+            if error.code not in RETRYABLE_REMOTE_CODES or attempt == attempts:
+                raise
+            emit(
+                "remote_retry",
+                checkpoint=checkpoint.label,
+                step=checkpoint.step,
+                attempt=attempt,
+                max_attempts=attempts,
+                code=error.code,
+            )
+            sleep(retry_seconds)
+    raise WatcherError("internal_error", "remote retry loop exhausted unexpectedly")
+
+
 def scan_once(
     *,
     args: argparse.Namespace,
@@ -1258,21 +1306,13 @@ def scan_once(
                 continue
             if remote is None:
                 raise WatcherError("internal_error", "upload requested without a remote client")
-            recovered_manifest_sha = remote.recover_existing(validated)
-            recovered = recovered_manifest_sha is not None
-            commit_oid = None
-            if not recovered:
-                try:
-                    commit_oid = remote.upload(validated)
-                except WatcherError as error:
-                    # A commit may have succeeded remotely while the response was
-                    # lost. Reconcile the immutable remote manifest before failing.
-                    if error.code != "remote_upload_failed":
-                        raise
-                    recovered_manifest_sha = remote.recover_existing(validated)
-                    if recovered_manifest_sha is None:
-                        raise
-                    recovered = True
+            commit_oid, recovered, recovered_manifest_sha = publish_with_retry(
+                remote,
+                validated,
+                attempts=getattr(args, "remote_attempts", 3),
+                retry_seconds=getattr(args, "remote_retry_seconds", 15.0),
+                sleep=sleep,
+            )
             state["checkpoints"][validated.label] = checkpoint_state_record(
                 validated,
                 commit_oid=commit_oid,
@@ -1328,6 +1368,12 @@ def validate_cli(args: argparse.Namespace) -> None:
         raise WatcherError("invalid_argument", "poll seconds must be in (0, 60]")
     if args.settle_seconds < 0 or args.settle_seconds > 60:
         raise WatcherError("invalid_argument", "settle seconds must be in [0, 60]")
+    if args.remote_attempts < 1 or args.remote_attempts > 10:
+        raise WatcherError("invalid_argument", "remote attempts must be in [1, 10]")
+    if args.remote_retry_seconds <= 0 or args.remote_retry_seconds > 60:
+        raise WatcherError(
+            "invalid_argument", "remote retry seconds must be in (0, 60]"
+        )
 
 
 def make_remote(args: argparse.Namespace) -> PrivateCandidateRemote | None:

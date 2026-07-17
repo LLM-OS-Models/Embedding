@@ -100,6 +100,8 @@ def make_args(root: Path, *, upload: bool) -> Namespace:
         admission_report_sha256="3" * 64,
         poll_seconds=1.0,
         settle_seconds=0.0,
+        remote_attempts=3,
+        remote_retry_seconds=1.0,
         once=True,
         upload=upload,
         no_local_archive=False,
@@ -156,7 +158,46 @@ class FakeOperationAdd:
         self.path_or_fileobj = path_or_fileobj
 
 
+class FailFirstCommitApi(FakeApi):
+    def __init__(self):
+        super().__init__()
+        self.commit_attempts = 0
+
+    def create_commit(self, **kwargs):
+        self.commit_attempts += 1
+        if self.commit_attempts == 1:
+            raise TimeoutError("transient")
+        return super().create_commit(**kwargs)
+
+
 class PrivateCheckpointWatcherTests(unittest.TestCase):
+    def test_transient_remote_failure_retries_without_duplicate_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            make_checkpoint(root)
+            args = make_args(root, upload=True)
+            api = FailFirstCommitApi()
+            sleeps: list[float] = []
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                state = watcher.scan_once(
+                    args=args,
+                    state_path=root / watcher.STATE_NAME,
+                    remote=watcher.PrivateCandidateRemote(
+                        api=api,
+                        repo_id=args.repo_id,
+                        operation_add_cls=FakeOperationAdd,
+                    ),
+                    sleep=sleeps.append,
+                )
+            self.assertEqual(api.commit_attempts, 2)
+            self.assertEqual(len(api.create_commit_calls), 1)
+            self.assertEqual(sleeps, [args.remote_retry_seconds])
+            self.assertEqual(
+                state["checkpoints"]["checkpoint-250"]["status"], "uploaded"
+            )
+            self.assertIn('"event": "remote_retry"', stream.getvalue())
+
     def test_nested_sensitive_config_key_still_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
