@@ -324,7 +324,7 @@ def local_merge_dtype(model: str) -> str:
 
 def canonical_local_revision(model: str, requested: str | None) -> str | None:
     root = Path(model).expanduser()
-    for name in ("merge_report.json", "full_tuning_report.json"):
+    for name in ("merge_report.json", "full_tuning_report.json", "soup_report.json"):
         report = root / name
         if not report.is_file():
             continue

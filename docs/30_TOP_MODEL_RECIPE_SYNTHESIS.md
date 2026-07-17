@@ -191,6 +191,12 @@ revision, positive evidence span, benchmark-overlap 결과를 가진다. 짧은 
   temperature, loss term과 weight, negative 수와 sampling seed
 - miner/teacher ID와 SHA, candidate pool, positive-relative threshold, 재채굴 횟수
 - hardware, peak VRAM, wall time, tokens/examples, checkpoint와 merge coefficient
+
+2026-07-17 구현에서는 Nemotron의 equal-average 근거와 독립 adapter factor의 basis ambiguity를
+함께 반영했다. 서로 다른 specialist LoRA의 A/B를 직접 평균하지 않고 safe-merged full model
+weight를 tensor별 FP32로 누적한다. general/combined/specialist의 네 fixed coefficient만
+사전에 등록하며, source shard와 model evidence SHA 및 ST contract가 모두 같은 경우에만
+BF16 sharded soup를 생성한다. 실제 clean 결과 전에는 개선을 주장하지 않는다.
 - evaluation task/data revision, backend, dtype, batch, raw result path와 실패/OOM 기록
 
 이 계약을 만족하지 않는 외부 점수는 참고값이며, 우리 모델의 승격이나 README의

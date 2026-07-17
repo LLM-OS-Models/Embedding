@@ -17,6 +17,8 @@ from scripts.publish_best_embedding_model import (
     upload_model_folder,
     validate_comprehensive_summary,
     validate_public_release_approval,
+    is_model_soup,
+    weights_sha,
 )
 
 
@@ -52,6 +54,14 @@ def comprehensive_payload(model: Path, weights_sha256: str) -> dict:
 
 
 class PublishBestModelTests(unittest.TestCase):
+    def test_soup_uses_full_model_weight_evidence(self) -> None:
+        evidence = {
+            "artifact_type": "weighted-full-model-embedding-soup",
+            "model": {"weights_sha256": "a" * 64},
+        }
+        self.assertTrue(is_model_soup(evidence))
+        self.assertEqual(weights_sha(evidence), "a" * 64)
+
     def test_private_candidate_does_not_require_release_approval(self) -> None:
         args = SimpleNamespace(public=False)
         result = validate_public_release_approval(
@@ -897,6 +907,53 @@ class PublishBestModelTests(unittest.TestCase):
             )
             self.assertFalse(
                 (model / "evaluation" / "raw" / "comprehensive_text_v1").exists()
+            )
+
+            (model / "full_tuning_report.json").unlink()
+            (model / "soup_report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "pass",
+                        "artifact_type": "weighted-full-model-embedding-soup",
+                        "training_method": "weighted-full-model-soup",
+                        "sources": [
+                            {"model": "/models/general", "weight": 0.5},
+                            {"model": "/models/combined", "weight": 0.5},
+                        ],
+                        "soup": {
+                            "accumulation_dtype": "float32",
+                            "output_floating_dtype": "bfloat16",
+                            "tensor_count": 2,
+                        },
+                        "model": {"weights_sha256": model_sha},
+                        "sentence_transformers_contract": {
+                            "pooling": "last_token",
+                            "normalize": True,
+                        },
+                    }
+                )
+            )
+            subprocess.check_call(
+                [
+                    "python",
+                    str(ROOT / "scripts/publish_best_embedding_model.py"),
+                    "--model-dir",
+                    str(model),
+                    "--sionic-summary",
+                    str(sionic),
+                    "--official-summary",
+                    str(official),
+                    "--training-manifest",
+                    str(manifest),
+                ]
+            )
+            soup_card = (model / "README.md").read_text()
+            self.assertIn("safe-merged full transformer weight", soup_card)
+            soup_publication = json.loads(
+                (model / "publication_manifest.json").read_text()
+            )
+            self.assertEqual(
+                soup_publication["model_evidence"]["file"], "soup_report.json"
             )
 
 

@@ -734,7 +734,7 @@ def atomic_write_json(path: Path, value: Mapping[str, Any]) -> str:
 def _local_model_revision(model_path: Path, requested: str | None) -> tuple[str, dict[str, Any]]:
     evidence_path = None
     evidence: dict[str, Any] | None = None
-    for filename in ("merge_report.json", "full_tuning_report.json"):
+    for filename in ("merge_report.json", "full_tuning_report.json", "soup_report.json"):
         candidate = model_path / filename
         if candidate.is_file():
             evidence_path = candidate
@@ -742,7 +742,8 @@ def _local_model_revision(model_path: Path, requested: str | None) -> tuple[str,
             break
     if evidence is None or evidence_path is None:
         raise OfflineAssetError(
-            "Local model requires merge_report.json or full_tuning_report.json weight evidence"
+            "Local model requires merge_report.json, full_tuning_report.json, or "
+            "soup_report.json weight evidence"
         )
     weights_sha = evidence.get("model", {}).get("weights_sha256")
     if not isinstance(weights_sha, str) or not SHA256_RE.fullmatch(weights_sha):

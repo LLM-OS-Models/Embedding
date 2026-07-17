@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 QUEUE = ROOT / "scripts/run_post_training_eval_queue.sh"
 SCALE_QUEUE = ROOT / "scripts/run_scale_1m_queue.sh"
 FRONTIER_QUEUE = ROOT / "scripts/run_frontier_200k_pair_queue.sh"
+SOUP_QUEUE = ROOT / "scripts/run_model_soup_queue.sh"
 
 
 def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
@@ -70,6 +71,8 @@ def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
         assert later_run in source
     assert "resolve_training_manifest" in source
     assert "train.reranker-quantile-kd15.manifest.json" in source
+    assert "SOUP_MODELS" in source
+    assert "soup_report.json" in source
 
 
 def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
@@ -78,9 +81,10 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
     selection_gate = frontier.index('[[ ! -s "$POST_EVAL_SELECTION" ]]', post_eval)
     scale = frontier.index("run_scale_1m_queue.sh", selection_gate)
     legal = frontier.index("run_legal_adaptation_queue.sh", scale)
-    final_eval = frontier.index("run_post_training_eval_queue.sh", legal)
+    soup = frontier.index("run_model_soup_queue.sh", legal)
+    final_eval = frontier.index("run_post_training_eval_queue.sh", soup)
     final_gate = frontier.index('[[ ! -s "$FINAL_EVAL_SELECTION" ]]', final_eval)
-    assert post_eval < selection_gate < scale < legal < final_eval < final_gate
+    assert post_eval < selection_gate < scale < legal < soup < final_eval < final_gate
     assert frontier.count("embedding_require_storage_headroom") >= 6
 
     scale_source = SCALE_QUEUE.read_text(encoding="utf-8")
@@ -109,6 +113,21 @@ def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
         source_token = source.index('source "$PUBLISH_HF_TOKEN_FILE"')
         selected_checkpoint = source.index("select_best_checkpoint.py")
         assert selected_checkpoint < source_token, queue
+
+
+def test_model_soup_coefficients_are_fixed_before_clean_evaluation() -> None:
+    source = SOUP_QUEUE.read_text(encoding="utf-8")
+    for label in (
+        "soup-general50-combined50",
+        "soup-general50-specialists10x5",
+        "soup-general25-combined25-specialists10x5",
+        "soup-combined50-specialists10x5",
+    ):
+        assert label in source
+    assert "merge_full_model_soup.py" in source
+    assert "evaluate_sionic9.py" not in source
+    assert "evaluate_mteb_korean_v1.py" not in source
+    assert "HF_TOKEN" in source and "unset HF_TOKEN" in source
 
 
 def test_campaign_queues_resolve_an_available_training_runtime() -> None:

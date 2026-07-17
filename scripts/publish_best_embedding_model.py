@@ -456,9 +456,18 @@ def upload_model_folder(
 
 def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     model_dir = args.model_dir.resolve()
-    model_evidence_path = model_dir / "merge_report.json"
-    if not model_evidence_path.is_file():
-        model_evidence_path = model_dir / "full_tuning_report.json"
+    evidence_paths = [
+        path
+        for path in (
+            model_dir / "merge_report.json",
+            model_dir / "full_tuning_report.json",
+            model_dir / "soup_report.json",
+        )
+        if path.is_file()
+    ]
+    if len(evidence_paths) != 1:
+        raise ValueError("Model must have exactly one merge/full/soup evidence report")
+    model_evidence_path = evidence_paths[0]
     required = [
         model_dir / "config.json",
         model_dir / "modules.json",
@@ -618,7 +627,13 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
 
 
 def is_full_update(evidence: dict[str, Any]) -> bool:
-    return str(evidence.get("training_method", "")).startswith("partial-full")
+    return str(evidence.get("training_method", "")).startswith("partial-full") or (
+        evidence.get("artifact_type") == "weighted-full-model-embedding-soup"
+    )
+
+
+def is_model_soup(evidence: dict[str, Any]) -> bool:
+    return evidence.get("artifact_type") == "weighted-full-model-embedding-soup"
 
 
 def weights_sha(evidence: dict[str, Any]) -> str:
@@ -755,15 +770,22 @@ def build_card(
         )
     else:
         adaptation_notice = "이 모델의 task-family 학습 노출은 아래와 같이 공개한다."
-    method_intro = (
-        "Qwen3-Embedding-8B의 상위 transformer block을 부분 full-parameter update한 "
-        "한국어 retrieval 성능 후보다. optimizer state를 제외한 SentenceTransformers "
-        "artifact를 만들고 last-token/L2 계약과 실제 embedding probe를 검증했다."
-        if full_update
-        else "Qwen3-Embedding-8B를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업 "
-        "성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와 "
-        "SentenceTransformers last-token/L2/prompt 계약을 검증했다."
-    )
+    if is_model_soup(evidence):
+        method_intro = (
+            "독립 LoRA factor를 직접 평균하지 않고 safe-merged full transformer weight를 "
+            "FP32로 가중 평균한 한국어 embedding soup 후보다. 고정 coefficient와 source "
+            "hash는 soup_report.json에 기록했고 last-token/L2 계약을 검증했다."
+        )
+    else:
+        method_intro = (
+            "Qwen3-Embedding-8B의 상위 transformer block을 부분 full-parameter update한 "
+            "한국어 retrieval 성능 후보다. optimizer state를 제외한 SentenceTransformers "
+            "artifact를 만들고 last-token/L2 계약과 실제 embedding probe를 검증했다."
+            if full_update
+            else "Qwen3-Embedding-8B를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업 "
+            "성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와 "
+            "SentenceTransformers last-token/L2/prompt 계약을 검증했다."
+        )
     clean_section = ""
     if clean is not None:
         clean_metrics = clean["metrics"]
@@ -809,7 +831,19 @@ def build_card(
 retrieval, K-HATERS 지원 또는 해당 영역의 우위를 주장하는 근거가 아니다. 요약과
 원본 MTEB result JSON은 `evaluation/`에 동봉한다.
 """
-    if full_update:
+    if is_model_soup(evidence):
+        source_rows = "; ".join(
+            f"{Path(str(row.get('model', 'unknown'))).name}={float(row.get('weight', 0.0)):.4f}"
+            for row in evidence.get("sources", [])
+            if isinstance(row, dict)
+        )
+        method_rows = f"""- method: basis-safe weighted arithmetic mean of safe-merged full model weights
+- fixed source weights: `{source_rows}`
+- FP32 accumulation / emitted dtype: `{evidence.get('soup', {}).get('accumulation_dtype')}` / `{evidence.get('soup', {}).get('output_floating_dtype')}`
+- model weight SHA-256: `{weights_sha(evidence)}`
+- source count: `{len(evidence.get('sources', []))}`
+- tensor count: `{evidence.get('soup', {}).get('tensor_count')}`"""
+    elif full_update:
         method_rows = f"""- base: `{evidence['base_model']}@{evidence['base_revision']}`
 - method: partial full-parameter contrastive fine-tuning, InfoNCE/explicit negatives
 - packaged model weight SHA-256: `{weights_sha(evidence)}`
@@ -1055,7 +1089,9 @@ def main() -> None:
             comprehensive_raw_root,
         )
     evidence_name = (
-        "full_tuning_report.json" if is_full_update(evidence) else "merge_report.json"
+        "soup_report.json"
+        if is_model_soup(evidence)
+        else ("full_tuning_report.json" if is_full_update(evidence) else "merge_report.json")
     )
     publication_manifest = {
         "schema_version": 1,

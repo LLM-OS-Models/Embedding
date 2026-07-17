@@ -38,13 +38,14 @@ def make_candidate(
     clean_ndcg: float,
     robust_floor: float,
     intrusion: float,
+    evidence_name: str = "merge_report.json",
 ) -> tuple[str, str]:
     model = f"artifacts/models/{name}-best-merged"
     weights_sha = hashlib.sha256(name.encode()).hexdigest()
     revision = f"model-{weights_sha[:12]}"
     model_dir = root / model
     model_dir.mkdir(parents=True)
-    (model_dir / "merge_report.json").write_text(
+    (model_dir / evidence_name).write_text(
         json.dumps({"model": {"weights_sha256": weights_sha}}), encoding="utf-8"
     )
     safe = model.replace("/", "__")
@@ -197,3 +198,15 @@ def test_explicit_candidate_allowlist_excludes_stale_models(tmp_path: Path) -> N
     assert report["best"]["model"] == expected
     assert report["candidate_allowlist"] == [expected]
     assert any("allowlist" in row["reason"] for row in report["excluded"])
+
+
+def test_soup_evidence_is_eligible_for_same_clean_selector(tmp_path: Path) -> None:
+    expected, _ = make_candidate(
+        tmp_path,
+        "soup-candidate",
+        clean_ndcg=0.81,
+        robust_floor=0.80,
+        intrusion=0.01,
+        evidence_name="soup_report.json",
+    )
+    assert select(tmp_path)["best"]["model"] == expected

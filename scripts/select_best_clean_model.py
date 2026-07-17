@@ -147,6 +147,7 @@ def validate_model_evidence(
         for path in (
             model_dir / "merge_report.json",
             model_dir / "full_tuning_report.json",
+            model_dir / "soup_report.json",
         )
         if path.is_file()
     ]

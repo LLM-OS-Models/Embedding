@@ -22,6 +22,18 @@ class LocalModelRevisionTests(unittest.TestCase):
             self.assertEqual(sionic_revision(str(model), "adapter-old"), expected)
             self.assertEqual(official_revision(str(model), "adapter-old"), expected)
 
+    def test_soup_weight_hash_is_canonical_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            model = Path(temporary)
+            model_sha = "b" * 64
+            (model / "soup_report.json").write_text(
+                json.dumps({"model": {"weights_sha256": model_sha}}),
+                encoding="utf-8",
+            )
+            expected = "model-" + model_sha[:12]
+            self.assertEqual(sionic_revision(str(model), None), expected)
+            self.assertEqual(official_revision(str(model), None), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ SCALE_LOG="$ROOT/outputs/scale-1m-20260717-frontier"
 LEGAL_LOG="$ROOT/outputs/legal-adaptation-20260717-frontier"
 FINAL_EVAL_LOG="$ROOT/outputs/final-frontier-selection-20260717"
 FINAL_EVAL_SELECTION="$FINAL_EVAL_LOG/clean-first-selection.json"
+SOUP_LOG="$ROOT/outputs/model-soup-20260717-frontier"
 
 mkdir -p "$COMSAT_RUN"
 exec > >(tee -a "$QUEUE_LOG") 2>&1
@@ -140,6 +141,13 @@ env WAIT_PID= LOG_DIR="$LEGAL_LOG" \
   GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json" \
   ENABLE_SIONIC_COMBINED_ADAPTATION=1 \
   bash "$ROOT/scripts/run_legal_adaptation_queue.sh"
+
+embedding_require_storage_headroom "$ROOT" 500 1000000
+embedding_require_storage_headroom /tmp 50 100000
+echo "[$(timestamp)] building fixed basis-safe full-model soup candidates"
+env LOG_DIR="$SOUP_LOG" \
+  GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json" \
+  bash "$ROOT/scripts/run_model_soup_queue.sh"
 
 embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000

@@ -54,6 +54,12 @@ RUNS=(
 FULL_RUNS=(
   qwen3-embedding-8b-ko-performance200k-last4
 )
+SOUP_MODELS=(
+  qwen3-embedding-8b-ko-soup-general50-combined50
+  qwen3-embedding-8b-ko-soup-general50-specialists10x5
+  qwen3-embedding-8b-ko-soup-general25-combined25-specialists10x5
+  qwen3-embedding-8b-ko-soup-combined50-specialists10x5
+)
 
 mkdir -p \
   "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$COMPREHENSIVE_OUT" \
@@ -196,6 +202,9 @@ resolve_training_manifest() {
   local model="$1" candidate
   local candidates=()
   case "$model" in
+    *-soup-*)
+      candidates+=("$ROOT/$model/soup_report.json")
+      ;;
     *reranker-*)
       candidates+=("$ROOT/outputs/data/performance-v1/performance-1m/reranker-kd-pilot/train.reranker-quantile-kd15.manifest.json")
       ;;
@@ -348,6 +357,19 @@ for run_name in "${FULL_RUNS[@]}"; do
   fi
 done
 
+for soup_name in "${SOUP_MODELS[@]}"; do
+  soup_rel="artifacts/models/$soup_name"
+  soup="$ROOT/$soup_rel"
+  [[ -s "$soup/soup_report.json" ]] || continue
+  weights_sha="$(jq -r '.model.weights_sha256 // empty' "$soup/soup_report.json")"
+  [[ "$weights_sha" =~ ^[0-9a-f]{64}$ ]] || continue
+  revision="model-${weights_sha:0:12}"
+  candidate_args+=(--candidate-model "$soup_rel")
+  if run_clean_with_fallback "$soup_name" "$soup_rel" "$revision"; then
+    run_robustness_with_fallback "$soup_name" "$soup_rel" "$revision" || true
+  fi
+done
+
 SELECTION="$LOG_DIR/clean-first-selection.json"
 rm -f "$SELECTION"
 if (( ${#candidate_args[@]} > 0 )); then
@@ -369,8 +391,11 @@ if [[ -s "$SELECTION" ]]; then
   if [[ -s "$best_abs/merge_report.json" ]]; then
     weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/merge_report.json")"
     local_revision="model-${weights_sha:0:12}"
-  else
+  elif [[ -s "$best_abs/full_tuning_report.json" ]]; then
     weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/full_tuning_report.json")"
+    local_revision="model-${weights_sha:0:12}"
+  else
+    weights_sha="$(jq -r '.model.weights_sha256' "$best_abs/soup_report.json")"
     local_revision="model-${weights_sha:0:12}"
   fi
   clean_summary="$(jq -r '.best.clean_summary' "$SELECTION")"
