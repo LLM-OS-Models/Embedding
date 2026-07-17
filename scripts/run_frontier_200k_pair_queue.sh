@@ -169,7 +169,7 @@ env LOG_DIR="$CAPACITY_LOG" LINEAGE_SELECTION="$POST_EVAL_SELECTION" \
 embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] selecting final 200K winner including capacity challenger"
-env WAIT_PID= SELECTION_ONLY=0 LOG_DIR="$CAPACITY_EVAL_LOG" \
+env WAIT_PID= SELECTION_ONLY=1 LOG_DIR="$CAPACITY_EVAL_LOG" \
   CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
   bash "$ROOT/scripts/run_post_training_eval_queue.sh"
 if [[ ! -s "$CAPACITY_EVAL_SELECTION" ]]; then
@@ -180,14 +180,14 @@ fi
 embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] starting 1M scale from the clean-selected lineage"
-env WAIT_PID= LOG_DIR="$SCALE_LOG" \
+env WAIT_PID= LOG_DIR="$SCALE_LOG" ENABLE_PUBLIC_INTERMEDIATE_EVAL=0 \
   POSTTRAIN_SELECTION="$CAPACITY_EVAL_SELECTION" \
   bash "$ROOT/scripts/run_scale_1m_queue.sh"
 
 embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] starting legal replay and combined target adaptation"
-env WAIT_PID= LOG_DIR="$LEGAL_LOG" \
+env WAIT_PID= LOG_DIR="$LEGAL_LOG" ENABLE_PUBLIC_INTERMEDIATE_EVAL=0 \
   GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json" \
   ENABLE_SIONIC_COMBINED_ADAPTATION=1 \
   bash "$ROOT/scripts/run_legal_adaptation_queue.sh"

@@ -118,7 +118,10 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
         < final_gate
     )
     assert 'SELECTION_ONLY=1 LOG_DIR="$POST_EVAL_LOG"' in frontier
+    assert 'SELECTION_ONLY=1 LOG_DIR="$CAPACITY_EVAL_LOG"' in frontier
+    assert "SELECTION_ONLY=0" not in frontier
     assert 'POSTTRAIN_SELECTION="$CAPACITY_EVAL_SELECTION"' in frontier
+    assert frontier.count("ENABLE_PUBLIC_INTERMEDIATE_EVAL=0") == 2
     assert frontier.count("embedding_require_storage_headroom") >= 8
 
     scale_source = SCALE_QUEUE.read_text(encoding="utf-8")
@@ -158,6 +161,31 @@ def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
         source_token = source.index('source "$PUBLISH_HF_TOKEN_FILE"')
         selected_checkpoint = source.index("select_best_checkpoint.py")
         assert selected_checkpoint < source_token, queue
+
+
+def test_intermediate_queues_disable_public_evaluation_by_default() -> None:
+    queues = (
+        SCALE_QUEUE,
+        ROOT / "scripts/run_legal_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+    )
+    for queue in queues:
+        source = queue.read_text(encoding="utf-8")
+        assert (
+            'ENABLE_PUBLIC_INTERMEDIATE_EVAL="${ENABLE_PUBLIC_INTERMEDIATE_EVAL:-0}"'
+            in source
+        ), queue
+        gate = source.index('if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 ]]')
+        public_sionic = source.index("run_sionic", gate)
+        public_official = source.index("run_official", public_sionic)
+        gate_end = source.index("\nfi", public_official)
+        assert gate < public_sionic < public_official < gate_end, queue
+        publish_gate = source.index(
+            'if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1', gate_end
+        )
+        publisher = source.index("publish_best_embedding_model.py", publish_gate)
+        assert publish_gate < publisher, queue
 
 
 def test_model_soup_coefficients_are_fixed_before_clean_evaluation() -> None:

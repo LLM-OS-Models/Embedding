@@ -12,6 +12,7 @@ embedding_resolve_train_runtime
 UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
+ENABLE_PUBLIC_INTERMEDIATE_EVAL="${ENABLE_PUBLIC_INTERMEDIATE_EVAL:-0}"
 TARGET_KIND="${TARGET_KIND:-squad}"
 TARGET_PHASE="${TARGET_PHASE:-sionic_squad_train_60k}"
 TARGET_DATA_REL="${TARGET_DATA_REL:-outputs/data/performance-v1/sionic-squad-train-60k}"
@@ -65,6 +66,12 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
 FAISS_THREADS="${FAISS_THREADS:-$EFFECTIVE_CPU_COUNT}"
+
+if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" != 0 \
+    && "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" != 1 ]]; then
+  echo "ENABLE_PUBLIC_INTERMEDIATE_EVAL must be 0 or 1" >&2
+  exit 2
+fi
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 run_stage() {
@@ -295,13 +302,17 @@ fi
 
 model_sha="$(jq -r '.model.weights_sha256' "$MODEL_DIR/merge_report.json")"
 revision="model-${model_sha:0:12}"
-run_sionic "$MODEL_REL" "$revision" \
-  "$ROOT/outputs/embedding-cache/sionic9-${TARGET_KIND}-target-adapted" || true
 safe="${MODEL_REL//\//__}"
 SIONIC_SUMMARY="$SIONIC_OUT/$safe/summary.json"
-run_official "$MODEL_REL" "$revision" \
-  "$ROOT/outputs/embedding-cache/official-${TARGET_KIND}-target-adapted" || true
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
+if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 ]]; then
+  run_sionic "$MODEL_REL" "$revision" \
+    "$ROOT/outputs/embedding-cache/sionic9-${TARGET_KIND}-target-adapted" || true
+  run_official "$MODEL_REL" "$revision" \
+    "$ROOT/outputs/embedding-cache/official-${TARGET_KIND}-target-adapted" || true
+else
+  echo "[$(timestamp)] public intermediate evaluation disabled for $RUN_NAME"
+fi
 
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
@@ -314,7 +325,8 @@ for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
 done
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
 
-if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
+if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
+    && -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
   [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
   if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then

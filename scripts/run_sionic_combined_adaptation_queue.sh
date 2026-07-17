@@ -8,6 +8,7 @@ embedding_resolve_train_runtime
 UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-combined-adaptation-20260712}"
+ENABLE_PUBLIC_INTERMEDIATE_EVAL="${ENABLE_PUBLIC_INTERMEDIATE_EVAL:-0}"
 OUT_DIR="$ROOT/outputs/data/sionic-combined-target-v1"
 CURRICULUM="$OUT_DIR/train.multidomain.jsonl"
 PROVENANCE="$OUT_DIR/provenance.multidomain.jsonl"
@@ -28,6 +29,12 @@ PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
+
+if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" != 0 \
+    && "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" != 1 ]]; then
+  echo "ENABLE_PUBLIC_INTERMEDIATE_EVAL must be 0 or 1" >&2
+  exit 2
+fi
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 run_stage() {
@@ -224,13 +231,17 @@ if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
 fi
 model_sha="$(jq -r '.model.weights_sha256' "$MODEL_DIR/merge_report.json")"
 revision="model-${model_sha:0:12}"
-run_sionic "$MODEL_REL" "$revision" \
-  "$ROOT/outputs/embedding-cache/sionic9-combined-target-adapted" || true
 safe="${MODEL_REL//\//__}"
 SIONIC_SUMMARY="$SIONIC_OUT/$safe/summary.json"
-run_official "$MODEL_REL" "$revision" \
-  "$ROOT/outputs/embedding-cache/official-combined-target-adapted" || true
 OFFICIAL_SUMMARY="$OFFICIAL_OUT/$safe/$revision/summary.json"
+if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 ]]; then
+  run_sionic "$MODEL_REL" "$revision" \
+    "$ROOT/outputs/embedding-cache/sionic9-combined-target-adapted" || true
+  run_official "$MODEL_REL" "$revision" \
+    "$ROOT/outputs/embedding-cache/official-combined-target-adapted" || true
+else
+  echo "[$(timestamp)] public intermediate evaluation disabled for $RUN_NAME"
+fi
 
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
@@ -242,7 +253,8 @@ for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" && break
 done
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
-if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
+if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
+    && -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
   [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
   if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
