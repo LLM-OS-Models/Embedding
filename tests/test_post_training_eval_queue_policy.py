@@ -112,6 +112,7 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
         '[[ ! -s "$CAPACITY_EVAL_SELECTION" ]]', capacity_eval
     )
     scale = frontier.index("run_scale_1m_queue.sh", capacity_gate)
+    kd_gate = frontier.index('[[ ! -s "$KD_SELECTION" ]]', scale)
     legal = frontier.index("run_legal_adaptation_queue.sh", scale)
     soup = frontier.index("run_model_soup_queue.sh", legal)
     final_eval = frontier.index("run_post_training_eval_queue.sh", soup)
@@ -123,6 +124,7 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
         < capacity_eval
         < capacity_gate
         < scale
+        < kd_gate
         < legal
         < soup
         < final_eval
@@ -334,3 +336,8 @@ def test_private_full_model_lineage_requires_exact_remote_file_set() -> None:
     frontier = FRONTIER_QUEUE.read_text(encoding="utf-8")
     assert "FINAL_PUBLICATION_REPORT" in frontier
     assert "final model publication completion evidence is invalid" in frontier
+    assert "KD_UPLOAD_REPORT" in frontier
+    assert "clean-selected general base backup is not exact" in frontier
+    assert "private clean-winner report does not bind the exact selection" in post
+    assert "report_weights_sha" in post
+    assert "report_commit" in post

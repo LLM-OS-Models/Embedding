@@ -469,8 +469,9 @@ raw-score 최고 모델, clean-lineage 최고 모델, release-safe 모델은 서
 config/tensor contract와 finite를 확인한 뒤 FP32로 평균한다. source/output/config SHA가 묶인
 `average_report.json`을 atomic하게 생성하며, `merge_embedding_adapter.py`가 report와 실제
 adapter 파일의 hash를 다시 검증한다. single best와 평균 모델은 둘 다 Grade-I clean/robustness
-후보가 될 뿐 자동 승격되지 않는다. 이미 시작된 Qwen run은 당시 `save_total_limit=3`이므로
-최대 3개만 사용하고, 아직 시작하지 않은 Comsat/1M/KD/target run은 5개를 보존한다. 실제
+후보가 될 뿐 자동 승격되지 않는다. 이미 시작된 Qwen run의 Trainer live 보존은
+`save_total_limit=3`이지만 private watcher archive가 모든 주기 checkpoint를 별도로 보존하므로
+마지막 최대 5개를 사용할 수 있다. Comsat/1M/KD/target run도 5개를 보존한다. 실제
 평균 모델 성능 결과는 아직 없다. 2번 specialist soup은 독립 LoRA A/B factor를 평균하지
 않고 safe-merged full weight를 FP32로 누적하는 방식으로 구현했다. general winner와 immediate
 local parent 75:25·50:50, general/combined 50:50·25:75, general 50%+specialist 5개 각 10%,
@@ -486,6 +487,11 @@ soup 성능 결과는 없고, adaptive/greedy coefficient 탐색은 일반-domai
 archive의 무결성 검증된 모든 checkpoint를 동일 clean 10K와 paired noise 6조건으로
 재평가한다. 이후 1M/KD/전문가 run은 corrected 512로 single checkpoint를 정하고 같은
 trajectory의 last-available-5 FP32 평균만 추가해 clean-first 비교한다.
+
+1M 뒤 reranker-KD A/B에는 KD를 거치지 않은 1M 원본도 항상 후보로 넣는다. 그러므로 KD가
+개선되지 않으면 원본을 선택하는 것이 정상이다. 다만 A/B 선택 파일 또는 선택 model·weights
+SHA에 정확히 결속된 private remote file set과 immutable commit이 없으면 이후 전문가·법률
+stage는 시작하지 않는다. 검증되지 않은 fallback base로 장시간 학습을 계속하지 않는다.
 
 frontier 끝단에도 같은 queue를 재호출해 전 stage의 single-best/평균 후보를 한 번 더
 clean-first 선택하도록 연결했다. 따라서 “평균 코드는 있지만 200K에만 쓰이는” 상태는

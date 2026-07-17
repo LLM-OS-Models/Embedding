@@ -75,6 +75,21 @@ retry_stage() {
   return "$status"
 }
 
+verified_private_report() {
+  local report="$1" expected_model="$2" expected_weights_sha="$3"
+  local contract report_model report_weights_sha report_commit
+  contract="$(jq -r \
+    '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$report" 2>/dev/null || true)"
+  report_model="$(jq -r '.model // empty' "$report" 2>/dev/null || true)"
+  report_weights_sha="$(jq -r '.weights_sha256 // empty' "$report" 2>/dev/null || true)"
+  report_commit="$(jq -r '.commit_sha // empty' "$report" 2>/dev/null || true)"
+  [[ "$contract" == "private:true:true" \
+      && "$report_model" == "$expected_model" \
+      && "$report_weights_sha" == "$expected_weights_sha" \
+      && "$report_commit" =~ ^[0-9a-f]{40}$ ]]
+}
+
 run_sionic_with_fallback() {
   local model="$1" revision="$2" cache="$3" batch
   for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
@@ -360,8 +375,10 @@ run_stage "select-clean-$RUN_NAME" \
   "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
   --output "$SCALE_SELECTION" --disqualification-root "$ROOT/outputs" \
   --candidate-model "$MODEL_REL" || exit 6
-if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-    "$SCALE_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
+selected_scale_model="$(jq -r '.best.model // empty' "$SCALE_SELECTION")"
+selected_scale_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$SCALE_SELECTION")"
+if ! verified_private_report \
+    "$SCALE_UPLOAD_REPORT" "$selected_scale_model" "$selected_scale_weights_sha"; then
   if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
     echo "[$(timestamp)] token file unavailable for required 1M private backup" >&2
     exit 6
@@ -375,8 +392,8 @@ if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.
     --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
     --report-output "$SCALE_UPLOAD_REPORT" --upload || exit 6
 fi
-if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-    "$SCALE_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
+if ! verified_private_report \
+    "$SCALE_UPLOAD_REPORT" "$selected_scale_model" "$selected_scale_weights_sha"; then
   echo "[$(timestamp)] 1M private clean-winner remote verification is incomplete" >&2
   exit 6
 fi
@@ -415,37 +432,57 @@ if [[ -n "$DATA_UPLOAD_PID" ]]; then
   fi
 fi
 
-GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json"
+GENERAL_SELECTION="$SCALE_SELECTION"
+GENERAL_BASE_UPLOAD_REPORT="$SCALE_UPLOAD_REPORT"
 if [[ "${ENABLE_RERANKER_KD_ABLATION:-1}" == 1 ]]; then
+  GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json"
+  GENERAL_BASE_UPLOAD_REPORT="${GENERAL_SELECTION%/*}/private-clean-candidate-upload.json"
   run_stage "qwen3-reranker-listwise-kd-ablation" env \
     LOG_DIR="$ROOT/outputs/reranker-kd-20260717-frontier" \
     GENERAL_BASE_MODEL="$MODEL_DIR" \
     GENERAL_TRAINING_MANIFEST="$TRAINING_MANIFEST" \
     GENERAL_BASE_UPLOAD_REPORT="$SCALE_UPLOAD_REPORT" \
-    bash "$ROOT/scripts/run_reranker_kd_ablation_queue.sh" || true
+    bash "$ROOT/scripts/run_reranker_kd_ablation_queue.sh" || exit 7
+  if [[ ! -s "$GENERAL_SELECTION" ]]; then
+    echo "[$(timestamp)] reranker KD A/B produced no clean selection" >&2
+    exit 7
+  fi
+  general_model="$(jq -r '.best.model // empty' "$GENERAL_SELECTION")"
+  general_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$GENERAL_SELECTION")"
+  if ! verified_private_report \
+      "$GENERAL_BASE_UPLOAD_REPORT" "$general_model" "$general_weights_sha"; then
+    echo "[$(timestamp)] reranker KD winner backup is not exact" >&2
+    exit 7
+  fi
+else
+  echo "[$(timestamp)] reranker KD A/B disabled; using clean-selected 1M base"
 fi
 
 if [[ "${ENABLE_SIONIC_RETRIEVAL_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-retrieval-train-family-adaptation" env WAIT_PID= \
     GENERAL_SELECTION="$GENERAL_SELECTION" \
+    GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-retrieval-family-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_retrieval_adaptation_queue.sh" || true
 fi
 if [[ "${ENABLE_SIONIC_SQUAD_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-squad-train-family-adaptation" env WAIT_PID= \
     GENERAL_SELECTION="$GENERAL_SELECTION" \
+    GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-squad-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_squad_adaptation_queue.sh" || true
 fi
 if [[ "${ENABLE_SIONIC_HEALTH_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-health-domain-adaptation" env WAIT_PID= \
     GENERAL_SELECTION="$GENERAL_SELECTION" \
+    GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-health-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_health_adaptation_queue.sh" || true
 fi
 if [[ "${ENABLE_SIONIC_AUTORAG_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-autorag-domain-adaptation" env WAIT_PID= \
     GENERAL_SELECTION="$GENERAL_SELECTION" \
+    GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-autorag-adaptation-20260712" \
     bash "$ROOT/scripts/run_sionic_autorag_adaptation_queue.sh" || true
 fi

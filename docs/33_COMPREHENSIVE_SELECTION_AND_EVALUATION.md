@@ -279,3 +279,8 @@ source-document-held-out 균형 부분집합이므로 학습과는 분리돼 있
 checkpoint를 같은 clean 10K와 paired noise 6조건에서 평가한다. 이후 1M/KD/전문가 stage는
 corrected 512 내부 신호로 single checkpoint를 정하고, 동일 trajectory의 last-available-5
 FP32 평균을 추가 후보로 만들어 clean-first 비교해 평가 비용과 checkpoint 탐색 편향을 제한한다.
+
+후속 base 전달도 성능 계약의 일부다. 1M 원본을 반드시 KD 후보군에 포함하므로 KD variant가
+개선되지 않아도 원본을 정당하게 선택할 수 있다. 반면 이 A/B 자체가 실패했거나 선택된 model,
+weights SHA, private exact remote file set, immutable commit이 서로 일치하지 않으면 fallback
+base로 조용히 넘어가지 않고 전문가·법률 stage를 시작하지 않는다.

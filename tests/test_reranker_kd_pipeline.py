@@ -40,8 +40,18 @@ def test_kd_queue_runs_filter_kl_and_queue_ablation_before_target_adaptation() -
     kd_index = scale.index("run_reranker_kd_ablation_queue.sh")
     target_index = scale.index("sionic-retrieval-train-family-adaptation", kd_index)
     assert kd_index < target_index
+    kd_gate = scale[kd_index:target_index]
+    assert "|| exit 7" in kd_gate
+    assert "reranker KD A/B produced no clean selection" in kd_gate
+    assert "reranker KD winner backup is not exact" in kd_gate
+    assert 'GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT"' in scale
     assert 'GENERAL_BASE_MODEL="$MODEL_DIR"' in scale
     assert 'GENERAL_TRAINING_MANIFEST="$TRAINING_MANIFEST"' in scale
+
+    assert "verified_private_report" in kd
+    assert "expected_model" in kd
+    assert "expected_weights_sha" in kd
+    assert "commit_sha" in kd
 
 
 def test_every_target_queue_resolves_the_clean_selected_general_base() -> None:

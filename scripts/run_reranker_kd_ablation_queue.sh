@@ -46,6 +46,21 @@ run_stage() {
   return "$status"
 }
 
+verified_private_report() {
+  local report="$1" expected_model="$2" expected_weights_sha="$3"
+  local contract report_model report_weights_sha report_commit
+  contract="$(jq -r \
+    '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$report" 2>/dev/null || true)"
+  report_model="$(jq -r '.model // empty' "$report" 2>/dev/null || true)"
+  report_weights_sha="$(jq -r '.weights_sha256 // empty' "$report" 2>/dev/null || true)"
+  report_commit="$(jq -r '.commit_sha // empty' "$report" 2>/dev/null || true)"
+  [[ "$contract" == "private:true:true" \
+      && "$report_model" == "$expected_model" \
+      && "$report_weights_sha" == "$expected_weights_sha" \
+      && "$report_commit" =~ ^[0-9a-f]{40}$ ]]
+}
+
 BASE_MODEL="${GENERAL_BASE_MODEL:-$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-best-merged}"
 if [[ ! -s "$BASE_MODEL/merge_report.json" ]]; then
   BASE_MODEL="$ROOT/artifacts/models/qwen3-embedding-8b-ko-performance1m-lora-r64-b8-best-merged"
@@ -261,13 +276,14 @@ run_stage select-clean-reranker-kd-winner \
   "${candidate_args[@]}" || exit 6
 
 MODEL_UPLOAD_REPORT="$LOG_DIR/private-clean-candidate-upload.json"
-if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-    "$MODEL_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
+selected_model_rel="$(jq -r '.best.model // empty' "$SELECTION")"
+selected_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$SELECTION")"
+if ! verified_private_report \
+    "$MODEL_UPLOAD_REPORT" "$selected_model_rel" "$selected_weights_sha"; then
   if [[ ! -f "$ROOT/.env" ]]; then
     echo "[$(timestamp)] .env unavailable for required KD winner backup" >&2
     exit 7
   fi
-  selected_model_rel="$(jq -r '.best.model // empty' "$SELECTION")"
   selected_model="$ROOT/$selected_model_rel"
   if [[ -n "$selected_model_rel" && -s "$selected_model/merge_report.json" ]]; then
     selected_training_manifest="$KD_MANIFEST"
@@ -293,8 +309,8 @@ if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.
     exit 7
   fi
 fi
-if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-    "$MODEL_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
+if ! verified_private_report \
+    "$MODEL_UPLOAD_REPORT" "$selected_model_rel" "$selected_weights_sha"; then
   echo "[$(timestamp)] KD winner private remote verification is incomplete" >&2
   exit 7
 fi

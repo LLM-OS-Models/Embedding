@@ -488,6 +488,16 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
       echo "[$(timestamp)] private clean-winner upload report failed verification" >&2
       exit 21
     fi
+    best_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$SELECTION")"
+    report_model="$(jq -r '.model // empty' "$SELECTION_UPLOAD_REPORT" 2>/dev/null || true)"
+    report_weights_sha="$(jq -r '.weights_sha256 // empty' "$SELECTION_UPLOAD_REPORT" 2>/dev/null || true)"
+    report_commit="$(jq -r '.commit_sha // empty' "$SELECTION_UPLOAD_REPORT" 2>/dev/null || true)"
+    if [[ "$report_model" != "$best_model" \
+        || "$report_weights_sha" != "$best_weights_sha" \
+        || ! "$report_commit" =~ ^[0-9a-f]{40}$ ]]; then
+      echo "[$(timestamp)] private clean-winner report does not bind the exact selection" >&2
+      exit 21
+    fi
     echo "[$(timestamp)] selection-only clean winner privately preserved"
   fi
   echo "[$(timestamp)] selection-only run complete; public evaluation and public-score publication skipped"

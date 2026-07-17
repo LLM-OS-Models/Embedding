@@ -33,6 +33,8 @@ CAPACITY_LOG="$ROOT/outputs/capacity-ablation-20260717-frontier"
 CAPACITY_EVAL_LOG="$ROOT/outputs/post-capacity-eval-20260717-frontier"
 CAPACITY_EVAL_SELECTION="$CAPACITY_EVAL_LOG/clean-first-selection.json"
 SCALE_LOG="$ROOT/outputs/scale-1m-20260717-frontier"
+KD_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json"
+KD_UPLOAD_REPORT="$ROOT/outputs/reranker-kd-20260717-frontier/private-clean-candidate-upload.json"
 LEGAL_LOG="$ROOT/outputs/legal-adaptation-20260717-frontier"
 FINAL_EVAL_LOG="$ROOT/outputs/final-frontier-selection-20260717"
 FINAL_EVAL_SELECTION="$FINAL_EVAL_LOG/clean-first-selection.json"
@@ -239,12 +241,28 @@ echo "[$(timestamp)] starting 1M scale from the clean-selected lineage"
 env WAIT_PID= LOG_DIR="$SCALE_LOG" ENABLE_PUBLIC_INTERMEDIATE_EVAL=0 \
   POSTTRAIN_SELECTION="$CAPACITY_EVAL_SELECTION" \
   bash "$ROOT/scripts/run_scale_1m_queue.sh"
+if [[ ! -s "$KD_SELECTION" ]]; then
+  echo "[$(timestamp)] 1M/KD stage produced no clean-selected general base" >&2
+  exit 22
+fi
+kd_model="$(jq -r '.best.model // empty' "$KD_SELECTION")"
+kd_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$KD_SELECTION")"
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$KD_UPLOAD_REPORT" 2>/dev/null || true)" != "private:true:true" \
+    || "$(jq -r '.model // empty' "$KD_UPLOAD_REPORT" 2>/dev/null || true)" != "$kd_model" \
+    || "$(jq -r '.weights_sha256 // empty' "$KD_UPLOAD_REPORT" 2>/dev/null || true)" != "$kd_weights_sha" \
+    || ! "$(jq -r '.commit_sha // empty' "$KD_UPLOAD_REPORT" 2>/dev/null || true)" \
+       =~ ^[0-9a-f]{40}$ ]]; then
+  echo "[$(timestamp)] clean-selected general base backup is not exact" >&2
+  exit 22
+fi
 
 embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] starting legal replay and combined target adaptation"
 env WAIT_PID= LOG_DIR="$LEGAL_LOG" ENABLE_PUBLIC_INTERMEDIATE_EVAL=0 \
-  GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json" \
+  GENERAL_SELECTION="$KD_SELECTION" \
+  GENERAL_BASE_UPLOAD_REPORT="$KD_UPLOAD_REPORT" \
   ENABLE_SIONIC_COMBINED_ADAPTATION=1 \
   bash "$ROOT/scripts/run_legal_adaptation_queue.sh"
 
@@ -252,7 +270,7 @@ embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] building fixed basis-safe full-model soup candidates"
 env LOG_DIR="$SOUP_LOG" \
-  GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json" \
+  GENERAL_SELECTION="$KD_SELECTION" \
   bash "$ROOT/scripts/run_model_soup_queue.sh"
 
 embedding_require_storage_headroom "$ROOT" 500 1000000
