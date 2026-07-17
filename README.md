@@ -11,7 +11,7 @@ Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 
 ## 한 줄 결론
 
 - 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
-- 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이다. 2026-07-18 00:26 KST에 `Nemotron-3-Embed-8B-BF16@2b29550c`의 고정 Sionic 9 전체 평가를 완료했으며 macro NDCG@10은 **`0.732212`**로 Comsat `0.7930`보다 `-0.060788`이다. 원본 그대로의 교체는 탈락이다. 태스크별 값은 MIRACL `.64994`, Mr.TyDi `.49324`, MLDR `.33463`, AutoRAG `.88550`, Ko-StrategyQA `.79387`, PublicHealthQA `.82497`, Belebele `.95209`, SQuADKorV1 `.92018`, LawIRKo `.73549`다. MLDR nominal batch/cache key 64는 유지하면서 OOM 1회 뒤 실제 encoder microbatch 32로 완료했다.
+- 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이다. 2026-07-18 07:33 KST에 `checkpoint-1750`에서 exact resume를 재기동했고(resume validation pass, matched_sdpa 재선택), frontier queue·checkpoint watcher·storage watchdog을 함께 복구했다. 복구 세부와 당일 문헌 점검은 [docs/37](docs/37_RESUME_RECOVERY_AND_LITERATURE_2026-07-18.md)에 있다. 2026-07-18 00:26 KST에 `Nemotron-3-Embed-8B-BF16@2b29550c`의 고정 Sionic 9 전체 평가를 완료했으며 macro NDCG@10은 **`0.732212`**로 Comsat `0.7930`보다 `-0.060788`이다. 원본 그대로의 교체는 탈락이다. 태스크별 값은 MIRACL `.64994`, Mr.TyDi `.49324`, MLDR `.33463`, AutoRAG `.88550`, Ko-StrategyQA `.79387`, PublicHealthQA `.82497`, Belebele `.95209`, SQuADKorV1 `.92018`, LawIRKo `.73549`다. MLDR nominal batch/cache key 64는 유지하면서 OOM 1회 뒤 실제 encoder microbatch 32로 완료했다.
 - 현재 valid performance candidate는 **0개**다. 자동 chain은 Nemotron/Qwen/Comsat의 독립 legal 10K·finance/knowledge 1.9K 비교를 진행 중이다. raw deficit이 `.020`을 초과하고 multidomain가 guard에서 탈락해 Nemotron은 성능상 채택 조건을 충족하지 못했다. `outputs/evaluation/nemotron3-base-decision.json`의 `decision`는 `resume_qwen_checkpoint_1750_and_reselect`로 고정되어 있어, 현재 베이스 재개는 Qwen `checkpoint-1750`이 기준이다. clean 비교 결과는 Nemotron을 teacher/miner로 쓸지 판단하는 근거로 보존한다.
 - 공개 학습용 첫 권리안전 artifact는 [`LLM-OS-Models2/ko-legal-embedding-training-v1`](https://huggingface.co/datasets/LLM-OS-Models2/ko-legal-embedding-training-v1)이다. 한국 법령·행정규칙·판례·자치법규 source-native pair 250,000행이며 모든 행의 source/revision/license/redistribution 권리를 검증했고, 고정 benchmark blocklist exact overlap은 query/evaluation/corpus 모두 0이다. public immutable commit은 `faf431f53a9d8e8bbfa4d57903012a5d786f8716`이다.
 - Nemotron-3 공개 적응은 decision gate가 허용할 때만 `scripts/train_nemotron3_public_lora.py`가 실행한다. base architecture/mean-pooling/public manifest SHA를 검증하고 PEFT LoRA·cached all-negative loss·optimizer checkpoint를 재개한다. source JSONL에 저장된 기존 `Instruct/Query`를 한 번 제거한 뒤 학습 query에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 붙이고 positive/negative는 무접두 source-native text로 유지해 이중 prompt 없이 train/eval 입력 계약을 맞춘다. contract-only와 단위 검증은 통과했다.
@@ -223,6 +223,7 @@ Nemotron은 legal에서 Qwen 대비 +0.0036 정도 우세했지만, finance/know
 35. [2026-07-17 성능 최우선 frontier 방법론과 전면 복구 계획](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md)
 36. [고정 비공개 finance/knowledge 다영역 모델 선택 보드](docs/35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md)
 37. [Nemotron-3 한국어 base 결정·중단 재개](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)
+38. [2026-07-18 중단 복구와 방법론 문헌 점검](docs/37_RESUME_RECOVERY_AND_LITERATURE_2026-07-18.md)
 
 ## 실험 지도
 
