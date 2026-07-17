@@ -61,4 +61,10 @@ for spec in "${models[@]}"; do
     --embedding-cache-dir "$ROOT/outputs/embedding-cache/multidomain-selection-base-decision/$label"
 done
 
+"$PYTHON" "$ROOT/scripts/decide_nemotron3_base.py" \
+  --sionic-dir "$ROOT/outputs/evaluation/sionic9-nemotron3-full-fixed-prompt" \
+  --legal-dir "$ROOT/outputs/evaluation/legal-source-heldout-base-decision" \
+  --multidomain-dir "$ROOT/outputs/evaluation/multidomain-selection-base-decision" \
+  --output "$ROOT/outputs/evaluation/nemotron3-base-decision.json"
+
 echo "Nemotron/Qwen/Comsat base-decision evaluation complete"
