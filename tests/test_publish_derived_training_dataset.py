@@ -21,6 +21,30 @@ def digest(path: Path) -> str:
 
 
 class PublishDerivedTrainingDatasetTest(unittest.TestCase):
+    def test_public_card_does_not_claim_private_noncommercial_or_mined_data(self) -> None:
+        args = SimpleNamespace(
+            title="Public fixture",
+            source_dataset=[],
+            mining_manifest=None,
+            mining_audit=None,
+            quality_audit=None,
+            benchmark_overlap_audit=None,
+            public=True,
+        )
+        card = dataset_card(
+            args,
+            {
+                "rows": 2,
+                "manifest": {"release_eligible": True},
+                "overlap": None,
+            },
+        )
+        self.assertIn("release eligible: **true**", card)
+        self.assertIn("visibility: **public**", card)
+        self.assertIn("bootstrap negative", card)
+        self.assertNotIn("non-commercial", card)
+        self.assertNotIn("exact float32 score", card)
+
     def test_public_rights_require_row_level_source_revision_and_license(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             provenance = Path(temporary) / "provenance.jsonl"

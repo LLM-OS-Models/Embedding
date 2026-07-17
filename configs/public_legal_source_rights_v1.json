@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "policy_id": "public-legal-source-rights-v1",
+  "reviewed_at": "2026-07-17",
+  "dataset_license": "other",
+  "sources": {
+    "legalize-kr/legalize-kr": {
+      "revision": "db3cd760c14042ee04fd9166e1bdbb662fc999bc",
+      "source_url": "https://github.com/legalize-kr/legalize-kr",
+      "license": "Korean Copyright Act Article 7 official legal text; MIT repository structure and metadata",
+      "redistribution_allowed": true,
+      "rights_basis": [
+        "https://www.law.go.kr/LSW/joStmdInfoP.do?joBrNo=00&joNo=0007&lsiSeq=148848",
+        "https://github.com/legalize-kr/legalize-kr#라이선스"
+      ]
+    },
+    "legalize-kr/admrule-kr": {
+      "revision": "64a5a272909ab5bc077b0ad9519ef31de8febb46",
+      "source_url": "https://github.com/legalize-kr/admrule-kr",
+      "license": "Korean Copyright Act Article 7 official administrative text; MIT repository structure and metadata",
+      "redistribution_allowed": true,
+      "rights_basis": [
+        "https://www.law.go.kr/LSW/joStmdInfoP.do?joBrNo=00&joNo=0007&lsiSeq=148848",
+        "https://github.com/legalize-kr/admrule-kr#라이선스"
+      ]
+    },
+    "legalize-kr/precedent-kr": {
+      "revision": "40cd00e54df19d98562abb170c8ff51fd6fe2c2e",
+      "source_url": "https://github.com/legalize-kr/precedent-kr",
+      "license": "Korean Copyright Act Article 7 official judicial decision text; MIT repository structure and metadata",
+      "redistribution_allowed": true,
+      "rights_basis": [
+        "https://www.law.go.kr/LSW/joStmdInfoP.do?joBrNo=00&joNo=0007&lsiSeq=148848",
+        "https://github.com/legalize-kr/precedent-kr#라이선스"
+      ]
+    },
+    "legalize-kr/ordinance-kr": {
+      "revision": "6443e5dd5833d863219064cd362111f516430bec",
+      "source_url": "https://github.com/legalize-kr/ordinance-kr",
+      "license": "Korean Copyright Act Article 7 official ordinance text; MIT repository structure and metadata",
+      "redistribution_allowed": true,
+      "rights_basis": [
+        "https://www.law.go.kr/LSW/joStmdInfoP.do?joBrNo=00&joNo=0007&lsiSeq=148848",
+        "https://github.com/legalize-kr/ordinance-kr#라이선스"
+      ]
+    }
+  }
+}
