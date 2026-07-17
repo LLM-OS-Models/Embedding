@@ -232,6 +232,7 @@ def merge(args: argparse.Namespace, validated: dict[str, Any], staging: Path) ->
             "weights_sha256": validated["adapter_info"]["weights_sha256"],
             "config_sha256": validated["adapter_info"]["config_sha256"],
         },
+        "adapter_config": validated["adapter_info"]["config"],
         "selection": {
             "report_sha256": validated["selection_sha256"],
             "signal": validated["selection"]["selection_signal"],
@@ -242,8 +243,13 @@ def merge(args: argparse.Namespace, validated: dict[str, Any], staging: Path) ->
             "visibility": "public",
             "release_eligible": True,
         },
-        "merge": {"safe_merge": True, "dtype": "bfloat16"},
+        "merge": {
+            "safe_merge": True,
+            "requested_dtype": "bfloat16",
+            "dtype": "bfloat16",
+        },
         "parity": asdict(parity),
+        "probe": {"metrics": asdict(parity)},
         "sentence_transformers_contract": saved_contract,
         "model": {"weights_sha256": weights_sha},
     }

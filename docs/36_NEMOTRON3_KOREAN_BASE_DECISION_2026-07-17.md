@@ -89,6 +89,8 @@ masked mean, L2 normalize, query-only 고정 prompt를 보존한다. PEFT adapte
 `safe_merge` 뒤의 한국어/영어 probe row cosine 및 모든 pairwise score 차이가 고정 gate를
 통과한 뒤에만 sibling staging을 최종 model directory로 원자 rename한다. base OpenMDW
 license/NOTICE와 adapter·selection·training manifest SHA도 merge report에 묶는다.
+최종 public publisher도 upstream lineage가 Nemotron이면 `masked_mean+Ministral3Model`,
+Qwen이면 `last_token`을 별도 검증하고 카드의 방법 설명에 실제 pooling을 넣는다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를

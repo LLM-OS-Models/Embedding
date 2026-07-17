@@ -20,6 +20,7 @@ from scripts.publish_best_embedding_model import (
     upload_model_folder,
     validate_comprehensive_summary,
     validate_public_release_approval,
+    validate_embedding_contract_for_evidence,
     is_model_soup,
     weights_sha,
 )
@@ -57,6 +58,25 @@ def comprehensive_payload(model: Path, weights_sha256: str) -> dict:
 
 
 class PublishBestModelTests(unittest.TestCase):
+    def test_nemotron_publication_accepts_only_masked_mean_contract(self) -> None:
+        evidence = {
+            "upstream_base_models": [
+                {
+                    "model": "nvidia/Nemotron-3-Embed-8B-BF16",
+                    "revision": "a" * 40,
+                }
+            ],
+            "sentence_transformers_contract": {
+                "architecture": "Ministral3Model",
+                "pooling": "masked_mean",
+                "normalize": True,
+            },
+        }
+        validate_embedding_contract_for_evidence(evidence)
+        evidence["sentence_transformers_contract"]["pooling"] = "last_token"
+        with self.assertRaisesRegex(ValueError, "contract drifted"):
+            validate_embedding_contract_for_evidence(evidence)
+
     def test_final_upload_staging_is_isolated_sanitized_and_fully_bound(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

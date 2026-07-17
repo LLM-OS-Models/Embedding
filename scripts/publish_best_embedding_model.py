@@ -477,6 +477,17 @@ def upload_model_folder(
     require_remote_visibility(api, repo_id, public=public)
 
 
+def validate_embedding_contract_for_evidence(evidence: dict[str, Any]) -> None:
+    contract = evidence.get("sentence_transformers_contract", {})
+    bases = lineage_from_evidence(evidence, context="publication evidence")
+    nemotron = any(row.get("model") == "nvidia/Nemotron-3-Embed-8B-BF16" for row in bases)
+    expected_pooling = "masked_mean" if nemotron else "last_token"
+    if contract.get("pooling") != expected_pooling or contract.get("normalize") is not True:
+        raise ValueError("Merged SentenceTransformers contract drifted")
+    if nemotron and contract.get("architecture") != "Ministral3Model":
+        raise ValueError("Merged Nemotron architecture contract drifted")
+
+
 def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     model_dir = args.model_dir.resolve()
     evidence_paths = [
@@ -541,9 +552,7 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         evidence_dir=model_dir,
         context=str(model_evidence_path),
     )
-    contract = model_evidence.get("sentence_transformers_contract", {})
-    if contract.get("pooling") != "last_token" or contract.get("normalize") is not True:
-        raise ValueError("Merged SentenceTransformers contract drifted")
+    validate_embedding_contract_for_evidence(model_evidence)
     if sionic.get("completed_tasks") != 9 or set(sionic.get("scores", {})) != set(
         SIONIC_ORDER
     ):
@@ -816,6 +825,8 @@ def build_card(
         f"{row['model']}@{row['revision']}" for row in upstream_bases
     )
     upstream_label = " + ".join(upstream_ids)
+    embedding_contract = evidence.get("sentence_transformers_contract", {})
+    pooling_label = str(embedding_contract.get("pooling", "last_token"))
     if len(upstream_ids) == 1:
         base_model_yaml = f"base_model: {upstream_ids[0]}"
     else:
@@ -851,17 +862,17 @@ def build_card(
         method_intro = (
             "독립 LoRA factor를 직접 평균하지 않고 safe-merged full transformer weight를 "
             "FP32로 가중 평균한 한국어 embedding soup 후보다. 고정 coefficient와 source "
-            "hash는 soup_report.json에 기록했고 last-token/L2 계약을 검증했다."
+            f"hash는 soup_report.json에 기록했고 {pooling_label}/L2 계약을 검증했다."
         )
     else:
         method_intro = (
             f"{upstream_label} 계보 모델의 상위 transformer block을 부분 full-parameter update한 "
             "한국어 retrieval 성능 후보다. optimizer state를 제외한 SentenceTransformers "
-            "artifact를 만들고 last-token/L2 계약과 실제 embedding probe를 검증했다."
+            f"artifact를 만들고 {pooling_label}/L2 계약과 실제 embedding probe를 검증했다."
             if full_update
             else f"{upstream_label} 계보를 한국어 retrieval용 contrastive fine-tuning한 연구·비상업 "
             "성능 후보다. PEFT adapter를 base에 safe-merge하고 병합 전후 embedding parity와 "
-            "SentenceTransformers last-token/L2/prompt 계약을 검증했다."
+            f"SentenceTransformers {pooling_label}/L2/prompt 계약을 검증했다."
         )
     clean_section = ""
     if clean is not None:
