@@ -48,8 +48,12 @@ FAISS 최신 wheel이 NumPy 2.x를 끌어오면 이 H100 이미지의 RAPIDS/Mod
 제약과 충돌하므로 extras 파일의 두 버전을 함께 설치한다.
 
 ```bash
-.venv-mteb/bin/python -m pip install -r requirements/mteb-extras.txt
+scripts/bootstrap_mteb_env.sh
 ```
+
+이 bootstrap은 host에 `ensurepip`가 없는 재시작 환경에서도 repository-local
+`virtualenv` fallback을 사용하고, 마지막에 MTEB/FAISS/NumPy exact version과
+SentenceTransformers/Transformers/Torch/FlashAttention import gate를 실행한다.
 
 10K mining은 exact blockwise dot product를 사용한다. 250K–1M은 FAISS IVF/HNSW로
 candidate pool만 만들고, 최종 positive-relative filter와 teacher score는 별도 정확

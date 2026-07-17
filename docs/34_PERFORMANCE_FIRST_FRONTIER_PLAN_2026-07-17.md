@@ -302,7 +302,7 @@ legacy warm-start` 순으로 한 요소씩 비교한다.
 2. 공개 HF asset을 unauthenticated exact revision으로 복원 — **dataset 13개와 core/teacher 8B 4개 완료**
 3. 법률 Git 4개를 NFS에 shallow가 아닌 pinned commit으로 복원 — **완료; exact HEAD와 312,581 Markdown 확인**
 4. model shard/file SHA, dataset row/file SHA 검증 — **HF asset과 법률 inventory 완료**
-5. NFS-only virtualenv와 cache 환경 생성 — **학습 환경 완료**
+5. NFS-only virtualenv와 cache 환경 생성 — **학습·MTEB/FAISS 평가 환경 완료**
 6. Qwen/Comsat baseline smoke encoding과 evaluator parity 확인
 
 ### R1 — 과거 baseline 재현

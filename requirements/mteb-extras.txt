@@ -2,3 +2,7 @@
 # compatible with the CUDA/RAPIDS/ModelOpt packages present on the H100 image.
 faiss-cpu==1.14.3
 numpy==1.26.4
+# Transformers 5.14 imports a newer torch.distributed.tensor.DTensor API than
+# the NVIDIA PyTorch 2.5a host image provides.  5.12.1 passes the actual
+# PreTrainedModel import gate and still supports Qwen3.
+transformers==5.12.1
