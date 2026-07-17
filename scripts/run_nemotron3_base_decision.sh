@@ -14,6 +14,12 @@ NEMOTRON_PATH="$ROOT/.cache/huggingface/hub/models--nvidia--Nemotron-3-Embed-8B-
   exit 2
 }
 
+ANONYMOUS_ONLINE_ENV=(
+  env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN
+  -u HF_HUB_OFFLINE -u TRANSFORMERS_OFFLINE -u HF_DATASETS_OFFLINE
+  HF_HUB_DISABLE_IMPLICIT_TOKEN=1
+  PYTHONPATH="$ROOT/third_party/mteb"
+)
 OFFLINE_ENV=(
   env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN
   HF_HUB_DISABLE_IMPLICIT_TOKEN=1 HF_HUB_OFFLINE=1
@@ -22,7 +28,7 @@ OFFLINE_ENV=(
 )
 PYTHON="$ROOT/.venv-mteb/bin/python"
 
-"${OFFLINE_ENV[@]}" "$PYTHON" "$ROOT/scripts/evaluate_sionic9.py" \
+"${ANONYMOUS_ONLINE_ENV[@]}" "$PYTHON" "$ROOT/scripts/evaluate_sionic9.py" \
   --model "$NEMOTRON_PATH" --revision "$NEMOTRON_REVISION" \
   --batch-size 64 --max-length 8192 \
   --attn-implementation flash_attention_2 \

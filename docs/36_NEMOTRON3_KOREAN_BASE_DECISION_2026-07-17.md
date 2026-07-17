@@ -71,8 +71,10 @@ outputs/embedding-cache/sionic9-nemotron3/full-fixed-prompt/
 ```
 
 Sionic 재개부터 Nemotron/Qwen/Comsat의 legal·multidomain 동등 비교까지 한 번에 실행하려면
-다음을 사용한다. 모든 모델 revision과 snapshot 존재 여부를 먼저 검사하고 network/token을
-차단한다.
+다음을 사용한다. 모든 모델 revision과 snapshot 존재 여부를 먼저 검사한다. Sionic 공개
+평가셋은 캐시에 없는 shard만 token 없이 익명으로 내려받고, 이미 로컬에 고정한 clean
+legal·multidomain 비교는 hard-offline으로 실행한다. 이 구분이 없으면 MIRACL 완료 뒤
+처음 필요한 Mr.TyDi dataset restore가 `HF_DATASETS_OFFLINE=1`에 막힌다.
 
 ```bash
 scripts/run_nemotron3_base_decision.sh
