@@ -11,7 +11,7 @@ Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 
 ## 한 줄 결론
 
 - 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
-- 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이며, 새 `Nemotron-3-Embed-8B-BF16@2b29550c`의 한국어 base 적합성 평가가 끝날 때까지 재개를 보류한다. Nemotron-3는 SQuADKorV1 `0.92032`로 Qwen 공개 reference `0.9063`과 Comsat `0.9168`을 먼저 넘었고 Sionic 9 전체를 resumable cache로 측정 중이다.
+- 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이며, 새 `Nemotron-3-Embed-8B-BF16@2b29550c`의 한국어 base 적합성 평가가 끝날 때까지 재개를 보류한다. Nemotron-3는 SQuADKorV1 `0.92032`로 Qwen 공개 reference `0.9063`과 Comsat `0.9168`을 먼저 넘었고, MIRACL 전체 `0.64994`를 완료한 뒤 Mr.TyDi를 50K atomic cache로 측정 중이다.
 - 현재 valid performance candidate는 **0개**다. Qwen 200K 직렬 queue는 종료 marker 없이 남아 polling하던 wrapper까지 정지 대상으로 분류했고, Nemotron-3 전체 평가가 base 결정을 내릴 때까지 학습은 재개하지 않는다. Nemotron이 clean selector에서도 우세하면 공개 재배포 가능한 데이터만 쓴 최단 적응으로 전환하고, 아니면 Qwen `checkpoint-1750`을 exact contract로 재개한다.
 - Hugging Face 산출물은 **학습/파생 데이터와 모델 모두 public이 기본**이다. 공개 repo에는 source revision·license·변환·dedup·benchmark overlap·모델 계보를 카드와 manifest로 함께 싣고 업로드 전후 visibility/file-set/SHA를 재검증한다. 권리 불명확·재배포 금지 source가 섞인 기존 performance track은 공개하지 않고 rights-safe 데이터로 다시 만든다. 점수 선택 오염을 막기 위한 고정 소규모 holdout만 비공개 예외다.
 - 본선은 `Qwen clean lineage`와 `Comsat Korean warm-start lineage`를 같은 200K 조건으로 비교하고, 승자 계보의 원본 base에서 동일 200K/token budget인 last4 partial-full challenger를 거친 뒤, 1M general → current-student wide ANN pool → Qwen reranker score-quantile KD/queue A/B → 400K target → 모든 stage의 single-best 대 동일-trajectory last-available-5 FP32 평균을 최종 legal/multidomain/robustness gate로 재선택하는 순서다.
