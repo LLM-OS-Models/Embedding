@@ -511,6 +511,16 @@ class PublishBestModelTests(unittest.TestCase):
         )
 
     def test_target_adapted_cards_link_exact_derived_datasets(self) -> None:
+        nemotron = training_dataset_repos(
+            {
+                "artifact_id": "public-legal-source-training-nemotron3-hn-v1",
+                "benchmark_adaptation": "target-adapted-legal-public-source",
+            }
+        )
+        self.assertEqual(
+            nemotron,
+            ["LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1"],
+        )
         scale = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-performance1m-current-student"}
         )

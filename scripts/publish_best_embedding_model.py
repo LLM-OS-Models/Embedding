@@ -721,6 +721,10 @@ def training_rows(manifest: dict[str, Any]) -> str:
 
 
 def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
+    if manifest.get("artifact_id") == "public-legal-source-training-nemotron3-hn-v1":
+        return [
+            "LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1"
+        ]
     adaptation = str(manifest.get("benchmark_adaptation", ""))
     if adaptation.startswith("target-adapted") and "combined" in adaptation:
         return [
