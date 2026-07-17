@@ -43,6 +43,7 @@ class DatasetAsset:
     revision: str
     destination: str
     files: tuple[FileContract, ...]
+    requires_token: bool = False
 
 
 @dataclass(frozen=True)
@@ -227,6 +228,32 @@ DATASETS = (
         ),
     ),
     DatasetAsset(
+        "cleanlegal10k-v2-text-strict",
+        "LLM-OS-Models2/korean-legal-source-heldout-retrieval-v2-text-strict",
+        "ce9d3bb57ca4dc5144753f6d0f8b4a2256851e97",
+        "outputs/evaluation/legal-source-heldout-i-v2-text-strict",
+        (
+            FileContract("queries.jsonl", None, "412bdf86ae0c87515948c7925477b210455ffe71584fe1916d976e164265fc49", 10_000),
+            FileContract("corpus.jsonl", None, "04b90c45f22ae3a09cae08eb84409a792725be28515700cf76b50eceb6fba94c", 10_000),
+            FileContract("qrels.jsonl", None, "1b33d648c4669f01a52d33712e227fcaa01dd117e5de1048b67e85dfb823782e", 10_000),
+            FileContract("provenance.jsonl", None, "1232dcdd7cc78f0bb2032d8a832e08f22c0dea2599d10b53bed8d8947ebe25bb", 10_000),
+            FileContract("manifest.json", None, "5455459ee9474430e0ba9f61be84d7a0a577f8f1a1f73f8981aefb6ef61a216e"),
+        ),
+        requires_token=True,
+    ),
+    DatasetAsset(
+        "legal-validation-v2-text-strict-512",
+        "LLM-OS-Models2/korean-embedding-legal-validation-v2-text-strict-512",
+        "8fdd1cad0007a9bfadf328d1702dcf6973c3c03d",
+        "outputs/data/validation/legal-source-heldout-i-v2-text-strict-512",
+        (
+            FileContract("validation.jsonl", None, "e95ccdf34d6de00292f84f22bfb28ae95eb0bcd9ed8cbb2120216f89701b2703", 512),
+            FileContract("provenance.jsonl", None, "a30cafb5491de73c991d15914556297a0df08e155d4b517658a8cbfadff5c517", 512),
+            FileContract("manifest.json", None, "1a108fe8b5c7c29a842773c11012acb04d12cda939321c8f782bec966eed6aa4"),
+        ),
+        requires_token=True,
+    ),
+    DatasetAsset(
         "blocklist",
         "LLM-OS-Models/korean-embedding-benchmark-blocklist-v1",
         "5e876f26606830cd4d663cd62806d1f4c36387c9",
@@ -317,6 +344,8 @@ def restore_dataset(asset: DatasetAsset, token: str | bool, cache_dir: Path, max
         raise RuntimeError("Install requirements/hf-tools.txt in a tools environment") from exc
     destination = ROOT / asset.destination
     print(f"DATASET {asset.key}: {asset.repo_id}@{asset.revision[:12]}")
+    if asset.requires_token and token is False and not local_only:
+        raise RuntimeError(f"Private dataset {asset.key} requires explicit --use-token")
     if local_only:
         if not destination.is_dir():
             raise FileNotFoundError(destination)
@@ -404,9 +433,32 @@ def main() -> None:
             raise SystemExit("--use-token was requested but HF_TOKEN is unavailable")
         token = loaded_token
     args.cache_dir.mkdir(parents=True, exist_ok=True)
-    selected_datasets = [
+    requested_datasets = [
         asset for asset in DATASETS if args.all or args.datasets or asset.key in requested
     ]
+    private_explicit_without_token = [
+        asset.key
+        for asset in requested_datasets
+        if asset.key in requested and asset.requires_token and not args.use_token and not args.local_only
+    ]
+    if private_explicit_without_token:
+        raise SystemExit(
+            "Private dataset asset requires --use-token: "
+            + ", ".join(private_explicit_without_token)
+        )
+    selected_datasets = [
+        asset
+        for asset in requested_datasets
+        if not asset.requires_token or args.use_token or args.local_only
+    ]
+    skipped_private = [
+        asset.key for asset in requested_datasets if asset not in selected_datasets
+    ]
+    if skipped_private:
+        print(
+            "SKIP private datasets without --use-token: "
+            + ", ".join(skipped_private)
+        )
     selected_models = [
         asset
         for asset in MODELS

@@ -59,6 +59,17 @@ class RestoreHfAssetsTests(unittest.TestCase):
         )
         self.assertEqual(teacher.group, "teacher")
 
+    def test_private_text_strict_assets_are_pinned_and_opt_in(self) -> None:
+        datasets = {asset.key: asset for asset in MODULE.DATASETS}
+        clean = datasets["cleanlegal10k-v2-text-strict"]
+        validation = datasets["legal-validation-v2-text-strict-512"]
+        self.assertTrue(clean.requires_token)
+        self.assertTrue(validation.requires_token)
+        self.assertEqual(clean.repo_id.split("/", 1)[0], "LLM-OS-Models2")
+        self.assertEqual(validation.repo_id.split("/", 1)[0], "LLM-OS-Models2")
+        self.assertEqual(clean.revision, "ce9d3bb57ca4dc5144753f6d0f8b4a2256851e97")
+        self.assertEqual(validation.revision, "8fdd1cad0007a9bfadf328d1702dcf6973c3c03d")
+
 
 if __name__ == "__main__":
     unittest.main()
