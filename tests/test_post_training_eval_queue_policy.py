@@ -57,6 +57,19 @@ def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
     assert "average_lora_checkpoints.py" in source
     assert "--last-n 5 --minimum-checkpoints 2" in source
     assert "last-available5-fp32-average-merged" in source
+    for later_run in (
+        "performance1m-lora-r64",
+        "reranker-listwise-kl07-queue4096-lora-r64",
+        "sionic-retrieval-family50-replay50-lora-r64",
+        "sionic-squad50-replay50-lora-r64",
+        "sionic-health50-replay50-lora-r64",
+        "sionic-autorag50-replay50-lora-r64",
+        "legal25-replay75-lora-r64",
+        "sionic-combined-target-lora-r64",
+    ):
+        assert later_run in source
+    assert "resolve_training_manifest" in source
+    assert "train.reranker-quantile-kd15.manifest.json" in source
 
 
 def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
@@ -65,7 +78,9 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
     selection_gate = frontier.index('[[ ! -s "$POST_EVAL_SELECTION" ]]', post_eval)
     scale = frontier.index("run_scale_1m_queue.sh", selection_gate)
     legal = frontier.index("run_legal_adaptation_queue.sh", scale)
-    assert post_eval < selection_gate < scale < legal
+    final_eval = frontier.index("run_post_training_eval_queue.sh", legal)
+    final_gate = frontier.index('[[ ! -s "$FINAL_EVAL_SELECTION" ]]', final_eval)
+    assert post_eval < selection_gate < scale < legal < final_eval < final_gate
     assert frontier.count("embedding_require_storage_headroom") >= 6
 
     scale_source = SCALE_QUEUE.read_text(encoding="utf-8")

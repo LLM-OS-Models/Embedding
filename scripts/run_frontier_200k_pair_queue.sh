@@ -25,6 +25,8 @@ POST_EVAL_LOG="$ROOT/outputs/post-training-eval-20260717-frontier"
 POST_EVAL_SELECTION="$POST_EVAL_LOG/clean-first-selection.json"
 SCALE_LOG="$ROOT/outputs/scale-1m-20260717-frontier"
 LEGAL_LOG="$ROOT/outputs/legal-adaptation-20260717-frontier"
+FINAL_EVAL_LOG="$ROOT/outputs/final-frontier-selection-20260717"
+FINAL_EVAL_SELECTION="$FINAL_EVAL_LOG/clean-first-selection.json"
 
 mkdir -p "$COMSAT_RUN"
 exec > >(tee -a "$QUEUE_LOG") 2>&1
@@ -138,5 +140,16 @@ env WAIT_PID= LOG_DIR="$LEGAL_LOG" \
   GENERAL_SELECTION="$ROOT/outputs/reranker-kd-20260717-frontier/clean-first-selection.json" \
   ENABLE_SIONIC_COMBINED_ADAPTATION=1 \
   bash "$ROOT/scripts/run_legal_adaptation_queue.sh"
+
+embedding_require_storage_headroom "$ROOT" 500 1000000
+embedding_require_storage_headroom /tmp 50 100000
+echo "[$(timestamp)] starting final all-stage best-vs-average clean selection"
+env WAIT_PID= LOG_DIR="$FINAL_EVAL_LOG" \
+  CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
+  bash "$ROOT/scripts/run_post_training_eval_queue.sh"
+if [[ ! -s "$FINAL_EVAL_SELECTION" ]]; then
+  echo "[$(timestamp)] final clean-first selection was not produced" >&2
+  exit 30
+fi
 
 echo "[$(timestamp)] frontier campaign queue completed"

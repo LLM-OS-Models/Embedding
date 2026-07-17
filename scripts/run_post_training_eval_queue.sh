@@ -29,6 +29,24 @@ RUNS=(
   qwen3-embedding-8b-ko-performance200k-lora-r64-b8
   comsat-embed-ko-8b-performance200k-lora-r64
   comsat-embed-ko-8b-performance200k-lora-r64-b8
+  qwen3-embedding-8b-ko-performance1m-lora-r64
+  qwen3-embedding-8b-ko-performance1m-lora-r64-b8
+  qwen3-embedding-8b-ko-performance1m-reranker-filter-only-lora-r64
+  qwen3-embedding-8b-ko-performance1m-reranker-listwise-kl07-lora-r64
+  qwen3-embedding-8b-ko-performance1m-reranker-listwise-kl07-queue4096-lora-r64
+  qwen3-embedding-8b-ko-performance1m-reranker-margin-mse07-lora-r64
+  qwen3-embedding-8b-ko-sionic-retrieval-family50-replay50-lora-r64
+  qwen3-embedding-8b-ko-sionic-retrieval-family50-replay50-lora-r64-b2
+  qwen3-embedding-8b-ko-sionic-squad50-replay50-lora-r64
+  qwen3-embedding-8b-ko-sionic-squad50-replay50-lora-r64-b4
+  qwen3-embedding-8b-ko-sionic-health50-replay50-lora-r64
+  qwen3-embedding-8b-ko-sionic-health50-replay50-lora-r64-b4
+  qwen3-embedding-8b-ko-sionic-autorag50-replay50-lora-r64
+  qwen3-embedding-8b-ko-sionic-autorag50-replay50-lora-r64-b4
+  qwen3-embedding-8b-ko-legal25-replay75-lora-r64
+  qwen3-embedding-8b-ko-legal25-replay75-lora-r64-b4
+  qwen3-embedding-8b-ko-sionic-combined-target-lora-r64
+  qwen3-embedding-8b-ko-sionic-combined-target-lora-r64-b4
   qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64
   qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64
   qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64
@@ -168,6 +186,60 @@ run_robustness_with_fallback() {
       --max-length 8192 --attn-implementation flash_attention_2 \
       --output-dir "$ROBUST_OUT" \
       --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_training_manifest() {
+  local model="$1" candidate
+  local candidates=()
+  case "$model" in
+    *reranker-*)
+      candidates+=("$ROOT/outputs/data/performance-v1/performance-1m/reranker-kd-pilot/train.reranker-quantile-kd15.manifest.json")
+      ;;
+    *sionic-combined-target*)
+      candidates+=("$ROOT/outputs/data/sionic-combined-target-v1/multidomain.manifest.json")
+      ;;
+    *sionic-retrieval-family50-replay50*)
+      candidates+=("$ROOT/outputs/data/performance-v1/sionic-retrieval-train-family-4146/faiss-current-r095-n7.retrieval_family50-replay50.manifest.json")
+      ;;
+    *sionic-squad50-replay50*)
+      candidates+=("$ROOT/outputs/data/performance-v1/sionic-squad-train-60k/faiss-current-r095-n7.squad50-replay50.manifest.json")
+      ;;
+    *sionic-health50-replay50*)
+      candidates+=("$ROOT/outputs/data/performance-v1/sionic-health-multilingual-100k/faiss-current-r095-n7.health50-replay50.manifest.json")
+      ;;
+    *sionic-autorag50-replay50*)
+      candidates+=("$ROOT/outputs/data/performance-v1/sionic-autorag-domain-100k/faiss-current-r095-n7.autorag50-replay50.manifest.json")
+      ;;
+    *legal25-replay75*)
+      candidates+=("$ROOT/outputs/data/legal-performance-v1/faiss-r095-n7.legal25-replay75.manifest.json")
+      ;;
+    *performance1m*)
+      candidates+=(
+        "$ROOT/outputs/data/performance-v1/performance-1m/faiss-current-r095-n7.homogeneous-b16.manifest.json"
+        "$ROOT/outputs/data/performance-v1/performance-1m/homogeneous-b16.manifest.json"
+        "$ROOT/outputs/data/performance-v1/performance-1m/manifest.json"
+      )
+      ;;
+    *performance200k*)
+      candidates+=("$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json")
+      ;;
+    *performance50k*)
+      candidates+=("$ROOT/outputs/data/performance-v1/pilot-50k/homogeneous-b16.manifest.json")
+      ;;
+    *)
+      candidates+=(
+        "$ROOT/data/processed/ko_triplet_pilot_10k/train.hn-qwen3-r095-n4.jsonl.manifest.json"
+        "$ROOT/data/processed/ko_triplet_pilot_10k/manifest.json"
+      )
+      ;;
+  esac
+  for candidate in "${candidates[@]}"; do
+    if [[ -s "$candidate" ]]; then
+      printf '%s\n' "$candidate"
       return 0
     fi
   done
@@ -325,14 +397,7 @@ if [[ -s "$SELECTION" ]]; then
   else
     echo "[$(timestamp)] final selected model comprehensive text evaluation failed"
   fi
-  if [[ "$best_model" == *performance200k* ]]; then
-    training_manifest="$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json"
-  elif [[ "$best_model" == *performance50k* ]]; then
-    training_manifest="$ROOT/outputs/data/performance-v1/pilot-50k/homogeneous-b16.manifest.json"
-  else
-    training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/train.hn-qwen3-r095-n4.jsonl.manifest.json"
-    [[ -s "$training_manifest" ]] || training_manifest="$ROOT/data/processed/ko_triplet_pilot_10k/manifest.json"
-  fi
+  training_manifest="$(resolve_training_manifest "$best_model" 2>/dev/null)" || training_manifest=""
   if [[ -s "$official_summary" && -s "$sionic_summary" \
       && -s "$comprehensive_summary" && -s "$training_manifest" ]]; then
     clean_args=()
