@@ -34,15 +34,35 @@ MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
 MODEL_DIR="$ROOT/$MODEL_REL"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-scale1m"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-scale1m"
+MULTIDOMAIN_OUT="$ROOT/outputs/evaluation/multidomain-selection"
+MULTIDOMAIN_DATASET="$ROOT/outputs/evaluation/multidomain-selection-heldout-v1"
 POSTTRAIN_SELECTION="${POSTTRAIN_SELECTION:-$ROOT/outputs/post-capacity-eval-20260717-frontier/clean-first-selection.json}"
 POSTTRAIN_UPLOAD_REPORT="${POSTTRAIN_UPLOAD_REPORT:-${POSTTRAIN_SELECTION%/*}/private-clean-candidate-upload.json}"
 SCALE_SELECTION="$LOG_DIR/clean-first-selection.json"
 SCALE_UPLOAD_REPORT="$LOG_DIR/private-clean-candidate-upload.json"
-mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
+mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$MULTIDOMAIN_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
 unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
 PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
+OFFLINE_ENV=(
+  env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN
+  EMBEDDING_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
+)
+read -r -a EVAL_BATCHES <<< "${CAMPAIGN_EVAL_BATCH_SIZES:-192 128 64 32 16 8 4 2}"
+for batch in "${EVAL_BATCHES[@]}"; do
+  [[ "$batch" =~ ^[1-9][0-9]*$ ]] || {
+    echo "Invalid evaluation batch size: $batch" >&2
+    exit 2
+  }
+done
+if ! "${OFFLINE_ENV[@]}" "$UTILITY_PYTHON" \
+    "$ROOT/scripts/build_multidomain_selection_holdout.py" \
+    --output-dir "$MULTIDOMAIN_DATASET" --verify-only \
+    >"$LOG_DIR/multidomain-dataset-verification.json"; then
+  echo "fixed multidomain selection dataset verification failed" >&2
+  exit 2
+fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
@@ -346,8 +366,9 @@ else
   echo "[$(timestamp)] public intermediate evaluation disabled for $RUN_NAME"
 fi
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
-for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
+for batch in "${EVAL_BATCHES[@]}"; do
   run_stage "clean-legal-$RUN_NAME-b$batch" \
+    "${OFFLINE_ENV[@]}" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_legal_source_holdout.py" \
     --model "$MODEL_REL" --revision "$local_revision" --batch-size "$batch" \
     --max-length 8192 --attn-implementation flash_attention_2 \
@@ -356,8 +377,9 @@ for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
 done
 CLEAN_SUMMARY="$CLEAN_OUT/$safe/$local_revision/summary.json"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
-for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
+for batch in "${EVAL_BATCHES[@]}"; do
   run_stage "robustness-$RUN_NAME-b$batch" \
+    "${OFFLINE_ENV[@]}" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_conversational_noise_robustness.py" \
     --model "$MODEL_REL" --revision "$local_revision" --batch-size "$batch" \
     --max-length 8192 --attn-implementation flash_attention_2 \
@@ -365,13 +387,26 @@ for batch in "${CAMPAIGN_EVAL_BATCH_SIZE:-192}"; do
     --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" && break
 done
 ROBUST_SUMMARY="$ROBUST_OUT/$safe/$local_revision/summary.json"
-if [[ ! -s "$CLEAN_SUMMARY" || ! -s "$ROBUST_SUMMARY" ]]; then
-  echo "[$(timestamp)] 1M clean/robustness evidence is incomplete" >&2
+for batch in "${EVAL_BATCHES[@]}"; do
+  run_stage "multidomain-$RUN_NAME-b$batch" \
+    "${OFFLINE_ENV[@]}" \
+    "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_multidomain_selection.py" \
+    --model "$MODEL_REL" --revision "$local_revision" --batch-size "$batch" \
+    --max-length 8192 --attn-implementation flash_attention_2 \
+    --dataset-dir "$MULTIDOMAIN_DATASET" --output-dir "$MULTIDOMAIN_OUT" \
+    --embedding-cache-dir "$ROOT/outputs/embedding-cache/multidomain-selection" && break
+done
+MULTIDOMAIN_SUMMARY="$MULTIDOMAIN_OUT/$safe/$local_revision/summary.json"
+if [[ ! -s "$CLEAN_SUMMARY" || ! -s "$ROBUST_SUMMARY" \
+    || ! -s "$MULTIDOMAIN_SUMMARY" ]]; then
+  echo "[$(timestamp)] 1M clean/robustness/multidomain evidence is incomplete" >&2
   exit 6
 fi
 run_stage "select-clean-$RUN_NAME" \
+  "${OFFLINE_ENV[@]}" \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_clean_model.py" \
-  "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
+  "$CLEAN_OUT" "$ROBUST_OUT" --multidomain-root "$MULTIDOMAIN_OUT" \
+  --workspace-root "$ROOT" --clean-epsilon 0.005 --multidomain-epsilon 0.002 \
   --output "$SCALE_SELECTION" --disqualification-root "$ROOT/outputs" \
   --candidate-model "$MODEL_REL" || exit 6
 selected_scale_model="$(jq -r '.best.model // empty' "$SCALE_SELECTION")"

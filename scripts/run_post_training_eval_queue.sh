@@ -2,9 +2,9 @@
 set -uo pipefail
 
 # After training exits, merge each internally selected checkpoint and evaluate
-# every local candidate on the Grade-I legal holdout plus its noise robustness
-# companion.  Select within a clean-score near-tie without public benchmark
-# input.  Only then run Sionic9 and official Korean MTEB once on the winner.
+# every local candidate on the Grade-I legal holdout, fixed non-public
+# finance/knowledge board, and paired-noise robustness companion. Select with
+# no public benchmark input, then run public suites once on the winner.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
@@ -22,6 +22,8 @@ OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain-contract-v1"
 COMPREHENSIVE_OUT="$ROOT/outputs/evaluation/comprehensive-text-v1-posttrain"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
+MULTIDOMAIN_OUT="$ROOT/outputs/evaluation/multidomain-selection"
+MULTIDOMAIN_DATASET="$ROOT/outputs/evaluation/multidomain-selection-heldout-v1"
 MODEL_ROOT="$ROOT/artifacts/models"
 
 RUNS=(
@@ -72,6 +74,7 @@ SOUP_MODELS=(
 mkdir -p \
   "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT" "$COMPREHENSIVE_OUT" \
   "$CLEAN_OUT" "$ROBUST_OUT" "$MODEL_ROOT"
+mkdir -p "$MULTIDOMAIN_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
 unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
@@ -91,6 +94,13 @@ OFFLINE_ENV=(
   env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN
   EMBEDDING_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 )
+if ! "${OFFLINE_ENV[@]}" "$UTILITY_PYTHON" \
+    "$ROOT/scripts/build_multidomain_selection_holdout.py" \
+    --output-dir "$MULTIDOMAIN_DATASET" --verify-only \
+    >"$LOG_DIR/multidomain-dataset-verification.json"; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] fixed multidomain selection dataset verification failed" >&2
+  exit 2
+fi
 candidate_args=()
 LAST_SIONIC_SUMMARY=""
 LAST_OFFICIAL_SUMMARY=""
@@ -204,6 +214,23 @@ run_robustness_with_fallback() {
       --max-length 8192 --attn-implementation flash_attention_2 \
       --output-dir "$ROBUST_OUT" \
       --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_multidomain_with_fallback() {
+  local label="$1" model="$2" revision="$3"
+  local batch
+  for batch in "${EVAL_BATCHES[@]}"; do
+    if run_stage "multidomain-$label-b$batch" \
+      "${OFFLINE_ENV[@]}" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_multidomain_selection.py" \
+      --model "$model" --revision "$revision" --batch-size "$batch" \
+      --max-length 8192 --attn-implementation flash_attention_2 \
+      --dataset-dir "$MULTIDOMAIN_DATASET" --output-dir "$MULTIDOMAIN_OUT" \
+      --embedding-cache-dir "$ROOT/outputs/embedding-cache/multidomain-selection"; then
       return 0
     fi
   done
@@ -347,6 +374,7 @@ for run_name in "${RUNS[@]}"; do
     candidate_args+=(--candidate-model "$merged_rel")
     if run_clean_with_fallback "$evaluation_label" "$merged_rel" "$revision"; then
       run_robustness_with_fallback "$evaluation_label" "$merged_rel" "$revision" || true
+      run_multidomain_with_fallback "$evaluation_label" "$merged_rel" "$revision" || true
     fi
   done
 
@@ -386,6 +414,9 @@ for run_name in "${RUNS[@]}"; do
       "$run_name-last-available5-fp32-average" \
       "$average_merged_rel" "$average_revision"; then
     run_robustness_with_fallback \
+      "$run_name-last-available5-fp32-average" \
+      "$average_merged_rel" "$average_revision" || true
+    run_multidomain_with_fallback \
       "$run_name-last-available5-fp32-average" \
       "$average_merged_rel" "$average_revision" || true
   fi
@@ -428,6 +459,7 @@ for run_name in "${FULL_RUNS[@]}"; do
   candidate_args+=(--candidate-model "$packaged_rel")
   if run_clean_with_fallback "$run_name" "$packaged_rel" "$revision"; then
     run_robustness_with_fallback "$run_name" "$packaged_rel" "$revision" || true
+    run_multidomain_with_fallback "$run_name" "$packaged_rel" "$revision" || true
   fi
 done
 
@@ -441,6 +473,7 @@ for soup_name in "${SOUP_MODELS[@]}"; do
   candidate_args+=(--candidate-model "$soup_rel")
   if run_clean_with_fallback "$soup_name" "$soup_rel" "$revision"; then
     run_robustness_with_fallback "$soup_name" "$soup_rel" "$revision" || true
+    run_multidomain_with_fallback "$soup_name" "$soup_rel" "$revision" || true
   fi
 done
 
@@ -450,7 +483,8 @@ if (( ${#candidate_args[@]} > 0 )); then
   run_stage "select-best-clean-near-tie-robustness" \
     "${OFFLINE_ENV[@]}" \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_clean_model.py" \
-    "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
+    "$CLEAN_OUT" "$ROBUST_OUT" --multidomain-root "$MULTIDOMAIN_OUT" \
+    --workspace-root "$ROOT" --clean-epsilon 0.005 --multidomain-epsilon 0.002 \
     --output "$SELECTION" --disqualification-root "$ROOT/outputs" \
     "${candidate_args[@]}" || true
 else
@@ -524,6 +558,7 @@ else
   fi
   clean_summary="$(jq -r '.best.clean_summary' "$SELECTION")"
   robustness_summary="$(jq -r '.best.robustness_summary' "$SELECTION")"
+  multidomain_summary="$(jq -r '.best.multidomain_summary' "$SELECTION")"
   sionic_summary=""
   official_summary=""
   comprehensive_summary=""
@@ -551,15 +586,15 @@ else
   fi
   training_manifest="$(resolve_training_manifest "$best_model" 2>/dev/null)" || training_manifest=""
   if [[ ! -s "$official_summary" || ! -s "$sionic_summary" \
-      || ! -s "$comprehensive_summary" || ! -s "$training_manifest" ]]; then
+      || ! -s "$comprehensive_summary" || ! -s "$training_manifest" \
+      || ! -s "$clean_summary" || ! -s "$robustness_summary" \
+      || ! -s "$multidomain_summary" ]]; then
     echo "[$(timestamp)] final evaluation evidence or training manifest is incomplete" >&2
     exit 26
   fi
-  clean_args=()
-  [[ -s "$clean_summary" ]] && clean_args+=(--clean-summary "$clean_summary")
-  robustness_args=()
-  [[ -s "$robustness_summary" ]] && \
-    robustness_args+=(--robustness-summary "$robustness_summary")
+  clean_args=(--clean-summary "$clean_summary")
+  robustness_args=(--robustness-summary "$robustness_summary")
+  multidomain_args=(--multidomain-summary "$multidomain_summary")
   if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
     echo "[$(timestamp)] Hugging Face token file is required for final private publication" >&2
     exit 27
@@ -573,6 +608,7 @@ else
     --training-manifest "$training_manifest" \
     "${clean_args[@]}" \
     "${robustness_args[@]}" \
+    "${multidomain_args[@]}" \
     --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
     --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
     --report-output "$FINAL_PUBLICATION_REPORT" --upload || exit 27

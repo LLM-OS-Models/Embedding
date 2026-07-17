@@ -11,9 +11,9 @@ Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 
 ## 한 줄 결론
 
 - 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
-- 현재 valid performance candidate는 **0개**다. 재시작으로 소실된 공개 data/model cache를 exact revision으로 복원했고, 2026-07-17 11:46 KST부터 Qwen clean-lineage 200K를 처음부터 다시 학습 중이다. 성공 종료 뒤 Comsat 200K → clean-only 계보 비교 → last4 capacity 비교 → 1M → 타깃/법률 통합 적응까지 단일 직렬 queue가 이어받는다.
-- 본선은 `Qwen clean lineage`와 `Comsat Korean warm-start lineage`를 같은 200K 조건으로 clean-only 비교하고, 승자 계보의 원본 base에서 동일 200K/token budget인 last4 partial-full challenger를 거친 뒤, 1M general → current-student wide ANN pool → Qwen reranker score-quantile KD/queue A/B → 400K target → 모든 stage의 single-best 대 동일-trajectory last-available-5 FP32 평균을 최종 clean-first로 재선택하는 순서다.
-- checkpoint는 public score가 아니라 Grade-I clean retrieval에서 먼저 고르며 NDCG@10 차이 `0.002` 이하는 near-tie로 처리합니다. 기존 512 validation의 200K 전량 중복을 발견해 Qwen/Comsat 200K는 양쪽 모두 보존된 모든 checkpoint를 동일한 독립 10K·noise robustness로 다시 고릅니다. 이후 1M/KD/전문가 run은 source-document-held-out 512 내부 신호와 last-available-5 FP32 평균을 함께 clean-first 비교합니다. Sionic 9와 공식 Korean 6은 local winner에 final-once로 실행합니다.
+- 현재 valid performance candidate는 **0개**다. 재시작으로 소실된 공개 data/model cache를 exact revision으로 복원했고, 2026-07-17 11:46 KST부터 Qwen clean-lineage 200K를 처음부터 다시 학습 중이다. 성공 종료 뒤 Comsat 200K → legal-guard multidomain 계보 비교 → last4 capacity 비교 → 1M → 타깃/법률 통합 적응까지 단일 직렬 queue가 이어받는다.
+- 본선은 `Qwen clean lineage`와 `Comsat Korean warm-start lineage`를 같은 200K 조건으로 비교하고, 승자 계보의 원본 base에서 동일 200K/token budget인 last4 partial-full challenger를 거친 뒤, 1M general → current-student wide ANN pool → Qwen reranker score-quantile KD/queue A/B → 400K target → 모든 stage의 single-best 대 동일-trajectory last-available-5 FP32 평균을 최종 legal/multidomain/robustness gate로 재선택하는 순서다.
+- checkpoint는 public score가 아니라 Grade-I legal 10K guard와 고정 비공개 finance/knowledge 1.9K에서 먼저 고릅니다. 기존 512 validation의 200K 전량 중복을 발견해 Qwen/Comsat 200K는 양쪽 모두 보존된 모든 checkpoint를 동일한 legal·multidomain·noise 조건으로 다시 고릅니다. 이후 1M/KD/전문가 run은 source-document-held-out 512 내부 신호와 last-available-5 FP32 평균을 같은 최종 gate에서 비교합니다. Sionic 9와 공식 Korean 6은 local winner에 final-once로 실행합니다.
 - Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
 - Comsat의 `0.7930`은 일반 MTEB SOTA가 아니라, 자체 선택한 한국어 retrieval 9종의 macro `NDCG@10`입니다. Qwen3-Embedding-8B 대비 차이는 `+0.0105`입니다.
 - 가장 직접적인 학습법은 raw-text LM CPT가 아니라 `query / positive / hard negatives`를 이용한 **continued contrastive fine-tuning(InfoNCE)** 입니다.
@@ -84,7 +84,7 @@ row는 101개였다.
 
 ### 자동 캠페인 실측 결과
 
-아래 block은 최종 clean winner가 Sionic 9와 공식 Korean 6을 final-once로 끝낸 뒤
+아래 block은 최종 local winner가 Sionic 9와 공식 Korean 6을 final-once로 끝낸 뒤
 자동 갱신·push한다. 중간 stage의 public 평가는 기본적으로 비활성화한다.
 
 <!-- CAMPAIGN_RESULTS_START -->
@@ -129,15 +129,16 @@ row는 101개였다.
 | 법률 holdout 후보 snapshot | v2 재생성용 pinned 중간 증거 242,675행·JSONL 16개·추출 manifest 16개를 private 보존. snapshot manifest `dca58ecb…`, 원격 visibility/allowlist/모든 콘텐츠 SHA 재검증 | [`LLM-OS-Models2/...-shards12-15@18cbfef7`](https://huggingface.co/datasets/LLM-OS-Models2/korean-legal-holdout-candidates-v1-shards12-15/tree/18cbfef7162fe07470d5377e198062301698ef33) |
 | Clean 법률 retrieval 10K v2 text-strict | 242,675 candidate의 선언 train-role text 교집합 248개를 차단; 최종 query/positive training-text 0, source-document 0, benchmark exact 0, 10K 고유 문서. 독립 verify 통과, 원격 SHA/allowlist/private 재검증 | [`LLM-OS-Models2/...-v2-text-strict@ce9d3bb5`](https://huggingface.co/datasets/LLM-OS-Models2/korean-legal-source-heldout-retrieval-v2-text-strict/tree/ce9d3bb57ca4dc5144753f6d0f8b4a2256851e97) |
 | Trainer validation 정정 | legacy 512 query-positive pair가 active 200K에 512/512 포함됨을 확인. active Qwen eval loss는 완료/finite 신호로만 사용하고 모든 archived checkpoint를 clean v2 10K로 재선택; 이후 run은 Grade-I text-strict 512·HN4·전체 예정 train 역할 exact overlap 0 사용. 원격 SHA/allowlist/private 재검증 | [`LLM-OS-Models2/...-512@8fdd1cad`](https://huggingface.co/datasets/LLM-OS-Models2/korean-embedding-legal-validation-v2-text-strict-512/tree/8fdd1cad0007a9bfadf328d1702dcf6973c3c03d) |
+| 고정 비공개 다영역 selector | finance 900 + knowledge 1,000; 선택 query training overlap 0, knowledge query/corpus training overlap 0, 공개 benchmark blocklist overlap 0. finance corpus 1,373건 노출을 target-dev로 명시. private visibility·전체 원격 파일/SHA exact 검증 | [`LLM-OS-Models2/...-heldout-v1@d261e1e3`](https://huggingface.co/datasets/LLM-OS-Models2/korean-embedding-multidomain-selection-heldout-v1/tree/d261e1e3ff64e13828e73017fe2c312aae575709) |
 | 대화형 noise robustness | prompt on/off × noise 0/1/5%, exact rank·cache·모델 카드 자동화; baseline 실행 대기 | [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md) |
 | 200K 학습 backend | 2026-07-17 exact homogeneous-order 5+5-step: SDPA 11.96, FA2 11.53 s/step(1.0373x); FA2 탈락, exact 검증된 `.venv-train-fa2 + SDPA` 선택 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
 | runtime storage watchdog | workspace 500GiB/100만 inode, root 100GiB/20만 inode, `/tmp` 50GiB/10만 inode를 30초마다 검사. 2회 연속 실패 때만 시작 시 검증한 우리 campaign PGID에 TERM→30초→KILL; 다른 프로세스는 신호하지 않음 | [`watch_storage_headroom.sh`](scripts/watch_storage_headroom.sh) |
-| 200K production·capacity | 2026-07-17 11:46 KST Qwen 시작; 199,904행·3,123-step, 양쪽 shuffle off, offline/token-free. legacy validation loss는 선택에서 제외하고 Qwen/Comsat 양쪽의 모든 archived checkpoint를 같은 clean 10K·robustness로 평가. 종료 뒤 clean-only 계보 선택 → 승자 raw base last4 partial-full 200K → 1M/KD/전문가/수프/최종 clean selection을 자동 실행 | [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
+| 200K production·capacity | 2026-07-17 11:46 KST Qwen 시작; 199,904행·3,123-step, 양쪽 shuffle off, offline/token-free. legacy validation loss는 선택에서 제외하고 Qwen/Comsat 양쪽의 모든 archived checkpoint를 같은 legal 10K·다영역 1.9K·robustness로 평가. 종료 뒤 계보 선택 → 승자 raw base last4 partial-full 200K → 1M/KD/전문가/수프/최종 선택을 자동 실행 | [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
 | last4 partial-full capacity challenger | Qwen/Comsat clean 승자 계보 하나만 동일 199,904행·3,123-step·global batch 64로 비교. 실제 microbatch 8/HN4 메모리 probe 실패 시 OOM 근거를 남기고 skip; 성공 시 상위 4 block+final norm 771.790M parameter update. input/completion log SHA와 exact base revision이 complete contract에 묶여야 package 가능 | [tuning strategy](experiments/070_tuning_strategy/) |
-| private checkpoint watcher / resume | 최초 repo의 잘못 선언된 train SHA를 발견해 commit `9ec6b86b`에서 superseded 처리. 올바른 SHA `8e2731ab…`의 private `-candidates-v2`에 step-250/500/750/1000/1250/1500을 commits `7d3b3ed1`/`ade73a6a`/`fecf0c73`/`684a6807`/`38ae9b1d`/`82f3fd11`로 재검증·보존했고 전 prefix allowlist/LFS/manifest exact. 후속 LoRA 자동 watcher+종료 reconciliation; 재시작은 complete optimizer checkpoint의 exact contract가 같을 때만 resume | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
+| private checkpoint watcher / resume | 최초 repo의 잘못 선언된 train SHA를 발견해 commit `9ec6b86b`에서 superseded 처리. 올바른 SHA `8e2731ab…`의 private `-candidates-v2`에 step-250/500/750/1000/1250/1500/1750을 commits `7d3b3ed1`/`ade73a6a`/`fecf0c73`/`684a6807`/`38ae9b1d`/`82f3fd11`/`1b84bea2`로 재검증·보존했고 전 prefix allowlist/LFS/manifest exact. 후속 LoRA 자동 watcher+종료 reconciliation; 재시작은 complete optimizer checkpoint의 exact contract가 같을 때만 resume | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
 | private clean-winner full model | clean selector의 exact winner만 격리 staging에 hardlink/copy하고 모델 로딩 allowlist 밖 파일을 거부한다. 원본 모델은 변경하지 않으며 evidence의 로컬 절대경로·인식 가능한 credential을 제거한다. 업로드 뒤 private visibility, 전체 remote file set, 모든 safetensors LFS SHA/size와 모든 metadata SHA를 검증해야 다음 continual run이 시작된다 | [`publish_private_clean_candidate.py`](scripts/publish_private_clean_candidate.py) |
-| final evaluation/publication completion | 최종 clean winner 한 모델에만 Sionic9→공식 Korean6→comprehensive7/414를 실행한다. 어느 평가·training manifest·token-file·private upload·campaign-result push라도 실패하면 campaign은 완료 처리되지 않는다. 최종 모델도 격리 staging과 전체 remote file/LFS exact report를 통과해야 한다 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
-| clean-first model selection | valid performance candidate 0; Grade-I-not-Z 법률 10K 우선, clean/robustness epsilon `0.002`, public Sionic/official score는 selector 입력에서 제외. 200K lineage → capacity 포함 200K → 전 stage final selection을 각각 mandatory gate로 실행 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
+| final evaluation/publication completion | 최종 local winner 한 모델에만 Sionic9→공식 Korean6→comprehensive7/414를 실행한다. 어느 평가·legal/multidomain/ranks evidence·training manifest·token-file·private upload·campaign-result push라도 실패하면 campaign은 완료 처리되지 않는다. 최종 모델도 격리 staging과 전체 remote file/LFS exact report를 통과해야 한다 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
+| clean-guard multidomain model selection | valid performance candidate 0; 법률 Grade-I 최고 `-0.005` guard → finance/knowledge macro 최고 `-0.002` → robustness `-0.002` → intrusion `+0.001`. public Sionic/official score는 selector 입력에서 제외하며 모든 stage에 mandatory gate로 실행 | [다영역 선택 계약](docs/35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md) |
 | text-only comprehensive diagnostic | 7 tasks·414 selected subsets; K-HATERS는 unsupported registered task, visual-document 5 assets는 modality 불일치로 명시 제외; public medium/high contamination diagnostic | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
 | Qwen3 reranker teacher scorer/KD | `Qwen3-Reranker-8B@77d193c`; official yes/no logits, 5개 약 16GB LFS content SHA 전수 검증 후 local-only load. wide pool200→quantile15 compiler, hard InfoNCE+listwise KL/MarginMSE, queue4096 A/B와 1M 원본을 clean-first 비교. 선택·가중치 SHA·private exact file set·immutable commit이 모두 일치하지 않으면 전문가/법률 stage로 진행하지 않음. 아직 실제 score/KD 성능 결과 없음 | [teacher scorer](experiments/030_teacher_distillation/) |
 | last-available-5 FP32 LoRA 평균 | 같은 Trainer version의 최신 최대 5개만 config/key/shape/dtype/finite gate 뒤 FP32 평균·atomic 저장; safe merge parity 후 single best와 동일 clean selector에서 비교. 첫 active Qwen도 검증 adapter archive로 5개를 보존하고 이후 run은 full checkpoint 5개도 유지 | [model merge](experiments/050_model_merge/) |
@@ -186,6 +187,7 @@ row는 101개였다.
 33. [Qwen reranker teacher와 금융·시간성 추가 데이터](docs/32_NEXT_STAGE_TEACHER_AND_DATA.md)
 34. [종합 최고 모델 선택·평가 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md)
 35. [2026-07-17 성능 최우선 frontier 방법론과 전면 복구 계획](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md)
+36. [고정 비공개 finance/knowledge 다영역 모델 선택 보드](docs/35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md)
 
 ## 실험 지도
 
@@ -209,8 +211,8 @@ row는 101개였다.
 
 ## 원칙
 
-- 공개 test 점수를 반복해서 보고 checkpoint를 고르지 않습니다. Grade-I clean/robustness로 먼저 고른 한 winner에 Sionic 9와 공식 Korean 6을 final-once 실행합니다.
-- 비교 가능한 clean NDCG@10 절대 차이 `0.002` 이하는 실질적 near-tie로 보고, 그 안에서는 worst-condition robustness와 noise intrusion을 우선합니다.
+- 공개 test 점수를 반복해서 보고 checkpoint를 고르지 않습니다. Grade-I legal guard와 고정 비공개 finance/knowledge, robustness로 먼저 고른 한 winner에 Sionic 9와 공식 Korean 6을 final-once 실행합니다.
+- 법률 최고에서 `0.005` 이내인 후보만 허용하고, 그 안에서 다영역 macro `0.002`, worst-condition robustness `0.002`, noise intrusion `0.001` near-tie 순서를 적용합니다.
 - 모든 데이터 행에 `source`, `revision/date`, `license`, `sha256`, `generator`, `prompt_version`을 남깁니다.
 - 현재 자체 법률 holdout은 같은 repository 안에서 source document를 분리한 Grade I이며, Grade Z 또는 `clean-zero-shot`으로 부르지 않습니다. 공개 benchmark exact blocklist와 추가 near-duplicate 감사 결과는 분리해 보고합니다.
 - benchmark train split을 쓰는 별도 실험은 `supervised/in-domain`으로 명시합니다.

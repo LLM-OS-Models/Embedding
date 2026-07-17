@@ -24,6 +24,8 @@ GENERAL_TRAINING_MANIFEST="${GENERAL_TRAINING_MANIFEST:-$ROOT/outputs/data/perfo
 GENERAL_BASE_UPLOAD_REPORT="${GENERAL_BASE_UPLOAD_REPORT:-$ROOT/outputs/scale-1m-20260717-frontier/private-clean-candidate-upload.json}"
 CLEAN_OUT="$ROOT/outputs/evaluation/legal-source-heldout"
 ROBUST_OUT="$ROOT/outputs/evaluation/conversational-noise-robustness"
+MULTIDOMAIN_OUT="$ROOT/outputs/evaluation/multidomain-selection"
+MULTIDOMAIN_DATASET="$ROOT/outputs/evaluation/multidomain-selection-heldout-v1"
 REQUEST_ROWS="${KD_REQUEST_ROWS:-10000}"
 CANDIDATES_PER_QUERY="${KD_CANDIDATES_PER_QUERY:-200}"
 NEGATIVES_PER_QUERY="${KD_NEGATIVES_PER_QUERY:-15}"
@@ -35,6 +37,13 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
 OFFLINE_ENV=(env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1)
+if ! "${OFFLINE_ENV[@]}" "$UTILITY_PYTHON" \
+    "$ROOT/scripts/build_multidomain_selection_holdout.py" \
+    --output-dir "$MULTIDOMAIN_DATASET" --verify-only \
+    >"$LOG_DIR/multidomain-dataset-verification.json"; then
+  echo "fixed multidomain selection dataset verification failed" >&2
+  exit 2
+fi
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S %Z'; }
 run_stage() {
@@ -195,7 +204,19 @@ if [[ -s "$base_clean" && ! -s "$base_robust" ]]; then
       --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" && break
   done
 fi
-[[ -s "$base_clean" ]] && candidate_args+=(--candidate-model "$base_rel")
+base_multidomain="$MULTIDOMAIN_OUT/$base_safe/$base_revision/summary.json"
+if [[ -s "$base_clean" && -s "$base_robust" && ! -s "$base_multidomain" ]]; then
+  for batch in 192 128 64 32 16 8 4 2; do
+    run_stage "multidomain-1m-base-b$batch" "${OFFLINE_ENV[@]}" \
+      "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_multidomain_selection.py" \
+      --model "$base_rel" --revision "$base_revision" --batch-size "$batch" \
+      --max-length 8192 --attn-implementation flash_attention_2 \
+      --dataset-dir "$MULTIDOMAIN_DATASET" --output-dir "$MULTIDOMAIN_OUT" \
+      --embedding-cache-dir "$ROOT/outputs/embedding-cache/multidomain-selection" && break
+  done
+fi
+[[ -s "$base_clean" && -s "$base_robust" && -s "$base_multidomain" ]] \
+  && candidate_args+=(--candidate-model "$base_rel")
 
 for variant in "${variants[@]}"; do
   IFS='|' read -r label hard_weight kd_weight kd_mode queue_size <<< "$variant"
@@ -261,7 +282,21 @@ for variant in "${variants[@]}"; do
         --embedding-cache-dir "$ROOT/outputs/embedding-cache/legal-source-heldout" && break
     done
   fi
-  [[ -s "$clean_summary" ]] && candidate_args+=(--candidate-model "$merged_rel")
+  multidomain_summary="$MULTIDOMAIN_OUT/$safe/$revision/summary.json"
+  if [[ -s "$clean_summary" && -s "$robustness_summary" \
+      && ! -s "$multidomain_summary" ]]; then
+    for batch in 192 128 64 32 16 8 4 2; do
+      run_stage "multidomain-$label-b$batch" "${OFFLINE_ENV[@]}" \
+        "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_multidomain_selection.py" \
+        --model "$merged_rel" --revision "$revision" --batch-size "$batch" \
+        --max-length 8192 --attn-implementation flash_attention_2 \
+        --dataset-dir "$MULTIDOMAIN_DATASET" --output-dir "$MULTIDOMAIN_OUT" \
+        --embedding-cache-dir "$ROOT/outputs/embedding-cache/multidomain-selection" && break
+    done
+  fi
+  [[ -s "$clean_summary" && -s "$robustness_summary" \
+      && -s "$multidomain_summary" ]] \
+    && candidate_args+=(--candidate-model "$merged_rel")
 done
 
 if (( ${#candidate_args[@]} == 0 )); then
@@ -270,7 +305,8 @@ if (( ${#candidate_args[@]} == 0 )); then
 fi
 run_stage select-clean-reranker-kd-winner \
   "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/select_best_clean_model.py" \
-  "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
+  "$CLEAN_OUT" "$ROBUST_OUT" --multidomain-root "$MULTIDOMAIN_OUT" \
+  --workspace-root "$ROOT" --clean-epsilon 0.005 --multidomain-epsilon 0.002 \
   --output "$SELECTION" --disqualification-root "$ROOT/outputs" \
   "${candidate_args[@]}" || exit 6
 

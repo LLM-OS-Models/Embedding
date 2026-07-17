@@ -31,16 +31,16 @@
 
 | 축 | 판단 대상 | 현재 사용 근거 | 현재 상태 |
 |---|---|---|---|
-| Korean retrieval | 법률·공공 clean holdout, 최종 Sionic retrieval 9종 | Grade-I 법률 10K, Sionic 고정 protocol | baseline/우리 후보 clean 결과 대기 |
+| Korean retrieval | 법률 독립성과 finance/knowledge 폭, 최종 Sionic retrieval 9종 | Grade-I 법률 10K, 비공개 다영역 1.9K, Sionic 고정 protocol | baseline/우리 후보 결과 대기 |
 | Broad text | retrieval 외 classification·pair·bitext·multilabel | text-only 7-task/414-subset diagnostic | protocol 구현, 점수 없음 |
 | Multilingual | 한국어↔영어 검색과 한국어 포함 병렬문장 | XPQA 3 subsets, FLORES 406 subsets | diagnostic 점수 없음 |
 | Long/context | 512/2K/4K/8K, evidence head/middle/tail | 별도 paired long-context 설계 | 실행 결과 없음 |
 | Noise robustness | prompt on/off, filler/system artifact, 0/1/5% noise | Grade-I 법률 companion evaluator | baseline/우리 후보 결과 대기 |
 | Efficiency | docs/s, p50/p95, peak VRAM, 차원·index bytes | 동일 hardware/runtime 측정 | 최종 후보 측정 대기 |
 
-아주 작은 차이를 목표 함수로 쫓지 않는다. 현재 구현된 clean selection에서 NDCG@10
-절대 차이 `0.002` 이하는 실질적 near-tie로 취급한다. near-tie 안에서는 최악 조건
-robustness와 noise intrusion을 보고 결정한다. 공개 보드에서도 반올림 오차 수준의 차이를
+아주 작은 차이를 목표 함수로 쫓지 않는다. 법률 최고에서 `0.005` 이내인 후보만 보존한 뒤
+고정 비공개 finance/knowledge domain-macro NDCG@10 `0.002` near-tie를 적용한다. 그 안에서
+최악 조건 robustness `0.002`와 noise intrusion `0.001`을 보고 결정한다. 공개 보드에서도 반올림 오차 수준의 차이를
 “압도적 우위”로 표현하지 않고 raw score와 불확실성을 함께 공개한다.
 
 ## 현재 candidate 원장
@@ -124,7 +124,7 @@ byte-exact로 보존하고 manifest가 자신을 제외한 모든 staged file의
 safetensors의 Hub LFS SHA-256/size와 모든 metadata download SHA-256을 exact commit에서 다시
 검증한다. 이 세 조건이 없는 report는 다음 continual base lineage로 사용할 수 없다.
 
-## Clean-first 선택 정책
+## Clean-guard multidomain 선택 정책
 
 ### 1. 후보 자격
 
@@ -146,30 +146,43 @@ same-repository whole-source-document-held-out다. 독립성 등급은 **I이며
 따라서 `unseen-source`, `clean zero-shot`, `Grade Z`라고 부르지 않는다. 허용되는 표현은
 `same-repository source-document-held-out (Grade I)`다.
 
-### 3. 실질적 near-tie
+### 3. 고정 비공개 다영역 retrieval
 
-selector `clean-first-grade-i-near-tie-robustness-v1`은 public score를 입력으로 받지 않고
+법률 단일-domain selector가 legal specialist를 과선택하지 않도록 finance 900개와 knowledge
+1,000개를 고정했다. 선택 query의 모든 선언 training-role exact overlap은 0이고 knowledge는
+query/corpus overlap도 0이다. 공개 benchmark blocklist overlap도 0이며 public score를
+selector에 넣지 않는다. finance corpus에는 training-text occurrence 1,373건이 있으므로
+target-dev로 공개하고 clean/zero-shot으로 부르지 않는다. exact source revision, 산출물 SHA,
+평가와 private upload 계약은
+[`35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md`](35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md)에
+고정한다.
+
+### 4. 실질적 near-tie
+
+selector `clean-guard-multidomain-near-tie-robustness-v2`는 public score를 입력으로 받지 않고
 다음 순서로 한 후보를 고른다.
 
-1. Grade-I clean NDCG@10 최고점에서 `0.002` 이내 후보를 near-tie로 묶는다.
-2. 여기에 포함된 후보의 6개 prompt/noise 조건 중 최저 NDCG@10을 비교하고, 최고값에서
+1. Grade-I legal NDCG@10 최고점에서 `0.005` 이내 후보만 guard 안에 둔다.
+2. guard 안에서 finance/knowledge domain-macro NDCG@10 최고점에서 `0.002` 이내 후보를 묶는다.
+3. 여기에 포함된 후보의 6개 prompt/noise 조건 중 최저 NDCG@10을 비교하고, 최고값에서
    `0.002` 이내를 다시 near-tie로 묶는다.
-3. 최대 synthetic-noise intrusion@10이 최저값에서 `0.001` 이내인 후보를 남긴다.
-4. 그래도 동률이면 clean NDCG@10, model ID, revision 순으로 결정론적으로 고른다.
+4. 최대 synthetic-noise intrusion@10이 최저값에서 `0.001` 이내인 후보를 남긴다.
+5. 그래도 동률이면 다영역 macro, legal NDCG@10, model ID, revision 순으로 결정론적으로 고른다.
 
 즉 `0.0001` 같은 차이만 반복 최적화하지 않는다. 동시에 epsilon은 “모든 품질이 같다”는
 뜻이 아니므로 worst-domain, long-context, multilingual, efficiency의 큰 회귀는 별도
 필수 gate에서 차단한다.
 
-### 4. Public final-once
+### 5. Public final-once
 
-Sionic 9와 공식 MTEB Korean v1 결과는 checkpoint selector에 들어가지 않는다. clean과
-robustness로 local winner를 먼저 고른 뒤 그 **한 모델**에만 `final-selected` namespace로
+Sionic 9와 공식 MTEB Korean v1 결과는 checkpoint selector에 들어가지 않는다. legal,
+multidomain과 robustness로 local winner를 먼저 고른 뒤 그 **한 모델**에만 `final-selected` namespace로
 Sionic 9 전체와 공식 Korean 6-task를 실행한다. runtime OOM에 따른 사전 고정 batch fallback은
 허용하지만 public 점수를 보고 checkpoint나 hyperparameter를 되돌려 고르지 않는다.
 
-이후 같은 winner에 text-only comprehensive diagnostic을 실행한다. 세 결과가 모두 있어야
-private best-candidate package의 evaluation evidence가 완성된다. public weight 전환은 별도로
+이후 같은 winner에 text-only comprehensive diagnostic을 실행한다. 세 public 결과와 legal,
+robustness, 다영역 summary/ranks가 모두 있어야 private best-candidate package의 evaluation
+evidence가 완성된다. public weight 전환은 별도로
 데이터 license/provenance와 release gate를 통과해야 한다.
 
 최종 실행은 completion도 fail closed다. Sionic9, 공식 Korean6, comprehensive7/414 중 하나,
@@ -263,8 +276,8 @@ clean·broad·multilingual 회귀가 실제로 좋아질 때만 다음 scale에 
 
 1. exact 200K data와 환경을 복원하고 3,123-step 학습·private checkpoint 보존을 처음부터 다시 실행한다.
 2. finite/parity/evidence gate를 통과한 checkpoint만 merge/package한다.
-3. 모든 eligible local candidate를 Grade-I clean 10K와 paired noise 6조건으로 평가한다.
-4. `0.002` clean near-tie 정책으로 local winner 하나를 고른다.
+3. 모든 eligible local candidate를 Grade-I legal 10K, 고정 다영역 1.9K와 paired noise 6조건으로 평가한다.
+4. legal `0.005` guard→multidomain `0.002`→robustness `0.002` 정책으로 local winner 하나를 고른다.
 5. winner에만 Sionic 9, 공식 Korean 6, comprehensive text 7/414를 final-once 실행한다.
 6. long-context·multilingual·efficiency 회귀와 license/provenance를 함께 확인한다.
 7. 모든 필수 gate가 통과될 때만 “종합 최고” 또는 public release를 검토한다.
@@ -276,9 +289,9 @@ controlled ablation으로 넘어간다.
 200K 계보 비교에서는 탐색 폭도 대칭으로 고정한다. corrected validation 512는 clean 10K의
 source-document-held-out 균형 부분집합이므로 학습과는 분리돼 있지만 clean 10K와 서로 독립인
 두 평가판은 아니다. 따라서 Qwen과 Comsat 양쪽 모두 private archive의 무결성 검증된 모든
-checkpoint를 같은 clean 10K와 paired noise 6조건에서 평가한다. 이후 1M/KD/전문가 stage는
+checkpoint를 같은 legal 10K, multidomain 1.9K와 paired noise 6조건에서 평가한다. 이후 1M/KD/전문가 stage는
 corrected 512 내부 신호로 single checkpoint를 정하고, 동일 trajectory의 last-available-5
-FP32 평균을 추가 후보로 만들어 clean-first 비교해 평가 비용과 checkpoint 탐색 편향을 제한한다.
+FP32 평균을 추가 후보로 만들어 같은 local selector에서 비교해 평가 비용과 checkpoint 탐색 편향을 제한한다.
 
 후속 base 전달도 성능 계약의 일부다. 1M 원본을 반드시 KD 후보군에 포함하므로 KD variant가
 개선되지 않아도 원본을 정당하게 선택할 수 있다. 반면 이 A/B 자체가 실패했거나 선택된 model,

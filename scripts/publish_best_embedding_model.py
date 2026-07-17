@@ -17,8 +17,10 @@ from typing import Any, Mapping
 
 try:
     from scripts.model_lineage import lineage_from_evidence
+    from scripts.select_best_clean_model import load_multidomain_candidate
 except ImportError:  # pragma: no cover - direct script execution fallback
     from model_lineage import lineage_from_evidence
+    from select_best_clean_model import load_multidomain_candidate
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +62,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--clean-summary", type=Path)
     parser.add_argument("--robustness-summary", type=Path)
+    parser.add_argument(
+        "--multidomain-summary",
+        type=Path,
+        help="Optional fixed finance/knowledge internal selection summary.",
+    )
     parser.add_argument("--training-manifest", type=Path, required=True)
     parser.add_argument(
         "--release-approval",
@@ -496,6 +503,12 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     ]
     if args.comprehensive_summary:
         required.append(args.comprehensive_summary.resolve())
+    if args.clean_summary:
+        required.append(args.clean_summary.resolve())
+    if args.robustness_summary:
+        required.append(args.robustness_summary.resolve())
+    if args.multidomain_summary:
+        required.append(args.multidomain_summary.resolve())
     missing = [str(path) for path in required if not path.exists()]
     if missing:
         raise FileNotFoundError(f"Missing publication evidence: {missing}")
@@ -513,6 +526,11 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
     robustness = (
         read_json(args.robustness_summary.resolve())
         if args.robustness_summary
+        else None
+    )
+    multidomain = (
+        read_json(args.multidomain_summary.resolve())
+        if args.multidomain_summary
         else None
     )
     training = read_json(args.training_manifest.resolve())
@@ -601,6 +619,18 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
             )
             if abs(clean_ndcg - robustness_clean_ndcg) > 1e-12:
                 raise ValueError("Clean and robustness prompt-on baselines disagree")
+    if multidomain is not None:
+        multidomain_evidence = load_multidomain_candidate(
+            args.multidomain_summary.resolve(), ROOT
+        )
+        if resolved_local_model(multidomain_evidence["model"]) != model_dir:
+            raise ValueError(
+                "Multidomain summary belongs to a different model artifact"
+            )
+        if multidomain_evidence["revision"] != expected_revision:
+            raise ValueError(
+                "Multidomain summary revision does not match model evidence"
+            )
     recomputed_sionic = fmean(float(value) for value in sionic["scores"].values())
     if abs(float(sionic["average"]) - recomputed_sionic) > 1e-12:
         raise ValueError("Sionic average is inconsistent with task scores")
@@ -643,6 +673,7 @@ def validate(args: argparse.Namespace) -> tuple[dict[str, Any], ...]:
         training,
         clean,
         robustness,
+        multidomain,
         approval,
     )
 
@@ -758,6 +789,7 @@ def build_card(
     training: dict[str, Any],
     clean: dict[str, Any] | None,
     robustness: dict[str, Any] | None,
+    multidomain: dict[str, Any] | None,
 ) -> str:
     delta = float(sionic["average"]) - 0.793
     full_update = is_full_update(evidence)
@@ -860,6 +892,28 @@ def build_card(
 
 고정된 filler/system/assistant artifact를 clean corpus의 5%만큼 추가한 paired test다.
 0/1/5% 전체 condition과 per-query rank는 `evaluation/`에 동봉한다.
+"""
+    multidomain_section = ""
+    if multidomain is not None:
+        finance = multidomain["domain_metrics"]["finance"]
+        knowledge = multidomain["domain_metrics"]["knowledge"]
+        macro = multidomain["metrics"]["macro_domain_ndcg_at_10"]
+        multidomain_section = f"""
+### 고정 비공개 다영역 선택 평가
+
+| Domain | Queries | NDCG@10 | Recall@10 | MRR@10 |
+|---|---:|---:|---:|---:|
+| finance | 900 | {float(finance['ndcg_at_10']):.5f} | {float(finance['recall_at_10']):.5f} | {float(finance['mrr_at_10']):.5f} |
+| knowledge | 1,000 | {float(knowledge['ndcg_at_10']):.5f} | {float(knowledge['recall_at_10']):.5f} | {float(knowledge['mrr_at_10']):.5f} |
+
+- domain-macro NDCG@10: **{float(macro):.5f}**
+- protocol: `{multidomain['protocol_id']}`
+- public benchmark score used for selection: **false**
+
+finance는 query exact-held-out이지만 corpus는 학습 text 노출 가능성이 있는 target-dev이며,
+knowledge는 query와 corpus 모두 exact-held-out이다. 이 보드는 모델 선택 전용이고 공개
+leaderboard 점수나 완전한 zero-shot 성능으로 해석하지 않는다. 요약과 1,900개 per-query
+rank를 `evaluation/`에 동봉한다.
 """
     comprehensive_section = ""
     if comprehensive is not None:
@@ -965,6 +1019,7 @@ tags:
 {comprehensive_section}
 {clean_section}
 {robustness_section}
+{multidomain_section}
 
 ## 학습
 
@@ -1190,6 +1245,7 @@ def main() -> None:
         training,
         clean,
         robustness,
+        multidomain,
         approval,
     ) = validate(args)
     model_dir = args.model_dir.resolve()
@@ -1202,6 +1258,7 @@ def main() -> None:
         training,
         clean,
         robustness,
+        multidomain,
     )
     card_path = model_dir / "README.md"
     card_path.write_text(card, encoding="utf-8")
@@ -1237,6 +1294,13 @@ def main() -> None:
         robustness_ranks = args.robustness_summary.resolve().parent / "ranks.jsonl"
         if robustness_ranks.is_file():
             evidence_files["conversational_noise_ranks.jsonl"] = robustness_ranks
+    if args.multidomain_summary:
+        evidence_files["multidomain_selection_summary.json"] = (
+            args.multidomain_summary.resolve()
+        )
+        multidomain_ranks = args.multidomain_summary.resolve().parent / "ranks.jsonl"
+        if multidomain_ranks.is_file():
+            evidence_files["multidomain_selection_ranks.jsonl"] = multidomain_ranks
     if approval is not None:
         evidence_files["public_release_approval.json"] = (
             args.release_approval.resolve()
@@ -1295,6 +1359,20 @@ def main() -> None:
             if comprehensive is not None
             else {"status": "not_provided"}
         ),
+        "multidomain_selection": (
+            {
+                "status": "complete_selection_only",
+                "protocol_id": multidomain["protocol_id"],
+                "summary_sha256": sha256(args.multidomain_summary.resolve()),
+                "manifest_sha256": multidomain["dataset"]["manifest_sha256"],
+                "macro_domain_ndcg_at_10": multidomain["metrics"][
+                    "macro_domain_ndcg_at_10"
+                ],
+                "public_benchmark_score_used_for_selection": False,
+            }
+            if multidomain is not None
+            else {"status": "not_provided"}
+        ),
         "model_weights_evidence_sha256": evidence["model"]["weights_sha256"],
         "public_release_gate": (
             {
@@ -1332,6 +1410,19 @@ def main() -> None:
                 "diagnostic_only": True,
             }
             if comprehensive is not None
+            else None
+        ),
+        "multidomain_selection": (
+            {
+                "protocol_id": multidomain["protocol_id"],
+                "summary_sha256": sha256(args.multidomain_summary.resolve()),
+                "manifest_sha256": multidomain["dataset"]["manifest_sha256"],
+                "macro_domain_ndcg_at_10": multidomain["metrics"][
+                    "macro_domain_ndcg_at_10"
+                ],
+                "selection_only": True,
+            }
+            if multidomain is not None
             else None
         ),
     }

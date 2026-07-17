@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Select a local candidate without consulting public benchmark scores.
 
-The primary signal is the verified Grade-I legal source holdout.  Differences
-smaller than the configured absolute epsilon form a near-tie.  Robustness is
-then used to resolve that near-tie, again with an epsilon, before deterministic
-fallbacks are applied.  Sionic9 and official MTEB results are intentionally not
-accepted as inputs to this selector.
+The verified Grade-I legal source holdout defines an admissible guard band.
+The fixed non-public finance/knowledge macro then ranks broad quality inside
+that band, followed by paired-noise robustness and deterministic fallbacks.
+Sionic9 and official MTEB results are intentionally not accepted as inputs.
 """
 
 from __future__ import annotations
@@ -23,13 +22,22 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_ID = "clean-first-grade-i-near-tie-robustness-v1"
+MULTIDOMAIN_POLICY_ID = "clean-guard-multidomain-near-tie-robustness-v2"
 CLEAN_PROTOCOL_ID = "legal-source-document-heldout-i-v2-text-strict"
 ROBUSTNESS_PROTOCOL_ID = "legal-conversational-noise-i-v2-text-strict"
+MULTIDOMAIN_PROTOCOL_ID = "multidomain-selection-heldout-v1"
+MULTIDOMAIN_MANIFEST_SHA256 = (
+    "86fea553c6652388b1f67160c0e2e6b7626acf8929f86c1a2708156bd89b3c46"
+)
 EXPECTED_SCORE_CONTRACT = (
     "exact float32 normalized dot; TF32 disabled; rank ties by corpus ID ascending"
 )
 EXPECTED_ROBUST_SCORE_CONTRACT = (
     "exact float32 normalized dot; TF32 disabled; ties by combined corpus ordering"
+)
+EXPECTED_MULTIDOMAIN_SCORE_CONTRACT = (
+    "exact float32 normalized dot; TF32 disabled; per-domain corpus; "
+    "rank ties by corpus ID ascending"
 )
 EXPECTED_CONDITIONS = {
     f"{prompt}/noise_{ratio}"
@@ -42,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("clean_root", type=Path)
     parser.add_argument("robustness_root", type=Path)
+    parser.add_argument("--multidomain-root", type=Path)
     parser.add_argument("--workspace-root", type=Path, default=ROOT)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--print-model", action="store_true")
@@ -51,7 +60,8 @@ def parse_args() -> argparse.Namespace:
         action="append",
         help="Exact local model path eligible for this campaign; repeat as needed.",
     )
-    parser.add_argument("--clean-epsilon", type=float, default=0.002)
+    parser.add_argument("--clean-epsilon", type=float, default=0.005)
+    parser.add_argument("--multidomain-epsilon", type=float, default=0.002)
     parser.add_argument("--robustness-epsilon", type=float, default=0.002)
     parser.add_argument("--intrusion-epsilon", type=float, default=0.001)
     return parser.parse_args()
@@ -106,6 +116,20 @@ def verified_ranks(summary_path: Path, summary: dict[str, Any]) -> str:
         rows = sum(1 for _ in handle)
     if rows != 10000:
         raise ValueError("ranks.jsonl must contain exactly 10K rows")
+    return descriptor["sha256"]
+
+
+def verified_multidomain_ranks(summary_path: Path, summary: dict[str, Any]) -> str:
+    descriptor = summary.get("files", {}).get("ranks.jsonl", {})
+    if descriptor.get("rows") != 1900 or not valid_sha(descriptor.get("sha256")):
+        raise ValueError("multidomain ranks.jsonl evidence is incomplete")
+    ranks = summary_path.parent / "ranks.jsonl"
+    if not ranks.is_file() or sha256(ranks) != descriptor["sha256"]:
+        raise ValueError("multidomain ranks.jsonl does not match recorded SHA-256")
+    with ranks.open("rb") as handle:
+        rows = sum(1 for _ in handle)
+    if rows != 1900:
+        raise ValueError("multidomain ranks.jsonl must contain exactly 1,900 rows")
     return descriptor["sha256"]
 
 
@@ -278,6 +302,78 @@ def load_robustness(path: Path) -> dict[str, Any]:
     }
 
 
+def load_multidomain_candidate(
+    path: Path, workspace_root: Path
+) -> dict[str, Any]:
+    summary = read_json(path)
+    if summary.get("protocol_id") != MULTIDOMAIN_PROTOCOL_ID:
+        raise ValueError("unexpected multidomain protocol")
+    model = summary.get("model")
+    revision = summary.get("requested_revision")
+    if not isinstance(model, str) or not isinstance(revision, str):
+        raise ValueError("multidomain summary has no model/revision")
+    _, weights_sha = validate_model_evidence(workspace_root, model, revision)
+    dataset = summary.get("dataset", {})
+    manifest_sha = dataset.get("manifest_sha256")
+    if (
+        manifest_sha != MULTIDOMAIN_MANIFEST_SHA256
+        or dataset.get("selection_only") is not True
+        or dataset.get("public_benchmark") is not False
+        or set(dataset.get("domains", {})) != {"finance", "knowledge"}
+    ):
+        raise ValueError("multidomain dataset disclosure is incomplete")
+    domain_contract = dataset["domains"]
+    if not all(isinstance(domain_contract[name], dict) for name in domain_contract):
+        raise ValueError("multidomain domain descriptors are malformed")
+    if (
+        domain_contract["finance"].get("queries") != 900
+        or domain_contract["finance"].get("independence")
+        != "query-heldout; corpus exposure disclosed"
+        or domain_contract["finance"].get("corpus_training_text_occurrences")
+        != 1373
+        or domain_contract["knowledge"].get("queries") != 1000
+        or domain_contract["knowledge"].get("independence")
+        != "query-and-corpus exact-text-heldout"
+    ):
+        raise ValueError("multidomain domain holdout contract drifted")
+    if summary.get("score_contract") != EXPECTED_MULTIDOMAIN_SCORE_CONTRACT:
+        raise ValueError("multidomain score contract drifted")
+    environment = summary.get("environment", {})
+    if (
+        environment.get("torch_dtype") != "bfloat16"
+        or environment.get("max_length") != 8192
+        or environment.get("attention") != "flash_attention_2"
+    ):
+        raise ValueError("multidomain canonical evaluation environment drifted")
+    metrics = summary.get("metrics", {})
+    macro = finite_unit(
+        metrics.get("macro_domain_ndcg_at_10"), "multidomain macro NDCG@10"
+    )
+    domains = summary.get("domain_metrics", {})
+    if set(domains) != {"finance", "knowledge"}:
+        raise ValueError("multidomain task metrics are incomplete")
+    domain_scores = {
+        domain: finite_unit(row.get("ndcg_at_10"), f"{domain} NDCG@10")
+        for domain, row in domains.items()
+        if isinstance(row, dict)
+    }
+    if len(domain_scores) != 2 or not math.isclose(
+        macro, sum(domain_scores.values()) / 2.0, rel_tol=0.0, abs_tol=1e-12
+    ):
+        raise ValueError("multidomain macro is inconsistent with domain metrics")
+    ranks_sha = verified_multidomain_ranks(path, summary)
+    return {
+        "model": model,
+        "revision": revision,
+        "weights_sha256": weights_sha,
+        "multidomain_manifest_sha256": manifest_sha,
+        "multidomain_macro_ndcg_at_10": macro,
+        "multidomain_domain_ndcg_at_10": domain_scores,
+        "multidomain_summary": str(path.resolve()),
+        "multidomain_ranks_sha256": ranks_sha,
+    }
+
+
 def summary_paths(root: Path) -> list[Path]:
     return sorted(root.expanduser().resolve().glob("*/*/summary.json"))
 
@@ -292,9 +388,12 @@ def select_candidates(
     clean_epsilon: float,
     robustness_epsilon: float,
     intrusion_epsilon: float,
+    multidomain_root: Path | None = None,
+    multidomain_epsilon: float = 0.002,
 ) -> dict[str, Any]:
     for label, value in (
         ("clean_epsilon", clean_epsilon),
+        ("multidomain_epsilon", multidomain_epsilon),
         ("robustness_epsilon", robustness_epsilon),
         ("intrusion_epsilon", intrusion_epsilon),
     ):
@@ -330,6 +429,18 @@ def select_candidates(
             robust[key] = row
         except (KeyError, TypeError, ValueError) as error:
             excluded.append({"summary": str(path.resolve()), "reason": str(error)})
+
+    multidomain: dict[tuple[str, str], dict[str, Any]] = {}
+    if multidomain_root is not None:
+        for path in summary_paths(multidomain_root):
+            try:
+                row = load_multidomain_candidate(path, workspace_root)
+                key = (row["model"], row["revision"])
+                if key in multidomain:
+                    raise ValueError("duplicate multidomain summary for model/revision")
+                multidomain[key] = row
+            except (KeyError, TypeError, ValueError) as error:
+                excluded.append({"summary": str(path.resolve()), "reason": str(error)})
 
     candidates: list[dict[str, Any]] = []
     for key, clean_row in sorted(clean.items()):
@@ -376,7 +487,28 @@ def select_candidates(
                 }
             )
             continue
-        candidates.append({**clean_row, **robust_row})
+        multidomain_row = multidomain.get(key) if multidomain_root is not None else None
+        if multidomain_root is not None and multidomain_row is None:
+            excluded.append(
+                {
+                    "model": clean_row["model"],
+                    "revision": clean_row["revision"],
+                    "reason": "missing complete matching multidomain summary",
+                }
+            )
+            continue
+        if multidomain_row is not None and multidomain_row["weights_sha256"] != clean_row["weights_sha256"]:
+            excluded.append(
+                {
+                    "model": clean_row["model"],
+                    "revision": clean_row["revision"],
+                    "reason": "multidomain model weight evidence mismatch",
+                }
+            )
+            continue
+        candidates.append(
+            {**clean_row, **robust_row, **(multidomain_row or {})}
+        )
 
     if not candidates:
         raise RuntimeError(
@@ -385,6 +517,13 @@ def select_candidates(
     manifests = {row["dataset_manifest_sha256"] for row in candidates}
     if len(manifests) != 1:
         raise RuntimeError("Candidate summaries use different clean dataset manifests")
+    multidomain_manifests = {
+        row["multidomain_manifest_sha256"]
+        for row in candidates
+        if "multidomain_manifest_sha256" in row
+    }
+    if multidomain_root is not None and len(multidomain_manifests) != 1:
+        raise RuntimeError("Candidate summaries use different multidomain manifests")
 
     best_clean = max(row["clean_ndcg_at_10"] for row in candidates)
     clean_shortlist = [
@@ -392,10 +531,25 @@ def select_candidates(
         for row in candidates
         if best_clean - row["clean_ndcg_at_10"] <= clean_epsilon
     ]
-    best_robust = max(row["robustness_floor_ndcg_at_10"] for row in clean_shortlist)
+    if multidomain_root is not None:
+        best_multidomain = max(
+            row["multidomain_macro_ndcg_at_10"] for row in clean_shortlist
+        )
+        multidomain_shortlist = [
+            row
+            for row in clean_shortlist
+            if best_multidomain - row["multidomain_macro_ndcg_at_10"]
+            <= multidomain_epsilon
+        ]
+    else:
+        best_multidomain = None
+        multidomain_shortlist = clean_shortlist
+    best_robust = max(
+        row["robustness_floor_ndcg_at_10"] for row in multidomain_shortlist
+    )
     robust_shortlist = [
         row
-        for row in clean_shortlist
+        for row in multidomain_shortlist
         if best_robust - row["robustness_floor_ndcg_at_10"] <= robustness_epsilon
     ]
     best_intrusion = min(row["max_noise_intrusion_at_10"] for row in robust_shortlist)
@@ -405,13 +559,23 @@ def select_candidates(
         if row["max_noise_intrusion_at_10"] - best_intrusion <= intrusion_epsilon
     ]
     intrusion_shortlist.sort(
-        key=lambda row: (-row["clean_ndcg_at_10"], row["model"], row["revision"])
+        key=lambda row: (
+            -row.get("multidomain_macro_ndcg_at_10", 0.0),
+            -row["clean_ndcg_at_10"],
+            row["model"],
+            row["revision"],
+        )
     )
     best = intrusion_shortlist[0]
 
     candidates.sort(
         key=lambda row: (
             -(row["clean_ndcg_at_10"] >= best_clean - clean_epsilon),
+            -(
+                multidomain_root is not None
+                and row in multidomain_shortlist
+            ),
+            -row.get("multidomain_macro_ndcg_at_10", 0.0),
             -row["clean_ndcg_at_10"],
             -row["robustness_floor_ndcg_at_10"],
             row["max_noise_intrusion_at_10"],
@@ -424,6 +588,7 @@ def select_candidates(
         {
             **row,
             "within_clean_near_tie": row in clean_shortlist,
+            "within_multidomain_near_tie": row in multidomain_shortlist,
             "within_robustness_near_tie": row in robust_shortlist,
             "within_intrusion_near_tie": row in intrusion_shortlist,
             "selected": (row["model"], row["revision"]) == selected_key,
@@ -432,18 +597,31 @@ def select_candidates(
     ]
     return {
         "schema_version": 1,
-        "policy_id": POLICY_ID,
+        "policy_id": MULTIDOMAIN_POLICY_ID if multidomain_root is not None else POLICY_ID,
         "selection_order": [
             "verified Grade-I clean NDCG@10 near-tie band",
+            *(
+                ["fixed non-public finance/knowledge domain-macro NDCG@10 near-tie band"]
+                if multidomain_root is not None
+                else []
+            ),
             "worst-condition robustness NDCG@10 near-tie band",
             "maximum synthetic-noise intrusion@10 near-tie band",
-            "clean NDCG@10 then deterministic model/revision fallback",
+            (
+                "multidomain macro, clean NDCG@10, then deterministic model/revision fallback"
+                if multidomain_root is not None
+                else "clean NDCG@10 then deterministic model/revision fallback"
+            ),
         ],
         "public_benchmark_used_for_selection": False,
         "clean_independence": {"grade": "I", "not_grade": "Z"},
         "dataset_manifest_sha256": next(iter(manifests)),
+        "multidomain_manifest_sha256": (
+            next(iter(multidomain_manifests)) if multidomain_manifests else None
+        ),
         "epsilon": {
             "clean_ndcg_at_10": clean_epsilon,
+            "multidomain_macro_ndcg_at_10": multidomain_epsilon,
             "robustness_floor_ndcg_at_10": robustness_epsilon,
             "max_noise_intrusion_at_10": intrusion_epsilon,
         },
@@ -485,6 +663,8 @@ def main() -> None:
         clean_epsilon=args.clean_epsilon,
         robustness_epsilon=args.robustness_epsilon,
         intrusion_epsilon=args.intrusion_epsilon,
+        multidomain_root=args.multidomain_root,
+        multidomain_epsilon=args.multidomain_epsilon,
     )
     if args.output:
         atomic_write_json(args.output, report)

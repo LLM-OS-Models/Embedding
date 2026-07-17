@@ -202,10 +202,22 @@ lineage를 local archive와 모두 대조했다. full local checkpoint에는 opt
 finite eval이 일치한다. legacy eval loss `0.0034647216089069843`는 completion 증거일 뿐
 성능 선택에는 사용하지 않는다.
 
+2026-07-17 18:35 KST의 step 1750 immutable commit은
+`1b84bea2cad8b9ac31180a7da77f57cd96475bc6`다. adapter SHA는
+`b835258d526a7f857940b71c9fdfa8511b226f895ec25f216a45994b158eae62`, size는
+698,419,728 bytes, config SHA는
+`eac78f0773789a361251829e3cde41561a94873bf0d5fece6cd94d22661b4d3d`, candidate manifest
+SHA는 `e448695686c5d99cf095375821db842f348004efc5ba21955db9fdfc9e0a3461`다. watcher와
+독립된 one-shot 감사가 immutable revision의 private visibility, exact 3-file prefix,
+adapter LFS identity, metadata download SHA, Qwen base revision과 data/training/admission
+lineage를 재검증했다. local sanitized archive의 504개 tensor도 전부 다시 읽어 finite임을
+확인했다. same-step legacy eval loss `0.0035100767854601145`는 completion 증거일 뿐 모델
+선택 점수가 아니다.
+
 ## Continual-base 복구 사슬
 
 selection-only 200K lineage winner와 capacity 포함 winner는 public benchmark를 호출하지 않은
-채 Grade-I clean/robustness evidence로 고른 전체 모델을 각각 private upload한다. uploader는
+채 Grade-I legal/multidomain/robustness evidence로 고른 전체 모델을 각각 private upload한다. uploader는
 merge LoRA뿐 아니라 partial-full 및 fixed soup evidence도 같은 weight SHA gate로 검증하고,
 remote manifest 재다운로드가 일치한 뒤 `repo_id`, `commit_sha`, `weights_sha256`를 atomic report로
 남긴다. 1M은 capacity report, KD는 1M report, specialist/legal/combined는 KD winner report를

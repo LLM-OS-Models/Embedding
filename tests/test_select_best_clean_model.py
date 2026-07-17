@@ -10,6 +10,7 @@ from scripts.select_best_clean_model import (
     CLEAN_PROTOCOL_ID,
     EXPECTED_ROBUST_SCORE_CONTRACT,
     EXPECTED_SCORE_CONTRACT,
+    MULTIDOMAIN_MANIFEST_SHA256,
     ROBUSTNESS_PROTOCOL_ID,
     atomic_write_json,
     select_candidates,
@@ -117,6 +118,54 @@ def select(root: Path) -> dict:
     )
 
 
+def write_multidomain(root: Path, model: str, revision: str, score: float) -> None:
+    safe = model.replace("/", "__")
+    folder = root / "multidomain" / safe / revision
+    folder.mkdir(parents=True)
+    ranks = folder / "ranks.jsonl"
+    ranks.write_text(
+        '{"query_id":"q","domain":"finance","relevant_ranks":[1]}\n' * 1900,
+        encoding="utf-8",
+    )
+    payload = {
+        "protocol_id": "multidomain-selection-heldout-v1",
+        "model": model,
+        "requested_revision": revision,
+        "dataset": {
+            "manifest_sha256": MULTIDOMAIN_MANIFEST_SHA256,
+            "selection_only": True,
+            "public_benchmark": False,
+            "domains": {
+                "finance": {
+                    "queries": 900,
+                    "independence": "query-heldout; corpus exposure disclosed",
+                    "corpus_training_text_occurrences": 1373,
+                },
+                "knowledge": {
+                    "queries": 1000,
+                    "independence": "query-and-corpus exact-text-heldout",
+                },
+            },
+        },
+        "metrics": {"macro_domain_ndcg_at_10": score},
+        "domain_metrics": {
+            "finance": {"ndcg_at_10": score},
+            "knowledge": {"ndcg_at_10": score},
+        },
+        "score_contract": (
+            "exact float32 normalized dot; TF32 disabled; per-domain corpus; "
+            "rank ties by corpus ID ascending"
+        ),
+        "files": {"ranks.jsonl": {"rows": 1900, "sha256": file_sha(ranks)}},
+        "environment": {
+            "torch_dtype": "bfloat16",
+            "max_length": 8192,
+            "attention": "flash_attention_2",
+        },
+    }
+    (folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_clean_near_tie_uses_robustness_but_not_distant_candidate(tmp_path: Path) -> None:
     make_candidate(tmp_path, "clean-leader", clean_ndcg=0.900, robust_floor=0.800, intrusion=0.02)
     expected, _ = make_candidate(
@@ -210,3 +259,34 @@ def test_soup_evidence_is_eligible_for_same_clean_selector(tmp_path: Path) -> No
         evidence_name="soup_report.json",
     )
     assert select(tmp_path)["best"]["model"] == expected
+
+
+def test_multidomain_selects_broad_candidate_inside_legal_guard(tmp_path: Path) -> None:
+    legal, legal_revision = make_candidate(
+        tmp_path, "legal-leader", clean_ndcg=0.900, robust_floor=0.85, intrusion=0.01
+    )
+    broad, broad_revision = make_candidate(
+        tmp_path, "broad", clean_ndcg=0.897, robust_floor=0.85, intrusion=0.01
+    )
+    distant, distant_revision = make_candidate(
+        tmp_path, "distant-broad", clean_ndcg=0.894, robust_floor=0.99, intrusion=0.0
+    )
+    write_multidomain(tmp_path, legal, legal_revision, 0.70)
+    write_multidomain(tmp_path, broad, broad_revision, 0.90)
+    write_multidomain(tmp_path, distant, distant_revision, 0.99)
+    report = select_candidates(
+        clean_root=tmp_path / "clean",
+        robustness_root=tmp_path / "robust",
+        multidomain_root=tmp_path / "multidomain",
+        workspace_root=tmp_path,
+        disqualification_root=tmp_path / "outputs",
+        candidate_models=None,
+        clean_epsilon=0.005,
+        multidomain_epsilon=0.002,
+        robustness_epsilon=0.002,
+        intrusion_epsilon=0.001,
+    )
+    assert report["best"]["model"] == broad
+    assert report["public_benchmark_used_for_selection"] is False
+    distant_row = next(row for row in report["ranking"] if row["model"] == distant)
+    assert distant_row["within_clean_near_tie"] is False

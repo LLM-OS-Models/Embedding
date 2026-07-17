@@ -21,6 +21,7 @@ TOP_MODEL_QUEUE = ROOT / "scripts/run_top_model_sionic_queue.sh"
 def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
     source = QUEUE.read_text(encoding="utf-8")
     selector_call = source.index('"$ROOT/scripts/select_best_clean_model.py"')
+    multidomain_call = source.index('"$ROOT/scripts/evaluate_multidomain_selection.py"')
     final_sionic_call = source.index(
         'run_sionic_with_fallback "final-selected"', selector_call
     )
@@ -28,7 +29,11 @@ def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
         'run_official_with_fallback "v1-final-selected"', selector_call
     )
     comprehensive_call = source.index("run_comprehensive_with_fallback", selector_call)
-    assert selector_call < final_sionic_call < final_official_call < comprehensive_call
+    assert multidomain_call < selector_call < final_sionic_call < final_official_call < comprehensive_call
+    assert '--multidomain-root "$MULTIDOMAIN_OUT"' in source
+    assert "--clean-epsilon 0.005 --multidomain-epsilon 0.002" in source
+    assert 'multidomain_summary="$(jq -r \'.best.multidomain_summary\'' in source
+    assert 'multidomain_args=(--multidomain-summary "$multidomain_summary")' in source
     assert "select_best_sionic_model.py" not in source
     assert "--candidate-model" in source
     assert source.count('run_sionic_with_fallback "') == 1
@@ -57,6 +62,7 @@ def test_queue_uses_safe_batches_and_token_free_offline_evaluation() -> None:
         "evaluate_mteb_korean_v1.py",
         "evaluate_legal_source_holdout.py",
         "evaluate_conversational_noise_robustness.py",
+        "evaluate_multidomain_selection.py",
         "evaluate_comprehensive_text_v1.py",
     ):
         index = source.index(evaluator)
@@ -344,6 +350,18 @@ def test_model_soup_coefficients_are_fixed_before_clean_evaluation() -> None:
 
 def test_required_specialists_and_derived_uploads_fail_closed() -> None:
     scale = SCALE_QUEUE.read_text(encoding="utf-8")
+    kd = (ROOT / "scripts/run_reranker_kd_ablation_queue.sh").read_text(
+        encoding="utf-8"
+    )
+    for source in (scale, kd):
+        assert "build_multidomain_selection_holdout.py" in source
+        assert "--verify-only" in source
+        assert "evaluate_multidomain_selection.py" in source
+        assert '--multidomain-root "$MULTIDOMAIN_OUT"' in source
+        assert "--clean-epsilon 0.005 --multidomain-epsilon 0.002" in source
+    assert "CAMPAIGN_EVAL_BATCH_SIZES:-192 128 64 32 16 8 4 2" in scale
+    assert 'for batch in "${EVAL_BATCHES[@]}"' in scale
+    assert '"${OFFLINE_ENV[@]}"' in scale
     for script, code in (
         ("run_sionic_retrieval_adaptation_queue.sh", 8),
         ("run_sionic_squad_adaptation_queue.sh", 9),
@@ -429,6 +447,7 @@ def test_queue_can_only_publish_the_clean_selected_private_candidate() -> None:
     assert source.count("publish_best_embedding_model.py") == 1
     assert "performance-v1-private-candidate" in source
     assert "--comprehensive-summary" in source
+    assert '"${multidomain_args[@]}"' in source
     assert "--upload --public" not in source
     assert "public_benchmark_used_for_selection" not in source
 
