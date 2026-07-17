@@ -5,12 +5,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 embedding_resolve_train_runtime
 cd "$ROOT"
-if [[ -f .env ]]; then
-  set -a
-  source .env
-  set +a
-fi
-[[ -n "${GITHUB:-}" ]] || { echo "GITHUB token is unavailable" >&2; exit 2; }
+embedding_load_github_credential "$ROOT/.env" || {
+  echo "GITHUB token is unavailable" >&2
+  exit 2
+}
 
 REVISION=4e423935c619ae4df87b646a3ce949610c66241c
 SUMMARY="$ROOT/outputs/evaluation/mteb-korean-v1-qwen-base/Qwen__Qwen3-Embedding-8B/$REVISION/summary.json"

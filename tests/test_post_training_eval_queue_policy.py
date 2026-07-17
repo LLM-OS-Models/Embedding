@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +74,41 @@ def test_top_model_queue_is_anonymous_and_fails_closed() -> None:
     assert 'failures+=("Qwen official Korean v1 evaluation")' in source
     assert "top-model queue incomplete" in source
     assert "exit 1" in source
+
+
+def test_git_publishers_load_only_github_credential(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "HF_TOKEN=hf_dummy_should_not_survive\n"
+        "export GITHUB='github dummy value'\n",
+        encoding="utf-8",
+    )
+    probe = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; unset GITHUB; export HF_TOKEN=sentinel; '
+            'embedding_load_github_credential "$2"; '
+            'printf "%s|%s" "$GITHUB" "${HF_TOKEN-unset}"',
+            "bash",
+            str(COMMON_RUNTIME),
+            str(env_file),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={"PATH": os.environ["PATH"]},
+    )
+    assert probe.stdout == "github dummy value|unset"
+
+    for publisher in (
+        ROOT / "scripts/commit_qwen_official_result.sh",
+        ROOT / "scripts/commit_campaign_result.sh",
+        ROOT / "scripts/commit_clean_legal_results.sh",
+    ):
+        source = publisher.read_text(encoding="utf-8")
+        assert "embedding_load_github_credential" in source
+        assert "source .env" not in source
 
 
 def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:

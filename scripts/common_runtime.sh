@@ -60,6 +60,53 @@ if [[ ! "$EFFECTIVE_CPU_COUNT" =~ ^[1-9][0-9]*$ ]]; then
 fi
 export EFFECTIVE_CPU_COUNT
 
+embedding_read_dotenv_key() {
+  local env_file="$1" wanted="$2" line key value
+  [[ -r "$env_file" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "$line" && "$line" != \#* ]] || continue
+    if [[ "$line" == export[[:space:]]* ]]; then
+      line="${line#export}"
+      line="${line#"${line%%[![:space:]]*}"}"
+    fi
+    [[ "$line" == *=* ]] || continue
+    key="${line%%=*}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    [[ "$key" == "$wanted" ]] || continue
+    value="${line#*=}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    if [[ ${#value} -ge 2 ]]; then
+      if [[ "$value" == \"*\" || "$value" == \'*\' ]]; then
+        [[ "${value:0:1}" == "${value: -1}" ]] || return 1
+        value="${value:1:${#value}-2}"
+      fi
+    fi
+    [[ -n "$value" ]] || return 1
+    printf '%s' "$value"
+    return 0
+  done < "$env_file"
+  return 1
+}
+
+embedding_load_github_credential() {
+  local env_file="${1:-$EMBEDDING_RUNTIME_ROOT/.env}" loaded status=0
+  if [[ -z "${GITHUB:-}" ]]; then
+    loaded="$(embedding_read_dotenv_key "$env_file" GITHUB)" || status=$?
+    if (( status == 0 )) && [[ -n "$loaded" ]]; then
+      GITHUB="$loaded"
+      export GITHUB
+    else
+      status=1
+    fi
+  fi
+  # A Git-only publisher must never retain unrelated Hub credentials.
+  unset HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACE_HUB_TOKEN
+  return "$status"
+}
+
 embedding_require_storage_headroom() {
   local path="$1" min_gib="$2" min_inodes="$3"
   local available_kib available_inodes required_kib
