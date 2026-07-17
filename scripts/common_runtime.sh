@@ -61,8 +61,11 @@ fi
 export EFFECTIVE_CPU_COUNT
 
 embedding_read_dotenv_key() {
-  local env_file="$1" wanted="$2" line key value
-  [[ -r "$env_file" ]] || return 1
+  local env_file="$1" wanted="$2" line key value mode owner
+  [[ -r "$env_file" && -f "$env_file" && ! -L "$env_file" ]] || return 1
+  mode="$(stat -Lc '%a' "$env_file" 2>/dev/null)" || return 1
+  owner="$(stat -Lc '%u' "$env_file" 2>/dev/null)" || return 1
+  [[ "$mode" == 600 && "$owner" == "$EUID" ]] || return 1
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line#"${line%%[![:space:]]*}"}"
     [[ -n "$line" && "$line" != \#* ]] || continue
@@ -104,6 +107,26 @@ embedding_load_github_credential() {
   fi
   # A Git-only publisher must never retain unrelated Hub credentials.
   unset HF_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACE_HUB_TOKEN
+  return "$status"
+}
+
+embedding_load_hf_credential() {
+  local env_file="${1:-$EMBEDDING_RUNTIME_ROOT/.env}" loaded status=0
+  loaded="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}}"
+  if [[ -z "$loaded" ]]; then
+    loaded="$(embedding_read_dotenv_key "$env_file" HF_TOKEN)" || {
+      loaded="$(embedding_read_dotenv_key "$env_file" HUGGINGFACE_HUB_TOKEN)" || status=$?
+    }
+  fi
+  if (( status == 0 )) && [[ -n "$loaded" ]]; then
+    HF_TOKEN="$loaded"
+    export HF_TOKEN
+  else
+    status=1
+  fi
+  # A Hub-only publisher must never retain unrelated Git credentials or a
+  # second token alias.  The caller runs this helper inside a short subshell.
+  unset GITHUB GITHUB_TOKEN HUGGING_FACE_HUB_TOKEN HUGGINGFACE_HUB_TOKEN
   return "$status"
 }
 

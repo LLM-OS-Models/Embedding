@@ -85,6 +85,7 @@ def test_git_publishers_load_only_github_credential(tmp_path: Path) -> None:
         "export GITHUB='github dummy value'\n",
         encoding="utf-8",
     )
+    env_file.chmod(0o600)
     probe = subprocess.run(
         [
             "bash",
@@ -102,6 +103,24 @@ def test_git_publishers_load_only_github_credential(tmp_path: Path) -> None:
         env={"PATH": os.environ["PATH"]},
     )
     assert probe.stdout == "github dummy value|unset"
+
+    hf_probe = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; unset HF_TOKEN HUGGINGFACE_HUB_TOKEN; '
+            'export GITHUB=sentinel; embedding_load_hf_credential "$2"; '
+            'printf "%s|%s" "${HF_TOKEN:+set}" "${GITHUB-unset}"',
+            "bash",
+            str(COMMON_RUNTIME),
+            str(env_file),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={"PATH": os.environ["PATH"]},
+    )
+    assert hf_probe.stdout == "set|unset"
 
     for publisher in (
         ROOT / "scripts/commit_qwen_official_result.sh",
@@ -227,11 +246,25 @@ def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
         assert "HF_TOKEN=\"$(sed" not in source, queue
         assert 'PUBLISH_HF_TOKEN_FILE="$ROOT/.env"' in source, queue
         assert '--hf-token-file "$PUBLISH_HF_TOKEN_FILE"' in source, queue
-        # Dataset publishers still require an environment token, but source the
-        # ignored credential file only after the training checkpoint is chosen.
-        source_token = source.index('source "$PUBLISH_HF_TOKEN_FILE"')
+        # Dataset publishers load only the Hub credential inside a short
+        # subshell after the training checkpoint is chosen.
+        source_token = source.index(
+            'embedding_load_hf_credential "$PUBLISH_HF_TOKEN_FILE"'
+        )
         selected_checkpoint = source.index("select_best_checkpoint.py")
         assert selected_checkpoint < source_token, queue
+
+    for queue in (
+        SCALE_QUEUE,
+        ROOT / "scripts/run_reranker_kd_ablation_queue.sh",
+        ROOT / "scripts/run_legal_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+    ):
+        source = queue.read_text(encoding="utf-8")
+        assert "embedding_load_hf_credential" in source, queue
+        assert 'source "$PUBLISH_HF_TOKEN_FILE"' not in source, queue
+        assert 'source "$ROOT/.env"' not in source, queue
 
 
 def test_intermediate_queues_disable_public_evaluation_by_default() -> None:

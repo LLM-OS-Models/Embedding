@@ -205,9 +205,7 @@ fi
 DATA_UPLOAD_PID=""
 if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
   (
-    set -a
-    source "$PUBLISH_HF_TOKEN_FILE"
-    set +a
+    embedding_load_hf_credential "$PUBLISH_HF_TOKEN_FILE"
     retry_stage upload-combined-curriculum 3 \
       "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
       --train "$CURRICULUM" --provenance "$PROVENANCE" --manifest "$MANIFEST" \

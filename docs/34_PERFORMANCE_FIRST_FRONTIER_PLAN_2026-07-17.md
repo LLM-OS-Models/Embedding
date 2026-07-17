@@ -540,8 +540,9 @@ Git remote URL, commit에 넣지 않는다.
 - credential을 읽어야 하는 upload는 값이 아니라 존재 여부만 확인하고 process memory에서
   사용한다. persistent `login`을 만들지 않는다.
 - 학습·mining·평가 parent에서는 `HF_TOKEN`/`HUGGINGFACE_HUB_TOKEN`을 unset한다. dataset
-  uploader만 `.env`를 source한 짧은 background subshell을 사용하고, model publisher/watcher는
-  mode-0600 `.env`에서 HF key 하나만 process memory로 읽는다.
+  uploader는 짧은 background subshell에서 mode-0600 `.env`의 HF key 하나만 안전하게 파싱해
+  export하고 GitHub key와 token alias를 제거한다. model publisher/watcher도 같은 파일에서 HF
+  key 하나만 process memory로 읽는다. `.env` 전체를 source하지 않는다.
 - Git에는 code, configs, docs, small manifest/report만 push한다.
 - model, dataset, checkpoint는 Hugging Face의 해당 model/dataset repository에 upload하고
   Git repository에는 넣지 않는다.

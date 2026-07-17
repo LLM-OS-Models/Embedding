@@ -141,9 +141,7 @@ CHECKPOINT_INTERVAL=25
 DATA_UPLOAD_PID=""
 if [[ -f "$ROOT/.env" ]]; then
   (
-    set -a
-    source "$ROOT/.env"
-    set +a
+    embedding_load_hf_credential "$ROOT/.env"
     for attempt in 1 2 3; do
       "$UTILITY_PYTHON" "$ROOT/scripts/publish_reranker_kd_dataset.py" \
         --train "$KD_TRAIN" --audit "$KD_AUDIT" --manifest "$KD_MANIFEST" \
