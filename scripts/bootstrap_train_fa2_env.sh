@@ -31,6 +31,7 @@ PY
 import accelerate
 import flash_attn
 import peft
+import sentence_transformers
 import swift
 import torch
 import transformers
@@ -45,6 +46,7 @@ print(
         "transformers": transformers.__version__,
         "swift": swift.__version__,
         "peft": peft.__version__,
+        "sentence_transformers": sentence_transformers.__version__,
         "trl": trl.__version__,
         "accelerate": accelerate.__version__,
     }
