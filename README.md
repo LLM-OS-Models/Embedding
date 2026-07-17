@@ -12,7 +12,7 @@ Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 
 
 - 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
 - 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이다. 2026-07-18 00:26 KST에 `Nemotron-3-Embed-8B-BF16@2b29550c`의 고정 Sionic 9 전체 평가를 완료했으며 macro NDCG@10은 **`0.732212`**로 Comsat `0.7930`보다 `-0.060788`이다. 원본 그대로의 교체는 탈락이다. 태스크별 값은 MIRACL `.64994`, Mr.TyDi `.49324`, MLDR `.33463`, AutoRAG `.88550`, Ko-StrategyQA `.79387`, PublicHealthQA `.82497`, Belebele `.95209`, SQuADKorV1 `.92018`, LawIRKo `.73549`다. MLDR nominal batch/cache key 64는 유지하면서 OOM 1회 뒤 실제 encoder microbatch 32로 완료했다.
-- 현재 valid performance candidate는 **0개**다. 자동 chain은 Nemotron/Qwen/Comsat의 독립 legal 10K·finance/knowledge 1.9K 비교를 진행 중이다. raw deficit이 `.020`을 초과하므로 기존 단기 적응 허용 규칙상 Nemotron 채택 가능성은 없고, decision artifact가 이를 확정하면 Qwen `checkpoint-1750`을 exact contract로 재개한다. clean 비교 결과는 Nemotron을 teacher/miner로 쓸지 판단하는 근거로 보존한다.
+- 현재 valid performance candidate는 **0개**다. 자동 chain은 Nemotron/Qwen/Comsat의 독립 legal 10K·finance/knowledge 1.9K 비교를 진행 중이다. raw deficit이 `.020`을 초과하고 multidomain가 guard에서 탈락해 Nemotron은 성능상 채택 조건을 충족하지 못했다. `outputs/evaluation/nemotron3-base-decision.json`의 `decision`는 `resume_qwen_checkpoint_1750_and_reselect`로 고정되어 있어, 현재 베이스 재개는 Qwen `checkpoint-1750`이 기준이다. clean 비교 결과는 Nemotron을 teacher/miner로 쓸지 판단하는 근거로 보존한다.
 - 공개 학습용 첫 권리안전 artifact는 [`LLM-OS-Models2/ko-legal-embedding-training-v1`](https://huggingface.co/datasets/LLM-OS-Models2/ko-legal-embedding-training-v1)이다. 한국 법령·행정규칙·판례·자치법규 source-native pair 250,000행이며 모든 행의 source/revision/license/redistribution 권리를 검증했고, 고정 benchmark blocklist exact overlap은 query/evaluation/corpus 모두 0이다. public immutable commit은 `faf431f53a9d8e8bbfa4d57903012a5d786f8716`이다.
 - Nemotron-3 공개 적응은 decision gate가 허용할 때만 `scripts/train_nemotron3_public_lora.py`가 실행한다. base architecture/mean-pooling/public manifest SHA를 검증하고 PEFT LoRA·cached all-negative loss·optimizer checkpoint를 재개한다. source JSONL에 저장된 기존 `Instruct/Query`를 한 번 제거한 뒤 학습 query에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 붙이고 positive/negative는 무접두 source-native text로 유지해 이중 prompt 없이 train/eval 입력 계약을 맞춘다. contract-only와 단위 검증은 통과했다.
 - 현재 자동 chain은 `run_nemotron3_base_decision.sh` → `run_nemotron3_post_decision_probe.sh` → `run_nemotron3_public_pipeline.sh` → `run_nemotron3_post_training_release.sh` 순서로 대기한다. Nemotron gate를 통과하면 저장된 기존 query instruction을 제거하고 학습·평가와 같은 query-only 고정 prompt로 public HN을 mining해 dataset 배포, 300-step LoRA, public checkpoint watcher, winner 병합·전체 final gate·public 최종 모델 검증까지 이어진다. gate가 Qwen을 선택하면 Nemotron mutation/release를 건너뛰고 Qwen exact-resume 대상으로 남긴다.
@@ -78,6 +78,20 @@ row는 101개였다.
 | 우리 공개 후보 목표 | **> 0.7930** | 회귀 없음 | 9개 전부 직접 측정 | **> 0** |
 
 현재 근거로 Comsat은 “별로인 모델”이 아니라 Qwen 대비 한국어 retrieval에 잘 특화된 모델입니다. 다만 선택된 9개 task만으로 일반 한국어·다국어 SOTA라고 할 수는 없습니다. 위 AutoRAG canonical 값은 두 모델 모두 BF16, FA2, batch 192, max length 8192로 다시 잰 값입니다. 과거 batch-2 값(Qwen `0.82765`, Comsat `0.85222`)과 섞어 비교하지 않습니다. raw run과 revision은 [평가 로그](docs/09_EVALUATION_RESULTS.md)에 기록합니다.
+
+### Nemotron-3 한국어 평가 정리(판단용)
+
+Nemotron raw 점수는 Sionic 9에서만 봤을 때 목표 `0.7930`에서 큼직하게 밀립니다 (`0.732212`, -0.060788).
+legal/multidomain 보조 guard를 기준으로 보면:
+
+| 모델 | Legal 10K NDCG@10 | Finance NDCG@10 | Knowledge NDCG@10 | multidomain macro | Sionic9 macro |
+|---|---:|---:|---:|---:|---:|
+| `nvidia/Nemotron-3-Embed-8B-BF16` | **0.982399** | **0.858991** | **0.645951** | **0.752471** | **0.732212** |
+| `Qwen/Qwen3-Embedding-8B` | 0.978809 | 0.872074 | 0.697344 | 0.784709 | 0.7825 |
+| `sionic-ai/comsat-embed-ko-8b-preview` | 0.981363 | 0.875759 | 0.708021 | 0.791890 | 0.7930 |
+
+Nemotron은 legal에서 Qwen 대비 +0.0036 정도 우세했지만, finance/knowledge/전체 multidomain에서 함께 떨어져 guard를 통과하지 못했습니다.
+그래서 현재 베이스선은 `Qwen checkpoint-1750` 재개 + `reselect` 경로가 유효합니다.
 
 ### 3. Clean Korean 종합 보드
 
