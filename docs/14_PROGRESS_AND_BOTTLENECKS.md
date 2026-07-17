@@ -1,13 +1,17 @@
 # 진행 현황, 병목과 다음 의사결정
 
-기준일: 2026-07-15 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
+기준일: 2026-07-17 (Asia/Seoul). 이 문서는 “코드가 실행됨”, “평가 재현됨”, “모델 성능이 개선됨”을 구분한다. 숫자가 없는 항목을 완료로 표현하지 않는다.
+
+> 2026-07-15 production과 local checkpoint는 재시작으로 소실됐다. 공개 data/model을 exact
+> revision으로 복원하고 2026-07-17 11:46 KST에 Qwen clean-lineage 200K를 처음부터 다시
+> 시작했다. 아래 2026-07-15 수치는 역사 기록이며 새 checkpoint 성능으로 간주하지 않는다.
 
 ## 현재 한 줄 상태
 
 평가와 학습 plumbing은 검증됐지만 **Comsat을 이긴 우리 성능 모델은 아직 없다**.
 10K r64는 merge parity 미달, 50K r64는 eval-query overlap으로 실격됐고, 오염을
-제거한 199,904행 200K r64가 첫 유효 성능 후보다. exact backend gate는 완료되어 빠른
-runtime의 SDPA가 선택됐으며 production 학습을 시작하는 단계다. checkpoint 선택은
+제거한 199,904행 200K r64가 첫 유효 성능 후보다. 재복구 exact backend gate에서 빠른
+runtime의 SDPA가 다시 선택됐고 2026-07-17 production 학습이 active다. checkpoint 선택은
 clean held-out을 우선하고, Sionic retrieval 9종과 공식 MTEB Korean v1은 최종 후보
 확인·보고에 사용한다. 이후 유효한 개선이 확인될 때만 1M, target-domain, legal replay로
 확대한다. `performance/non-commercial`과 `clean/release` 트랙은 분리한다.

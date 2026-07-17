@@ -193,13 +193,13 @@ retry_stage upload-combined-curriculum 3 \
   "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
   --train "$CURRICULUM" --provenance "$PROVENANCE" --manifest "$MANIFEST" \
   --quality-audit "$QUALITY" --benchmark-overlap-audit "$OVERLAP" \
-  --repo-id LLM-OS-Models/korean-embedding-sionic-combined-replay-v1 \
+  --repo-id LLM-OS-Models2/korean-embedding-sionic-combined-replay-v1 \
   --title "Korean Sionic Combined Target Domains with General Replay" \
-  --source-dataset LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models/korean-embedding-sionic-health-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models/korean-legal-quantile-hn7-replay-v1 \
+  --source-dataset LLM-OS-Models2/korean-embedding-sionic-squad-quantile-hn7-replay-v1 \
+  --source-dataset LLM-OS-Models2/korean-embedding-sionic-health-quantile-hn7-replay-v1 \
+  --source-dataset LLM-OS-Models2/korean-embedding-sionic-autorag-quantile-hn7-replay-v1 \
+  --source-dataset LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1 \
+  --source-dataset LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1 \
   --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
   --upload --public >"$LOG_DIR/dataset-upload.log" 2>&1 &
 DATA_UPLOAD_PID=$!
@@ -242,11 +242,11 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
     --training-manifest "$MANIFEST" \
-    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
     --upload; then
     run_stage record-combined-result "$ROOT/scripts/commit_campaign_result.sh" \
       --stage sionic-combined --model "$MODEL_REL" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
+      --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi

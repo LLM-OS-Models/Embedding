@@ -1,6 +1,12 @@
 # 종합 최고 모델 선택과 평가 계약
 
-기준일: **2026-07-15 (Asia/Seoul)**
+기준일: **2026-07-17 (Asia/Seoul)**
+
+> **2026-07-17 상태 정정:** 아래 `v1-20260715-184610` run과 watcher는 container
+> 재시작으로 종료되었고 local checkpoint가 남지 않았다. 학습 계약 자체는 재현을 위해
+> 보존한다. exact remote data/model을 복원하고 2026-07-17 11:46 KST에 같은 clean-lineage
+> run을 처음부터 다시 시작했다. 새 성능 우선 순서는
+> [2026-07-17 frontier plan](34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md)에 고정한다.
 
 ## 결론
 
@@ -44,16 +50,17 @@ robustness와 noise intrusion을 보고 결정한다. 공개 보드에서도 반
 | 288-row LoRA r32 smoke | pipeline-only | 저장·재로딩 검증이며 retrieval 성능 실험이 아님 |
 | 10K exhaustive-HN LoRA r64 | diagnostic | BF16 direct-fold merge parity가 strict gate에 미달했고 종합 평가가 없음 |
 | 50K LoRA r64 | 실격 | trainer order에서 공개 평가 query exact hash 4개가 발견됨 |
-| 200K LoRA r64 | 학습 중 | decontaminated input이지만 아직 완료·merge·clean/public 평가 전 |
+| 200K LoRA r64 | active 재학습 | 2026-07-17 새 run은 아직 checkpoint·clean selection 결과가 없음 |
 
 따라서 private checkpoint가 생성되더라도 그것은 검증할 **후보 artifact**일 뿐 valid
 performance model count를 늘리지 않는다. 같은 이유로 train/eval loss, positive margin,
 초기 finite gradient와 GPU utilization은 성능 우위의 증거가 아니다.
 
-## 활성 200K r64의 exact 학습 계약
+## 200K r64 exact 재학습 계약
 
-run ID는 `qwen3-embedding-8b-ko-performance200k-lora-r64`, trainer version directory는
-`v1-20260715-184610`이다. 2026-07-15 18:46 KST에 시작했다.
+run ID는 `qwen3-embedding-8b-ko-performance200k-lora-r64`다. 소실된 역사 run의 trainer
+version은 `v1-20260715-184610`, 현재 exact 재학습 version은
+`v0-20260717-114605`이며 2026-07-17 11:46 KST에 시작했다.
 
 | 항목 | 고정값 |
 |---|---|
@@ -73,15 +80,18 @@ run ID는 `qwen3-embedding-8b-ko-performance200k-lora-r64`, trainer version dire
 | duration | 3,123 optimizer steps |
 | validation/checkpoint | 250 steps마다 eval/save, `save_total_limit=3`, eval batch 4 |
 
-FA2는 exact homogeneous-order 5+5-step 비교에서 SDPA 대비 약 3.2%만 빨랐고 사전 고정한
-1.05× admission 기준을 넘지 못했다. 작은 차이를 승격 근거로 삼지 않아 SDPA를 선택했다.
+재시작 후 FA2는 exact homogeneous-order 5+5-step 비교에서 SDPA 대비 약 3.73%만 빨랐고
+사전 고정한 1.05× admission 기준을 넘지 못했다. 작은 차이를 승격 근거로 삼지 않아
+SDPA를 선택했다. 새 admission report SHA-256은
+`c409291a95017716925275ec3068db19ba00d734750ab77a0e38c2b1f432ec11`다.
 초기 step의 finite loss/gradient와 H100 사용률은 runtime 건강성만 증명한다.
 
 ## Private checkpoint watcher의 역할
 
-학습과 분리된 watcher도 active run과 함께 실행 중이며, step 250 이후 같은 간격의 completed checkpoint만 검사한다.
-directory step과 같은 step의 finite `eval_loss`, 전체 BF16/F16/F32 safetensors의 finite
-value, LoRA A/B 구조와 안정된 file fingerprint를 통과해야 한다.
+watcher는 2026-07-17 새 run과 함께 `LLM-OS-Models2` private repository를 대상으로
+실행 중이다. step 250 이후 같은 간격의 completed checkpoint만 검사한다. directory step과 같은 step의 finite
+`eval_loss`, 전체 BF16/F16/F32 safetensors의 finite value, LoRA A/B 구조와 안정된 file
+fingerprint를 통과해야 한다.
 
 private repository에는 checkpoint마다 다음 세 파일만 atomic commit한다.
 
@@ -225,7 +235,7 @@ clean·broad·multilingual 회귀가 실제로 좋아질 때만 다음 scale에 
 
 ## 다음 판정 순서
 
-1. active 200K 3,123-step 학습과 private checkpoint 보존을 끝낸다.
+1. exact 200K data와 환경을 복원하고 3,123-step 학습·private checkpoint 보존을 처음부터 다시 실행한다.
 2. finite/parity/evidence gate를 통과한 checkpoint만 merge/package한다.
 3. 모든 eligible local candidate를 Grade-I clean 10K와 paired noise 6조건으로 평가한다.
 4. `0.002` clean near-tie 정책으로 local winner 하나를 고른다.

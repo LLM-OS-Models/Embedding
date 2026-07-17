@@ -2,6 +2,31 @@
 
 이 파일에는 실제로 실행한 결과만 기록합니다. 모델 카드의 성능표는 여기의 raw result와 revision을 기준으로 생성합니다.
 
+## 2026-07-17 restart exact-order 200K backend decision
+
+재시작 뒤 복원한 NFS 학습 환경에서 2026-07-15와 같은 320행, 같은 source/length order,
+Qwen3-Embedding-8B LoRA r64, batch 16, accumulation 4, max length 512, HN4 계약을
+SDPA와 FA2로 각각 5 optimizer-step 다시 역전파했다. 양쪽 loss와 gradient는 모두 finite였다.
+
+| Runtime / backend | Seconds / optimizer-step | Peak VRAM | 결정 |
+|---|---:|---:|---|
+| NVIDIA Torch 2.5 runtime / SDPA | **11.96** | 69.12 GiB | 선택 |
+| NVIDIA Torch 2.5 runtime / FA2 | 11.53 | **67.99 GiB** | 1.05x gate 미달 |
+
+FA2 speedup은 `1.037294x`다. admission report는 `admitted=false`,
+`matched_sdpa_eligible=true`, `selected_backend=sdpa`이며 SHA-256은
+`c409291a95017716925275ec3068db19ba00d734750ab77a0e38c2b1f432ec11`다. workload
+contract SHA는 `aec12f9fdb9b65fd29946d05f529957aae285da168c921309284b040c67a12c3`,
+runtime fingerprint SHA는
+`a5a93eb86d3a0a41be11cf6c0fd059e277b84f42c0ae26634c643dae28c2028e`다.
+원본 train SHA와 probe subset SHA는 각각
+`8e2731ab25299ff558af675f067b253a6ce4375a850aa925acfe3b3117505e3c`,
+`155ce90a20fb9f4dacce3244a43962bd9a96f8fc765365d54295d16f2cc503b9`다.
+
+이 보고서를 fail-closed `check-sdpa`로 재검증한 뒤 2026-07-17 11:46 KST에
+`v0-20260717-114605` production을 시작했다. 학습 process는 `EMBEDDING_OFFLINE=1`로
+Hub token을 제거했고, 별도 private watcher만 mode-0600 `.env`를 메모리에서 읽는다.
+
 ## 2026-07-15 exact-order 200K training backend decision
 
 무효 측정의 원인을 고친 뒤 같은 320행 subset으로 다시 실행했다. 양쪽 모두

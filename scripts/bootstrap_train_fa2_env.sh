@@ -6,7 +6,14 @@ cd "$ROOT"
 TARGET="${TRAIN_FA2_ENV:-$ROOT/.venv-train-fa2}"
 
 if [[ ! -x "$TARGET/bin/python" ]]; then
-  python3 -m venv --system-site-packages "$TARGET"
+  if ! python3 -m venv --system-site-packages "$TARGET"; then
+    BOOTSTRAP="$ROOT/.cache/virtualenv-bootstrap"
+    PIP_CACHE_DIR="${PIP_CACHE_DIR:-$ROOT/.cache/pip}" \
+      python3 -m pip install --disable-pip-version-check --no-input \
+      --target "$BOOTSTRAP" virtualenv==21.6.1
+    PYTHONPATH="$BOOTSTRAP" python3 -m virtualenv --clear \
+      --system-site-packages "$TARGET"
+  fi
 fi
 "$TARGET/bin/python" - <<'PY'
 import flash_attn

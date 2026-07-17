@@ -1,24 +1,27 @@
 # Korean Embedding Lab
 
 한국어 검색 임베딩 모델을 연구하되 `sionic-ai/comsat-embed-ko-8b-preview`나 Sionic 한
-보드를 넘는 데서 멈추지 않고, **Korean retrieval·broad text·다국어·긴 문맥/context·
-noise 강건성·효율을 함께 보는 실용적 종합 최고 모델**을 재현 가능하게 만드는 작업
-공간입니다. 실질적으로 미미한 차이는 near-tie로 취급하고 실패 축과 오염을 숨기지
-않습니다.
+보드를 넘는 데서 멈추지 않고, **비상업 연구 자산까지 허용한 성능 최우선 모델**과 그
+방법을 재현 가능한 clean-release 모델로 다시 만드는 두 track의 작업 공간입니다.
+Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 함께 보며, 실질적으로
+미미한 차이는 near-tie로 취급하고 실패 축과 오염을 숨기지 않습니다.
 
-기준일: **2026-07-15 (Asia/Seoul)**
+기준일: **2026-07-17 (Asia/Seoul)**
 
 ## 한 줄 결론
 
-- 현재 최적화 우선순위는 **clean 종합 보드 → Sionic retrieval 9종 → 공식 MTEB Korean v1**이며, 공개 후보는 성능뿐 아니라 데이터·가중치 권리와 배포 가능성까지 통과해야 합니다.
-- 현재 valid performance candidate는 **0개**입니다. 오염을 제거한 199,904-row 200K LoRA r64가 3,123-step production 학습 중이지만 아직 성능 후보나 우위 결과가 아닙니다.
+- 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
+- 현재 valid performance candidate는 **0개**다. 재시작으로 소실된 공개 data/model cache를 exact revision으로 복원했고, 2026-07-17 11:46 KST부터 Qwen clean-lineage 200K를 처음부터 다시 학습 중이다.
+- 본선은 `Qwen clean lineage`와 `Comsat Korean warm-start lineage`를 같은 200K 조건으로 비교한 뒤, 1M general → current-student hybrid mining → Qwen reranker score-quantile KD → 400K target → last-5 checkpoint merge 순으로 진행한다.
 - checkpoint는 public score가 아니라 Grade-I clean retrieval에서 먼저 고르며 NDCG@10 차이 `0.002` 이하는 near-tie로 처리합니다. Sionic 9와 공식 Korean 6은 local winner에 final-once로 실행합니다.
 - Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
 - Comsat의 `0.7930`은 일반 MTEB SOTA가 아니라, 자체 선택한 한국어 retrieval 9종의 macro `NDCG@10`입니다. Qwen3-Embedding-8B 대비 차이는 `+0.0105`입니다.
 - 가장 직접적인 학습법은 raw-text LM CPT가 아니라 `query / positive / hard negatives`를 이용한 **continued contrastive fine-tuning(InfoNCE)** 입니다.
 - 현재 첫 실험은 `Qwen/Qwen3-Embedding-8B + BF16 LoRA + InfoNCE`로 시작합니다. 공개 평가 9종은 학습·negative mining·checkpoint selection에서 차단합니다.
 
-자세한 판단은 [요약 문서](docs/00_EXECUTIVE_SUMMARY.md)부터 읽으면 됩니다.
+새 성능 우선 판단과 재복구 순서는
+[2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md), 기존
+전체 배경은 [요약 문서](docs/00_EXECUTIVE_SUMMARY.md)부터 읽으면 됩니다.
 
 ## 성능 보드 3종
 
@@ -89,16 +92,23 @@ row는 101개였다.
 
 ## 현재 상태
 
+> **재시작 정정(2026-07-17):** 아래 dataset/card와 과거 run 기록은 원격 공개 artifact와
+> 역사적 실측을 뜻한다. 재시작 직후에는 `data/`, `outputs/`, 기존 `.venv-*`, model cache가
+> 없었으나, 현재 submodule 4개, 공개 dataset 13개, Qwen/Comsat/reranker 8B cache와 H100
+> 학습 환경을 NFS에 exact 복원했다. valid candidate는 아직 0이며 새 200K run이 active다.
+> cache/env/data/checkpoint는 모두 `/home/ubuntu/data/Embedding`의 NFS 아래에 둔다.
+
 | 항목 | 상태 | 위치 |
 |---|---|---|
-| Qwen3-Embedding 공식 저장소 | clone 완료 | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
-| 공식 후속학습 프레임워크 `ms-swift` | commit 고정, 격리 환경 설치 완료 | [`third_party/ms-swift/`](third_party/ms-swift/) |
-| 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B pinned revision 다운로드 완료; remote-code 모델은 정적 감사 전 실행 금지 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
+| Hugging Face 새 publish namespace | `LLM-OS-Models2` private model repo 생성+README write 실검증 완료; 기존 `LLM-OS-Models`는 source read-only | [`embedding-upload-permission-test-20260717`](https://huggingface.co/LLM-OS-Models2/embedding-upload-permission-test-20260717) |
+| Qwen3-Embedding 공식 저장소 | pinned submodule 복원 완료 (`44548aa5`) | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
+| 공식 후속학습 프레임워크 `ms-swift` | pinned submodule `3d61b931`, NFS `.venv-train-fa2`, CUDA 12.6/PyTorch 2.5 import+8B backward 통과 | [`third_party/ms-swift/`](third_party/ms-swift/) |
+| 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B revision은 고정; 재시작 후 local cache 복원 대기 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
 | Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
 | 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
 | 데이터 manifest / 오염 차단 | 15/15 task exact SHA-256 blocklist 빌드·공개 완료 | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
 | 100만 행 공개 가능 데이터 공장 | source·수량·검수 gate 설계 완료 | [docs/13_RIGHTS_SAFE_DATA_FACTORY.md](docs/13_RIGHTS_SAFE_DATA_FACTORY.md) |
-| Legalize-KR 데이터 | 312,581문서 감사, 2,756,363 source-native 후보 추출 가능 | [docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md](docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md) |
+| Legalize-KR 데이터 | NFS exact HEAD 4개·Markdown 312,581개 재검증 완료, 2,756,363 source-native 후보 추출 가능 | [docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md](docs/17_LEGAL_AND_KO_DATA_SOURCE_AUDIT.md) |
 | Ko-triplet exhaustive HN 10K/512 | Qwen3 exact dense top-24→HN4, ratio .95; train/validation 15-task exact overlap 모두 0, manifest/audit 공개 | [`LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k/tree/0865276985dd2eae5efec33a4fa181ee3086bd5f) |
 | 성능 우선 50K 데이터 | raw/ordered 모두 eval-query hash 4개 확인; diagnostic 전용으로 카드 경고·감사 공개, 대표 모델 선택 금지 | [`LLM-OS-Models/korean-embedding-performance-v1-pilot-50k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-pilot-50k/tree/77ed4e8d30c89722b262d500f38b4818b359eaf4) |
 | 성능 우선 200K 데이터 | critical eval-query row 12개 교체, exact 199,904-row order, query/eval critical overlap 0·품질/overlap 감사 공개 | [`LLM-OS-Models/korean-embedding-performance-v1-ablation-200k`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-performance-v1-ablation-200k/tree/f605128d3233e7cc488dc741b8f2af9ecf68b6fa) |
@@ -112,9 +122,9 @@ row는 101개였다.
 | 평가 오염 방지 blocklist | Sionic 9 + 공식 Korean 6, 원문 없는 SHA-256 547MB | [`LLM-OS-Models/korean-embedding-benchmark-blocklist-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
 | Clean 법률 retrieval 10K | training document overlap 0, benchmark exact overlap 0, 독립 verifier pass | [`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0) |
 | 대화형 noise robustness | prompt on/off × noise 0/1/5%, exact rank·cache·모델 카드 자동화; baseline 실행 대기 | [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md) |
-| 200K 학습 backend | exact homogeneous-order 5+5-step: SDPA 11.90, FA2 11.53 s/step(1.0321x); 미미한 차이라 FA2 탈락, exact 검증된 빠른 runtime+SDPA 선택 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
-| 200K LoRA r64 production | 2026-07-15 18:46 KST 시작; train SHA `8e2731…5e3c`, actual microbatch 16·accumulation 4, BF16 SDPA, 199,904행·3,123 step; early loss/grad finite는 runtime 건강성일 뿐 성능 주장이 아님 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
-| private checkpoint watcher | step-250부터 same-step eval·전체 adapter finite gate를 통과한 allowlist 3파일만 private 증분 업로드; checkpoint 업로드는 성능 승격이 아님 | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
+| 200K 학습 backend | 2026-07-17 exact homogeneous-order 5+5-step: SDPA 11.96, FA2 11.53 s/step(1.0373x); FA2 탈락, exact 검증된 `.venv-train-fa2 + SDPA` 선택 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
+| 200K LoRA r64 production | 2026-07-17 11:46 KST 시작; Qwen exact base, train SHA `8e2731…5e3c`, 199,904행·3,123-step, 양쪽 shuffle off, offline/token-free active run | [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
+| private checkpoint watcher | active; step-250부터 finite/same-step eval gate를 통과한 allowlist 3파일만 `LLM-OS-Models2` private 복구 artifact로 업로드 | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
 | clean-first model selection | valid performance candidate 0; Grade-I-not-Z 법률 10K 우선, clean/robustness epsilon `0.002`, public Sionic/official score는 selector 입력에서 제외 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
 | text-only comprehensive diagnostic | 7 tasks·414 selected subsets; K-HATERS는 unsupported registered task, visual-document 5 assets는 modality 불일치로 명시 제외; public medium/high contamination diagnostic | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
 | Qwen3 reranker teacher scorer | `Qwen3-Reranker-8B@77d193c`; official yes/no logits, 실제 model microbatch 8, 5개 약 16GB LFS content SHA 전수 검증 후 local-only load; 아직 score/KD 성능 결과 없음 | [teacher scorer](experiments/030_teacher_distillation/) |
@@ -160,6 +170,7 @@ row는 101개였다.
 32. [200K private checkpoint 증분 업로드 watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md)
 33. [Qwen reranker teacher와 금융·시간성 추가 데이터](docs/32_NEXT_STAGE_TEACHER_AND_DATA.md)
 34. [종합 최고 모델 선택·평가 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md)
+35. [2026-07-17 성능 최우선 frontier 방법론과 전면 복구 계획](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md)
 
 ## 실험 지도
 

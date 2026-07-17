@@ -73,7 +73,7 @@ class PublishBestModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             model_sha = "a" * 64
-            repo_id = "LLM-OS-Models/release-fixture"
+            repo_id = "LLM-OS-Models2/release-fixture"
             paths = {
                 "training": root / "training.json",
                 "sionic9": root / "sionic.json",
@@ -409,45 +409,45 @@ class PublishBestModelTests(unittest.TestCase):
         )
         self.assertEqual(
             scale[0],
-            "LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1",
+            "LLM-OS-Models2/korean-embedding-performance-1m-quantile-hn7-v1",
         )
         legal = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-legal25-general75"}
         )
-        self.assertEqual(legal[0], "LLM-OS-Models/korean-legal-quantile-hn7-replay-v1")
+        self.assertEqual(legal[0], "LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1")
         squad = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-squad50-general50"}
         )
         self.assertEqual(
             squad[0],
-            "LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
         )
         health = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-health-domain50-general50"}
         )
         self.assertEqual(
             health[0],
-            "LLM-OS-Models/korean-embedding-sionic-health-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-health-quantile-hn7-replay-v1",
         )
         autorag = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-autorag-domain50-general50"}
         )
         self.assertEqual(
             autorag[0],
-            "LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
         )
         retrieval = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-retrieval-family50-general50"}
         )
         self.assertEqual(
             retrieval[0],
-            "LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
         )
         combined = training_dataset_repos(
             {"benchmark_adaptation": "target-adapted-sionic-combined-v1"}
         )
         self.assertEqual(
-            combined[0], "LLM-OS-Models/korean-embedding-sionic-combined-replay-v1"
+            combined[0], "LLM-OS-Models2/korean-embedding-sionic-combined-replay-v1"
         )
 
     def test_card_requires_complete_evidence(self) -> None:
@@ -731,7 +731,7 @@ class PublishBestModelTests(unittest.TestCase):
                 "conversational_noise_ranks.jsonl", robust_publication["evidence"]
             )
 
-            release_repo = "LLM-OS-Models/release-fixture"
+            release_repo = "LLM-OS-Models2/release-fixture"
             manifest.write_text(
                 json.dumps(
                     {

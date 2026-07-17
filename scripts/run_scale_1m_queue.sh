@@ -273,7 +273,7 @@ if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
     --mining-manifest "$MINING_MANIFEST" --mining-audit "$MINING_AUDIT" \
     --quality-audit "$MINED_QUALITY_AUDIT" \
     --benchmark-overlap-audit "$MINED_OVERLAP_AUDIT" \
-    --repo-id LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1 \
+    --repo-id LLM-OS-Models2/korean-embedding-performance-1m-quantile-hn7-v1 \
     --title "Korean Embedding Performance 1M Quantile HN7" \
     --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
     --upload --public >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
@@ -339,12 +339,12 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     "${clean_args[@]}" \
     "${robustness_args[@]}" \
     --training-manifest "$TRAINING_MANIFEST" \
-    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-1m-v1-private-candidate \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-1m-v1-private-candidate \
     --upload; then
     run_stage "record-scale-1m-result" \
       "$ROOT/scripts/commit_campaign_result.sh" \
       --stage scale-1m --model "$MODEL_REL" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-1m-v1-private-candidate \
+      --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-1m-v1-private-candidate \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi

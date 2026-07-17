@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--repo-id",
-        default="LLM-OS-Models/korean-embedding-benchmark-blocklist-v1",
+        default="LLM-OS-Models2/korean-embedding-benchmark-blocklist-v1",
     )
     parser.add_argument("--upload", action="store_true")
     parser.add_argument("--public", action="store_true")

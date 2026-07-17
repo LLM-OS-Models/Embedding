@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
         help="Machine-readable approval required for every public release.",
     )
     parser.add_argument(
-        "--repo-id", default="LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1"
+        "--repo-id", default="LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1"
     )
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--upload", action="store_true")
@@ -648,47 +648,47 @@ def training_dataset_repos(manifest: dict[str, Any]) -> list[str]:
     adaptation = str(manifest.get("benchmark_adaptation", ""))
     if adaptation.startswith("target-adapted") and "combined" in adaptation:
         return [
-            "LLM-OS-Models/korean-embedding-sionic-combined-replay-v1",
-            "LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
-            "LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
-            "LLM-OS-Models/korean-embedding-sionic-health-quantile-hn7-replay-v1",
-            "LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
-            "LLM-OS-Models/korean-legal-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-combined-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-health-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if adaptation.startswith("target-adapted") and "legal" in adaptation:
         return [
-            "LLM-OS-Models/korean-legal-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-legal-retrieval-source-native-250k",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if adaptation.startswith("target-adapted") and "squad" in adaptation:
         return [
-            "LLM-OS-Models/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-squad-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-sionic-squad-train-60k",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if adaptation.startswith("target-adapted") and "health" in adaptation:
         return [
-            "LLM-OS-Models/korean-embedding-sionic-health-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-health-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-sionic-health-100k",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if adaptation.startswith("target-adapted") and "autorag" in adaptation:
         return [
-            "LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-autorag-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-sionic-autorag-100k",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if adaptation.startswith("target-adapted") and "retrieval-family" in adaptation:
         return [
-            "LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
+            "LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if adaptation.startswith("target-adapted"):
         return [
-            "LLM-OS-Models/korean-embedding-performance-1m-quantile-hn7-v1",
+            "LLM-OS-Models2/korean-embedding-performance-1m-quantile-hn7-v1",
             "LLM-OS-Models/korean-embedding-performance-v1-performance-1m",
         ]
     if manifest.get("purpose") == "training-only-dense-hard-negative-mining":

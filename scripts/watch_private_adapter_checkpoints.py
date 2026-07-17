@@ -29,7 +29,7 @@ from typing import Any, Callable, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPO_ID = (
-    "LLM-OS-Models/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates"
+    "LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates"
 )
 DEFAULT_BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
 DEFAULT_BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
@@ -1059,10 +1059,10 @@ def scan_once(
 
 def validate_cli(args: argparse.Namespace) -> None:
     if not REPO_ID_RE.fullmatch(args.repo_id) or not args.repo_id.startswith(
-        "LLM-OS-Models/"
+        "LLM-OS-Models2/"
     ):
         raise WatcherError(
-            "invalid_argument", "repo ID must be under the LLM-OS-Models organization"
+            "invalid_argument", "repo ID must be under the LLM-OS-Models2 organization"
         )
     if any(pattern.search(args.repo_id) for pattern in TOKEN_VALUE_RES):
         raise WatcherError("invalid_argument", "repo ID contains a token-like value")

@@ -238,7 +238,7 @@ retry_stage upload-derived-legal-replay 3 \
   --mining-manifest "$MINING_MANIFEST" --mining-audit "$AUDIT" \
   --quality-audit "$CURRICULUM_QUALITY_AUDIT" \
   --benchmark-overlap-audit "$CURRICULUM_OVERLAP_AUDIT" \
-  --repo-id LLM-OS-Models/korean-legal-quantile-hn7-replay-v1 \
+  --repo-id LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1 \
   --title "Korean Legal Quantile HN7 with General Replay" \
   --source-dataset LLM-OS-Models/korean-legal-retrieval-source-native-250k \
   --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
@@ -301,12 +301,12 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
     "${clean_args[@]}" \
     "${robustness_args[@]}" \
-    --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1-private-candidate \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-legal-target-adapted-v1-private-candidate \
     --upload; then
     run_stage record-legal-replay-result \
       "$ROOT/scripts/commit_campaign_result.sh" \
       --stage legal-replay --model "$MODEL_REL" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-legal-target-adapted-v1-private-candidate \
+      --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-legal-target-adapted-v1-private-candidate \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi

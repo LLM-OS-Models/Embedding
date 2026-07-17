@@ -19,9 +19,9 @@ export TARGET_FALLBACK_GRAD_ACCUM_STEPS=32
 export TARGET_EVAL_BATCH_SIZE=2
 export TARGET_SOURCE_DATASET=LLM-OS-Models/korean-embedding-performance-v1-sionic-retrieval-train-family-4146
 export TARGET_RUN_NAME=qwen3-embedding-8b-ko-sionic-retrieval-family50-replay50-lora-r64
-export DERIVED_REPO=LLM-OS-Models/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1
+export DERIVED_REPO=LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1
 export DERIVED_TITLE="Korean Sionic Retrieval-Family Quantile HN7 with General Replay"
-export MODEL_REPO=LLM-OS-Models/qwen3-embedding-8b-ko-sionic-retrieval-family-target-adapted-v1
+export MODEL_REPO=LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-retrieval-family-target-adapted-v1
 export CAMPAIGN_STAGE=sionic-retrieval-family-target
 export LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-retrieval-family-adaptation-20260712}"
 

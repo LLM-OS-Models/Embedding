@@ -6,9 +6,11 @@ while the campaign predates publication and expects selected files at the
 local dataset root.  This tool downloads exact Hub revisions, verifies the
 training bytes, and creates relative symlinks for the legacy queue names.
 
-The Hugging Face token is read into process memory from ``HF_TOKEN`` or the
-repository's ignored ``.env`` file.  It is never printed or persisted by this
-tool.
+Public assets are downloaded anonymously by default with ``token=False`` so a
+credential persisted by another user on a shared machine is never reused.  If
+``--use-token`` is explicitly requested, the token is read into process memory
+from ``HF_TOKEN`` or the repository's ignored ``.env`` file.  It is never
+printed or persisted by this tool.
 """
 
 from __future__ import annotations
@@ -308,7 +310,7 @@ def metadata_aliases(asset: DatasetAsset, destination: Path) -> Iterable[tuple[P
             yield source, destination / alias_name
 
 
-def restore_dataset(asset: DatasetAsset, token: str | None, cache_dir: Path, max_workers: int, local_only: bool) -> None:
+def restore_dataset(asset: DatasetAsset, token: str | bool, cache_dir: Path, max_workers: int, local_only: bool) -> None:
     try:
         from huggingface_hub import snapshot_download
     except ImportError as exc:
@@ -346,7 +348,7 @@ def restore_dataset(asset: DatasetAsset, token: str | None, cache_dir: Path, max
     print(f"VERIFIED {asset.key}")
 
 
-def restore_model(asset: ModelAsset, token: str | None, cache_dir: Path, max_workers: int, local_only: bool) -> None:
+def restore_model(asset: ModelAsset, token: str | bool, cache_dir: Path, max_workers: int, local_only: bool) -> None:
     try:
         from huggingface_hub import snapshot_download
     except ImportError as exc:
@@ -372,6 +374,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--all", action="store_true", help="restore datasets and every model")
     parser.add_argument("--asset", action="append", default=[], help="restore only a named dataset/model key")
     parser.add_argument("--local-only", action="store_true", help="verify/link without network access")
+    parser.add_argument(
+        "--use-token",
+        action="store_true",
+        help="opt in to reading HF_TOKEN or the ignored .env file; public downloads are anonymous by default",
+    )
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--max-workers", type=int, default=8)
     return parser.parse_args()
@@ -386,9 +393,16 @@ def main() -> None:
     unknown = requested - known
     if unknown:
         raise SystemExit(f"Unknown asset key(s): {', '.join(sorted(unknown))}")
-    token = read_dotenv_token()
-    if not args.local_only and not token:
-        raise SystemExit("HF_TOKEN is unavailable; token value is never accepted on the command line")
+    # Passing False explicitly prevents huggingface_hub from falling back to a
+    # token persisted by another user on this shared machine.  Public assets do
+    # not need authentication.  Token use is an explicit opt-in and the value
+    # is never accepted as a command-line argument or printed.
+    token: str | bool = False
+    if args.use_token:
+        loaded_token = read_dotenv_token()
+        if not loaded_token:
+            raise SystemExit("--use-token was requested but HF_TOKEN is unavailable")
+        token = loaded_token
     args.cache_dir.mkdir(parents=True, exist_ok=True)
     selected_datasets = [
         asset for asset in DATASETS if args.all or args.datasets or asset.key in requested

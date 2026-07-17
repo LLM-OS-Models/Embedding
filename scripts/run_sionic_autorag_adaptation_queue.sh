@@ -12,9 +12,9 @@ export TARGET_NLIST=512
 export TARGET_TRAINING_POINTS=50000
 export TARGET_SOURCE_DATASET=LLM-OS-Models/korean-embedding-performance-v1-sionic-autorag-100k
 export TARGET_RUN_NAME=qwen3-embedding-8b-ko-sionic-autorag50-replay50-lora-r64
-export DERIVED_REPO=LLM-OS-Models/korean-embedding-sionic-autorag-quantile-hn7-replay-v1
+export DERIVED_REPO=LLM-OS-Models2/korean-embedding-sionic-autorag-quantile-hn7-replay-v1
 export DERIVED_TITLE="Korean Sionic AutoRAG Quantile HN7 with General Replay"
-export MODEL_REPO=LLM-OS-Models/qwen3-embedding-8b-ko-sionic-autorag-target-adapted-v1
+export MODEL_REPO=LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-autorag-target-adapted-v1
 export CAMPAIGN_STAGE=sionic-autorag-target
 export LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-autorag-adaptation-20260712}"
 

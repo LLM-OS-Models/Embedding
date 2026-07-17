@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data/processed/ko_triplet_pilot_10k"
 REPORTS = ROOT / "reports"
-DEFAULT_REPO = "LLM-OS-Models/korean-embedding-ko-triplet-hn-pilot-10k"
+DEFAULT_REPO = "LLM-OS-Models2/korean-embedding-ko-triplet-hn-pilot-10k"
 
 
 def parse_args() -> argparse.Namespace:

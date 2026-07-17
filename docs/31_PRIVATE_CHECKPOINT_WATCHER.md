@@ -4,7 +4,7 @@
 output for completed `checkpoint-N` directories and incrementally commits only
 verified adapter candidates to the private model repository:
 
-`LLM-OS-Models/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates`
+`LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates`
 
 The watcher is deliberately separate from the training process. It does not
 start or modify training and uploading is disabled unless `--upload` is given.

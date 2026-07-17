@@ -4,6 +4,10 @@
 revision으로 다운로드했다. 제3자 원본을 우리 조직에 재업로드하지 않고, 파생 데이터가
 생길 때만 원본 revision·변환·감사 SHA를 포함해 별도 공개한다.
 
+> **2026-07-17 상태 정정:** 아래 “다운로드했다”는 2026-07-15 container의 역사적
+> 상태다. 재시작 후 local cache는 없으며 revision·SHA 계약을 이용해 NFS에 다시
+> 복원해야 한다.
+
 ## 고정 자산
 
 | 역할 | Hugging Face asset | Revision | License / 크기 |
@@ -51,7 +55,7 @@ KoTSQA test 6,750개는 unchanged/changed/new와 single-hop/multi-hop/false-prem
 
 ## 실행 순서
 
-1. 진행 중인 200K r64를 끝내 clean held-out으로 첫 유효 후보 여부를 판정한다.
+1. 중단된 200K r64의 exact data/environment를 복원하고 처음부터 재학습해 clean held-out으로 첫 유효 후보 여부를 판정한다.
 2. 개선이 확인되면 Qwen reranker score cache와 filter-only/KD 소규모 A/B를 만든다.
 3. BCAI train-only finance shard와 KoTSQA test blocklist의 exact/near-overlap 감사를
    완료한다.

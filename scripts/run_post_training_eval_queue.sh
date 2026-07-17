@@ -308,12 +308,12 @@ if [[ -s "$SELECTION" ]]; then
       --training-manifest "$training_manifest" \
       "${clean_args[@]}" \
       "${robustness_args[@]}" \
-      --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1-private-candidate \
+      --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
       --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
       run_stage "record-pilot-best-result" \
         "$ROOT/scripts/commit_campaign_result.sh" \
         --stage pilot-best --model "$best_model" \
-        --repo-id LLM-OS-Models/qwen3-embedding-8b-ko-performance-v1-private-candidate \
+        --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
         --sionic-summary "$sionic_summary" --official-summary "$official_summary"
     fi
   fi

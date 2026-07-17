@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--repo-id",
-        default="LLM-OS-Models/korean-embedding-performance-v1-pilot-50k",
+        default="LLM-OS-Models2/korean-embedding-performance-v1-pilot-50k",
     )
     parser.add_argument("--expected-phase", default="pilot_50k")
     parser.add_argument("--expected-rows", type=int, default=50_000)
