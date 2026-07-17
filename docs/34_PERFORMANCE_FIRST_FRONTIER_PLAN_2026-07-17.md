@@ -34,17 +34,17 @@ track이다.
 
 ## 1. 재시작 후 실제 상태
 
-2026-07-17 재점검 결과, Git 저장소와 remote artifact 기록은 남아 있지만 로컬 학습 상태는
-복원 전이다.
+2026-07-17 재점검·복구 결과, 이전 local checkpoint는 소실됐지만 원격에 고정한 공개
+data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다.
 
 | 항목 | 현재 실제 상태 |
 |---|---|
-| Git | `main@44512b3`, `origin/main`과 일치, 작업 시작 전 clean |
+| Git | 복구/방법론/queue/environment local commit 완료; 재시작 환경에 GitHub credential이 없어 `origin/main` push 대기 |
 | submodule | 4개 모두 pinned commit으로 복원 완료 |
-| 로컬 data/cache/output | 이전 container의 checkpoint는 없음. 이 작업에서 13개 pinned dataset bundle을 SHA/row 검증과 함께 복원 완료 |
-| Python 환경 | NFS의 `.venv-hf-tools` 복원 완료; train/eval 환경은 재생성 필요 |
-| valid model | 0개; 과거 200K run은 재시작으로 중단되어 처음부터 다시 학습해야 함 |
-| GPU | H100 80GB 1장 기준으로 재설계 |
+| 로컬 data/cache/output | 이전 checkpoint는 없음. 13개 pinned dataset, core/teacher 8B 4개, 법률 312,581문서를 exact 복원·검증 |
+| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 147/147 통과 |
+| valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K 직렬 queue 대기 |
+| GPU | H100 80GB 1장, Qwen production 100% utilization |
 | NFS | `/home/ubuntu/data`, 49TB 중 48TB 가용, 사용률 3%, inode 1% |
 | system disk | `/`, 2.0TB 중 1.6TB 가용, 사용률 22% |
 
@@ -64,7 +64,9 @@ track이다.
 `TMPDIR`, `HF_HOME`, `HF_HUB_CACHE`, `TRANSFORMERS_CACHE`, `PIP_CACHE_DIR`, `TORCH_HOME`,
 `XDG_CACHE_HOME`도 모두 위 NFS 아래로 지정한다. root overlay에 model shard나 optimizer를
 두지 않는다. 학습 전후 `df -h`와 `df -ih`를 기록하고, NFS 사용률 80%에서 새 download를
-중단하며 90%에서는 학습 시작을 금지한다.
+중단하며 90%에서는 학습 시작을 금지한다. 8B 학습 진입점은 추가로 workspace
+500GiB/100만 inode와 `/tmp` 50GiB/10만 inode를 fail-closed 최소 headroom으로
+검사한다. 현재 NFS 약 48TB와 root 약 1.6TB가 가용하다.
 
 ## 2. 참고 코드와 법률 원문 위치
 

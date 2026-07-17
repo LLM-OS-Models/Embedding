@@ -53,6 +53,10 @@ if [[ "$RUN_NAME" == *performance200k* ]]; then
 fi
 
 embedding_configure_hf_access
+embedding_require_storage_headroom "$ROOT" \
+  "${MIN_WORKSPACE_FREE_GIB:-500}" "${MIN_WORKSPACE_FREE_INODES:-1000000}"
+embedding_require_storage_headroom /tmp \
+  "${MIN_TMP_FREE_GIB:-50}" "${MIN_TMP_FREE_INODES:-100000}"
 
 for path in "$TRAIN_FILE" "$VAL_FILE"; do
   if [[ ! -f "$path" ]]; then

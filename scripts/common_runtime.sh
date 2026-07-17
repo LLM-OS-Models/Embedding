@@ -60,6 +60,28 @@ if [[ ! "$EFFECTIVE_CPU_COUNT" =~ ^[1-9][0-9]*$ ]]; then
 fi
 export EFFECTIVE_CPU_COUNT
 
+embedding_require_storage_headroom() {
+  local path="$1" min_gib="$2" min_inodes="$3"
+  local available_kib available_inodes required_kib
+  if [[ ! "$min_gib" =~ ^[1-9][0-9]*$ \
+      || ! "$min_inodes" =~ ^[1-9][0-9]*$ ]]; then
+    echo "storage headroom thresholds must be positive integers" >&2
+    return 2
+  fi
+  available_kib="$(df -Pk "$path" | awk 'NR == 2 {print $4}')"
+  available_inodes="$(df -Pi "$path" | awk 'NR == 2 {print $4}')"
+  if [[ ! "$available_kib" =~ ^[0-9]+$ \
+      || ! "$available_inodes" =~ ^[0-9]+$ ]]; then
+    echo "unable to measure storage headroom: $path" >&2
+    return 2
+  fi
+  required_kib=$((min_gib * 1024 * 1024))
+  if (( available_kib < required_kib || available_inodes < min_inodes )); then
+    echo "insufficient storage headroom: $path requires ${min_gib}GiB and ${min_inodes} inodes" >&2
+    return 3
+  fi
+}
+
 embedding_enable_torch25_swift_compat() {
   local compat="$EMBEDDING_RUNTIME_ROOT/compat/torch25"
   case ":${PYTHONPATH:-}:" in
