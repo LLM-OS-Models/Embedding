@@ -29,6 +29,7 @@ PROBE_MARKER="$ROOT/outputs/nemotron3-post-decision-probe/probe-complete.json"
 DATASET_REPO="LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/nemotron3-public-pipeline}"
 FAISS_THREADS="${FAISS_THREADS:-32}"
+QUERY_PROMPT=$'Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:'
 
 mkdir -p "$OUT" "$LOG_DIR"
 exec > >(tee -a "$LOG_DIR/runner.log") 2>&1
@@ -77,6 +78,7 @@ if [[ ! -s "$MINING_MANIFEST" \
       --work-dir "$OUT/faiss-work" --keep-work-dir \
       --model "$MODEL" --revision "$NEMOTRON_REVISION" \
       --encode-batch-size 128 --max-seq-length 512 \
+      --query-prefix "$QUERY_PROMPT" --document-prefix "" \
       --candidate-pool-size 24 --search-k 256 --num-negatives 7 \
       --selection-strategy score_rank_quantiles --positive-relative-ratio .95 \
       --nlist 512 --nprobe 32 --training-points 50000 \

@@ -67,6 +67,9 @@ Nemotron으로 FAISS HN7 mining하고, provenance projection → source-homogene
 batch32 → 최종 benchmark audit → rights finalization을 순서대로 실행한다. exact 원격 payload를
 `LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1`에 public 배포한 뒤 위 trainer를
 호출한다. 각 대형 stage의 manifest/cache를 재사용하므로 중단 후 같은 명령으로 재개한다.
+FAISS query embedding에도 학습·Sionic 평가와 동일한 query-only 고정 prompt를 명시하고
+document prefix는 비워 둔다. 두 prefix는 embedding cache namespace와 mining manifest에
+포함되어 다른 prompt로 만든 캐시가 재사용되지 않는다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를

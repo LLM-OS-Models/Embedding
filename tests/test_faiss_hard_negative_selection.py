@@ -19,6 +19,21 @@ SPEC.loader.exec_module(MODULE)
 
 
 class FaissSelectionTests(unittest.TestCase):
+    def test_prompt_is_part_of_embedding_cache_namespace(self) -> None:
+        args = SimpleNamespace(
+            model="model",
+            revision="a" * 40,
+            max_seq_length=512,
+            model_dtype="bfloat16",
+            attn_implementation="flash_attention_2",
+        )
+        plain = MODULE.cache_namespace(args, "b" * 64, "queries", 2, None, "")
+        prompted = MODULE.cache_namespace(
+            args, "b" * 64, "queries", 2, None, "fixed prompt"
+        )
+        self.assertEqual(prompted["prefix"], "fixed prompt")
+        self.assertNotEqual(plain, prompted)
+
     def test_teacher_request_sampling_is_seeded_and_without_replacement(self) -> None:
         first = MODULE.deterministic_sample_indices(1000, 50, 42)
         second = MODULE.deterministic_sample_indices(1000, 50, 42)

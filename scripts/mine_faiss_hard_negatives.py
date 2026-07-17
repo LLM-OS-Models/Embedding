@@ -62,6 +62,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attn-implementation", default="flash_attention_2")
     parser.add_argument("--max-seq-length", type=int, default=512)
     parser.add_argument("--encode-batch-size", type=int, default=128)
+    parser.add_argument("--query-prefix", default="")
+    parser.add_argument("--document-prefix", default="")
     parser.add_argument("--candidate-pool-size", type=int, default=24)
     parser.add_argument("--search-k", type=int, default=256)
     parser.add_argument("--num-negatives", type=int, default=7)
@@ -161,6 +163,7 @@ def cache_namespace(
     role: str,
     rows: int,
     model_weights_sha256: str | None,
+    prefix: str,
 ) -> dict:
     return {
         "schema": 1,
@@ -173,7 +176,7 @@ def cache_namespace(
         "max_seq_length": args.max_seq_length,
         "model_dtype": args.model_dtype,
         "attention": args.attn_implementation,
-        "prefix": "",
+        "prefix": prefix,
         "normalized": True,
         "dtype": "float32",
     }
@@ -203,6 +206,7 @@ def encode_or_resume(
     path: Path,
     namespace: dict,
     batch_size: int,
+    prefix: str,
 ) -> tuple[Any, int, bool]:
     metadata_path = path.with_suffix(path.suffix + ".json")
     cached = load_cached_memmap(path, metadata_path, namespace)
@@ -211,7 +215,7 @@ def encode_or_resume(
         return cached[0], cached[1], True
     path.unlink(missing_ok=True)
     metadata_path.unlink(missing_ok=True)
-    array, dimension = encode_to_memmap(model, texts, "", path, batch_size)
+    array, dimension = encode_to_memmap(model, texts, prefix, path, batch_size)
     metadata_path.write_text(
         json.dumps({"namespace": namespace, "dimension": dimension}, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -430,6 +434,11 @@ def main() -> None:
         "num_negatives": args.num_negatives,
         "selection_strategy": args.selection_strategy,
         "positive_relative_ratio": args.positive_relative_ratio,
+        "prompt": {
+            "query_prefix": args.query_prefix,
+            "document_prefix": args.document_prefix,
+            "sentence_transformers_implicit_prompt": "disabled with prompt=''",
+        },
         "teacher_requests": (
             {
                 "rows": args.teacher_request_limit,
@@ -467,13 +476,23 @@ def main() -> None:
     started = time.monotonic()
     model, _, encoder_device, effective_dtype = load_encoder(args)
     query_namespace = cache_namespace(
-        args, input_sha, "queries", len(rows), model_weights_sha
+        args, input_sha, "queries", len(rows), model_weights_sha, args.query_prefix
     )
     corpus_namespace = cache_namespace(
-        args, input_sha, "positive_corpus", len(corpus), model_weights_sha
+        args,
+        input_sha,
+        "positive_corpus",
+        len(corpus),
+        model_weights_sha,
+        args.document_prefix,
     )
     query_embeddings, query_dimension, query_resumed = encode_or_resume(
-        model, [row.query for row in rows], work_dir / "queries.f32", query_namespace, args.encode_batch_size
+        model,
+        [row.query for row in rows],
+        work_dir / "queries.f32",
+        query_namespace,
+        args.encode_batch_size,
+        args.query_prefix,
     )
     corpus_embeddings, corpus_dimension, corpus_resumed = encode_or_resume(
         model,
@@ -481,6 +500,7 @@ def main() -> None:
         work_dir / "corpus.f32",
         corpus_namespace,
         args.encode_batch_size,
+        args.document_prefix,
     )
     del model
     if query_dimension != corpus_dimension:
