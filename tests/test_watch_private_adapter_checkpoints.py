@@ -127,12 +127,28 @@ class FakeApi:
         self.create_repo_calls.append(kwargs)
 
     def model_info(self, **kwargs):
-        return SimpleNamespace(private=self.private, sha=self.head_sha)
+        siblings = []
+        if kwargs.get("files_metadata"):
+            for name, payload in self.uploaded.items():
+                lfs = None
+                if name.endswith("/" + watcher.WEIGHTS_NAME):
+                    lfs = {
+                        "sha256": watcher.sha256_bytes(payload),
+                        "size": len(payload),
+                    }
+                siblings.append(SimpleNamespace(rfilename=name, lfs=lfs))
+        return SimpleNamespace(private=self.private, sha=self.head_sha, siblings=siblings)
 
     def file_exists(self, **kwargs):
-        return self.remote_manifest is not None
+        return self.remote_manifest is not None or kwargs.get("filename") in self.uploaded
 
     def hf_hub_download(self, **kwargs):
+        filename = kwargs.get("filename")
+        if filename in self.uploaded:
+            descriptor, temporary = tempfile.mkstemp(prefix="fake-hf-download-")
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(self.uploaded[filename])
+            return temporary
         if self.remote_manifest is None:
             raise AssertionError("no remote manifest configured")
         return str(self.remote_manifest)
@@ -440,6 +456,14 @@ class PrivateCheckpointWatcherTests(unittest.TestCase):
             remote_manifest = root / "remote-manifest.json"
             remote_manifest.write_bytes(validated.manifest_bytes)
             api = FakeApi(remote_manifest=remote_manifest)
+            prefix = "checkpoints/checkpoint-250"
+            api.uploaded = {
+                f"{prefix}/{watcher.WEIGHTS_NAME}": (
+                    checkpoint / watcher.WEIGHTS_NAME
+                ).read_bytes(),
+                f"{prefix}/{watcher.CONFIG_NAME}": validated.config_bytes,
+                f"{prefix}/{watcher.MANIFEST_NAME}": validated.manifest_bytes,
+            }
             remote = watcher.PrivateCandidateRemote(
                 api=api, repo_id=args.repo_id, operation_add_cls=FakeOperationAdd
             )
@@ -452,6 +476,38 @@ class PrivateCheckpointWatcherTests(unittest.TestCase):
             self.assertEqual(api.create_commit_calls, [])
             record = state["checkpoints"]["checkpoint-250"]
             self.assertTrue(record["recovered_existing_remote"])
+
+    def test_remote_lfs_mismatch_never_advances_upload_state(self) -> None:
+        class CorruptMetadataApi(FakeApi):
+            def model_info(self, **kwargs):
+                info = super().model_info(**kwargs)
+                if kwargs.get("files_metadata"):
+                    for sibling in info.siblings:
+                        if sibling.rfilename.endswith("/" + watcher.WEIGHTS_NAME):
+                            sibling.lfs["sha256"] = "0" * 64
+                return info
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            make_checkpoint(root)
+            args = make_args(root, upload=True)
+            state_path = root / watcher.STATE_NAME
+            api = CorruptMetadataApi()
+            with self.assertRaises(watcher.WatcherError) as caught:
+                watcher.scan_once(
+                    args=args,
+                    state_path=state_path,
+                    remote=watcher.PrivateCandidateRemote(
+                        api=api,
+                        repo_id=args.repo_id,
+                        operation_add_cls=FakeOperationAdd,
+                    ),
+                    sleep=lambda _seconds: None,
+                )
+            self.assertEqual(caught.exception.code, "remote_verification_failed")
+            if state_path.exists():
+                state = json.loads(state_path.read_text())
+                self.assertEqual(state["checkpoints"], {})
 
     def test_incomplete_or_changing_checkpoint_is_not_uploaded(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -673,6 +729,35 @@ class PrivateCheckpointWatcherTests(unittest.TestCase):
                 )
             self.assertEqual(caught.exception.code, "remote_conflict")
             self.assertEqual(api.create_commit_calls, [])
+
+            validated = watcher.validate_checkpoint(
+                root / "v0-fixture/checkpoint-250",
+                base_model=args.base_model,
+                base_revision=args.base_revision,
+                run_id=args.run_id,
+                training_data_sha256=args.training_data_sha256,
+                training_manifest_sha256=args.training_manifest_sha256,
+                admission_report_sha256=args.admission_report_sha256,
+                settle_seconds=0,
+                sleep=lambda _seconds: None,
+            )
+            self.assertIsNotNone(validated)
+            wrong_lineage = json.loads(validated.manifest_bytes)
+            wrong_lineage["lineage"]["training_data_sha256"] = "9" * 64
+            conflict_manifest.write_text(json.dumps(wrong_lineage), encoding="utf-8")
+            lineage_api = FakeApi(remote_manifest=conflict_manifest)
+            with self.assertRaises(watcher.WatcherError) as lineage_caught:
+                watcher.scan_once(
+                    args=args,
+                    state_path=root / "lineage-state.json",
+                    remote=watcher.PrivateCandidateRemote(
+                        api=lineage_api,
+                        repo_id=args.repo_id,
+                        operation_add_cls=FakeOperationAdd,
+                    ),
+                    sleep=lambda _seconds: None,
+                )
+            self.assertEqual(lineage_caught.exception.code, "remote_conflict")
 
             secret = TOKEN_CANARY
 

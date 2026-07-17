@@ -1058,6 +1058,86 @@ class PrivateCandidateRemote:
     def remote_prefix(checkpoint: ValidatedCheckpoint) -> str:
         return f"checkpoints/{checkpoint.label}"
 
+    def verify_uploaded_commit(
+        self,
+        checkpoint: ValidatedCheckpoint,
+        *,
+        revision: str,
+        manifest_sha256: str | None = None,
+    ) -> None:
+        """Verify the immutable Hub commit before allowing local state to advance."""
+        prefix = self.remote_prefix(checkpoint)
+        expected = {f"{prefix}/{name}" for name in REMOTE_ALLOWLIST}
+        try:
+            info = self.api.model_info(
+                repo_id=self.repo_id,
+                revision=revision,
+                files_metadata=True,
+            )
+            if getattr(info, "private", None) is not True:
+                raise WatcherError(
+                    "public_repo_refused",
+                    "refusing uploaded checkpoint because repository is not private",
+                )
+            siblings = {
+                item.rfilename: item
+                for item in getattr(info, "siblings", [])
+                if item.rfilename.startswith(f"{prefix}/")
+            }
+            if set(siblings) != expected:
+                raise WatcherError(
+                    "remote_verification_failed",
+                    "uploaded checkpoint remote allowlist verification failed",
+                )
+            weights_item = siblings[f"{prefix}/{WEIGHTS_NAME}"]
+            lfs = getattr(weights_item, "lfs", None)
+            if isinstance(lfs, dict):
+                remote_weights_sha = lfs.get("sha256")
+                remote_weights_size = lfs.get("size")
+            else:
+                remote_weights_sha = getattr(lfs, "sha256", None)
+                remote_weights_size = getattr(lfs, "size", None)
+            if (
+                remote_weights_sha != checkpoint.weights_sha256
+                or remote_weights_size != checkpoint.weights_size
+            ):
+                raise WatcherError(
+                    "remote_verification_failed",
+                    "uploaded checkpoint LFS verification failed",
+                )
+            remote_config = Path(
+                self.api.hf_hub_download(
+                    repo_id=self.repo_id,
+                    filename=f"{prefix}/{CONFIG_NAME}",
+                    repo_type="model",
+                    revision=revision,
+                )
+            )
+            remote_manifest = Path(
+                self.api.hf_hub_download(
+                    repo_id=self.repo_id,
+                    filename=f"{prefix}/{MANIFEST_NAME}",
+                    repo_type="model",
+                    revision=revision,
+                )
+            )
+            if (
+                sha256_file(remote_config) != checkpoint.config_sha256
+                or sha256_file(remote_manifest)
+                != (manifest_sha256 or checkpoint.manifest_sha256)
+            ):
+                raise WatcherError(
+                    "remote_verification_failed",
+                    "uploaded checkpoint metadata verification failed",
+                )
+        except WatcherError:
+            raise
+        except Exception as error:
+            raise WatcherError(
+                "remote_verification_failed",
+                f"uploaded checkpoint verification failed ({type(error).__name__})",
+            ) from None
+
     def recover_existing(self, checkpoint: ValidatedCheckpoint) -> str | None:
         self.ensure_private()
         self._head_sha = self._check_private_info()
@@ -1099,8 +1179,29 @@ class PrivateCandidateRemote:
             raise WatcherError(
                 "remote_conflict", "existing remote checkpoint has different checksums"
             )
+        expected_payload = json.loads(checkpoint.manifest_bytes)
+        payload_without_time = dict(payload)
+        expected_without_time = dict(expected_payload)
+        payload_without_time.pop("created_at_utc", None)
+        expected_without_time.pop("created_at_utc", None)
+        if payload_without_time != expected_without_time:
+            raise WatcherError(
+                "remote_conflict",
+                "existing remote checkpoint has different immutable lineage",
+            )
         self._head_sha = self._check_private_info()
-        return sha256_file(downloaded)
+        if self._head_sha is None:
+            raise WatcherError(
+                "remote_verification_failed",
+                "existing remote checkpoint has no immutable commit ID",
+            )
+        remote_manifest_sha = sha256_file(downloaded)
+        self.verify_uploaded_commit(
+            checkpoint,
+            revision=self._head_sha,
+            manifest_sha256=remote_manifest_sha,
+        )
+        return remote_manifest_sha
 
     def upload(self, checkpoint: ValidatedCheckpoint) -> str | None:
         self.ensure_private()
@@ -1163,6 +1264,11 @@ class PrivateCandidateRemote:
         # Visibility is checked again after the commit. A repository whose
         # visibility changed concurrently is never recorded as uploaded.
         self._head_sha = self._check_private_info()
+        if result is None:
+            raise WatcherError(
+                "remote_verification_failed", "uploaded checkpoint has no immutable commit ID"
+            )
+        self.verify_uploaded_commit(checkpoint, revision=result)
         return result
 
 

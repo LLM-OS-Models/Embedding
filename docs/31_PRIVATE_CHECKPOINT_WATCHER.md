@@ -143,6 +143,14 @@ narrow: public visibility, checksum conflict, unsafe local files, invalid
 state, and credential/config failures remain immediate hard stops. The bounds
 can be tightened with `--remote-attempts` and `--remote-retry-seconds`.
 
+새 watcher process는 commit 응답만으로 state를 전진시키지 않는다. returned immutable
+revision을 `files_metadata=true`로 다시 조회해 checkpoint prefix가 exact 3-file allowlist인지,
+adapter LFS SHA-256/size가 local finite-inspected payload와 같은지, config와 manifest를 같은
+revision에서 재다운로드한 SHA가 같은지 확인한 뒤에만 `uploaded`를 atomic state에 쓴다.
+commit 응답 유실 뒤 existing manifest로 복구할 때도 `created_at_utc`만 제외한 전체 manifest
+의미 구조를 비교하므로 adapter SHA가 같아도 base/train/admission lineage가 다르면 거부한다.
+LFS 또는 metadata mismatch는 retryable upload 응답 오류로 취급하지 않고 fail closed한다.
+
 ### 2026-07-17 Qwen 복구 실측
 
 첫 watcher command가 실제 train SHA `8e2731ab25299ff558af675f067b253a6ce4375a850aa925acfe3b3117505e3c`
