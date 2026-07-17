@@ -1060,6 +1060,7 @@ class PrivateCandidateRemote:
 
     def recover_existing(self, checkpoint: ValidatedCheckpoint) -> str | None:
         self.ensure_private()
+        self._head_sha = self._check_private_info()
         remote_manifest = f"{self.remote_prefix(checkpoint)}/{MANIFEST_NAME}"
         try:
             exists = self.api.file_exists(
@@ -1098,6 +1099,7 @@ class PrivateCandidateRemote:
             raise WatcherError(
                 "remote_conflict", "existing remote checkpoint has different checksums"
             )
+        self._head_sha = self._check_private_info()
         return sha256_file(downloaded)
 
     def upload(self, checkpoint: ValidatedCheckpoint) -> str | None:

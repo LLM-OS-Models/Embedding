@@ -52,7 +52,12 @@ A candidate is eligible only when all gates pass:
    finite. The full staged file SHA-256 is recomputed before upload.
 6. The Hub repository is created with `private=True` and its visibility is
    checked both before and after the commit. A public or unknown-visibility
-   repository is rejected.
+repository is rejected.
+
+Visibility is not trusted from an earlier cached check. It is re-read before
+and after both a new commit and crash-recovery acceptance of an existing remote
+manifest, so a repository changed to public mid-run is never recorded as a
+successful private backup.
 
 The generated manifest contains only checksums, tensor summary, same-step
 validation evidence, pinned base lineage, run ID, and optional input-manifest

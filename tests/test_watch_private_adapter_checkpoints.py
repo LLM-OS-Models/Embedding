@@ -171,6 +171,36 @@ class FailFirstCommitApi(FakeApi):
 
 
 class PrivateCheckpointWatcherTests(unittest.TestCase):
+    def test_remote_recovery_rechecks_private_visibility(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkpoint = make_checkpoint(root)
+            args = make_args(root, upload=True)
+            validated = watcher.validate_checkpoint(
+                checkpoint,
+                base_model=args.base_model,
+                base_revision=args.base_revision,
+                run_id=args.run_id,
+                training_data_sha256=args.training_data_sha256,
+                training_manifest_sha256=args.training_manifest_sha256,
+                admission_report_sha256=args.admission_report_sha256,
+                settle_seconds=0,
+                sleep=lambda _seconds: None,
+            )
+            self.assertIsNotNone(validated)
+            api = FakeApi(private=True)
+            remote = watcher.PrivateCandidateRemote(
+                api=api,
+                repo_id=args.repo_id,
+                operation_add_cls=FakeOperationAdd,
+            )
+            remote.ensure_private()
+            api.private = False
+            with self.assertRaises(watcher.WatcherError) as caught:
+                remote.recover_existing(validated)
+            self.assertEqual(caught.exception.code, "public_repo_refused")
+            validated.weights_path.unlink()
+
     def test_transient_remote_failure_retries_without_duplicate_commit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
