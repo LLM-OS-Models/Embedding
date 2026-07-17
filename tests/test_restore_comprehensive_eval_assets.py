@@ -127,7 +127,7 @@ class RestoreComprehensiveEvalAssetsTests(unittest.TestCase):
             for item in plan:
                 MODULE.restore_asset(
                     item,
-                    token=None,
+                    token=False,
                     local_only=True,
                     max_workers=1,
                     cache_dir=Path(directory),
@@ -153,6 +153,31 @@ class RestoreComprehensiveEvalAssetsTests(unittest.TestCase):
                 self.assertEqual(MODULE.read_hf_token(env_file), "env-secret")
             with mock.patch.dict(os.environ, {}, clear=True):
                 self.assertEqual(MODULE.read_hf_token(env_file), "dotenv-secret")
+
+    def test_default_restore_is_anonymous_and_never_reads_dotenv(self) -> None:
+        calls = []
+
+        def fake_restore(_planned, **kwargs):
+            calls.append(kwargs)
+
+        output = io.StringIO()
+        with mock.patch.object(
+            MODULE, "restore_asset", side_effect=fake_restore
+        ), mock.patch.object(
+            MODULE, "load_snapshot_download", return_value=lambda **_kwargs: "unused"
+        ), mock.patch.object(
+            MODULE, "read_hf_token", side_effect=AssertionError("token read")
+        ), contextlib.redirect_stdout(output):
+            MODULE.main(["--small", "--max-workers", "1"])
+
+        self.assertEqual(len(calls), 8)
+        self.assertTrue(all(call["token"] is False for call in calls))
+
+    def test_token_use_is_explicit_opt_in(self) -> None:
+        with mock.patch.object(MODULE, "read_hf_token", return_value=None):
+            with self.assertRaises(SystemExit) as caught:
+                MODULE.main(["--small", "--use-token"])
+        self.assertIn("--use-token was requested", str(caught.exception))
 
     def test_restore_output_and_failure_do_not_expose_token_or_paths(self) -> None:
         item = MODULE.build_plan(

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Restore pinned comprehensive-evaluation datasets to a repository-local cache.
 
-The Hugging Face token is taken from ``HF_TOKEN`` (or
-``HUGGINGFACE_HUB_TOKEN``) in process environment, then from the repository's
-ignored ``.env`` file.  The token is passed directly to ``snapshot_download``;
-this script never prints it, places it on the command line, or persists it.
+Every declared asset is public, so downloads explicitly use ``token=False`` by
+default. ``--use-token`` is an opt-in for rate limits; only then is a token
+read into process memory from the environment or ignored ``.env`` file. The
+script never prints it, places it on the command line, or persists it.
 
 Modes are deliberately conservative:
 
@@ -228,7 +228,7 @@ def load_snapshot_download() -> SnapshotDownload:
 def restore_asset(
     planned: PlannedAsset,
     *,
-    token: str | None,
+    token: str | bool,
     local_only: bool,
     max_workers: int,
     cache_dir: Path = CACHE_DIR,
@@ -284,6 +284,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="use cached files only and never read a token or contact the Hub",
     )
+    parser.add_argument(
+        "--use-token",
+        action="store_true",
+        help="opt in to reading HF_TOKEN or the ignored .env file",
+    )
     parser.add_argument("--max-workers", type=int, default=8)
     return parser.parse_args(argv)
 
@@ -303,10 +308,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.max_workers < 1:
         raise SystemExit("--max-workers must be positive")
 
-    token = None if args.local_only else read_hf_token()
-    if not args.local_only and not token:
+    token: str | bool = False
+    if args.use_token and not args.local_only:
+        loaded_token = read_hf_token()
+        if loaded_token:
+            token = loaded_token
+    if args.use_token and not args.local_only and token is False:
         raise SystemExit(
-            "HF token unavailable; configure HF_TOKEN in environment or the ignored .env file"
+            "--use-token was requested but HF_TOKEN is unavailable"
         )
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
