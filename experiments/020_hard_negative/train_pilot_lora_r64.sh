@@ -61,7 +61,24 @@ for path in "$TRAIN_FILE" "$VAL_FILE"; do
     exit 2
   fi
 done
-embedding_require_clean_validation "$VAL_FILE"
+# docs/36: the interrupted 200K Qwen run resumes with its original legacy
+# validation file so the optimizer/scheduler/RNG contract stays exact.  That
+# eval loss is a completion/finite signal only; checkpoint selection stays on
+# the clean Grade-I selectors.  The exception requires the pinned file hash
+# and an existing resumable checkpoint history, and is never a default.
+EXACT_RESUME_LEGACY_VAL_SHA256="f121f7eb3011ee2bfd796cb7622efd4b6f8f8ad80d09525cf083eeb18c7a9ede"
+if [[ "${ALLOW_EXACT_RESUME_LEGACY_VALIDATION:-0}" == 1 ]]; then
+  if [[ "$AUTO_RESUME_FROM_LATEST_CHECKPOINT" != 1 ]] \
+      || ! find "$OUTPUT_DIR" -mindepth 2 -maxdepth 2 -type d \
+        -name 'checkpoint-*' -print -quit 2>/dev/null | grep -q . \
+      || [[ "$(sha256sum "$VAL_FILE" | awk '{print $1}')" \
+        != "$EXACT_RESUME_LEGACY_VAL_SHA256" ]]; then
+    echo "exact-resume legacy validation requires the pinned legacy file and checkpoint history" >&2
+    exit 2
+  fi
+else
+  embedding_require_clean_validation "$VAL_FILE"
+fi
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"

@@ -116,6 +116,10 @@ if [[ ! -s "$QWEN_ADMISSION" ]]; then
   echo "[$(timestamp)] Qwen admission report is unavailable" >&2
   exit 11
 fi
+# The 200K performance manifest is not release-eligible (rights-unclear
+# sources), so the watcher rights gate refuses --public for these candidate
+# repos.  Public release happens through the rights-safe track and the final
+# winner publication gates instead.
 qwen_training_sha="$(sha256sum "$TRAIN_FILE" | awk '{print $1}')"
 qwen_manifest_sha="$(sha256sum "$TRAIN_MANIFEST" | awk '{print $1}')"
 qwen_admission_sha="$(sha256sum "$QWEN_ADMISSION" | awk '{print $1}')"
@@ -133,7 +137,7 @@ env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
   --training-manifest-path "$TRAIN_MANIFEST" --base-license apache-2.0 \
   --admission-report-sha256 "$qwen_admission_sha" \
   --poll-seconds 5 --settle-seconds 0 \
-  --remote-attempts 3 --remote-retry-seconds 15 --once --upload --public \
+  --remote-attempts 3 --remote-retry-seconds 15 --once --upload \
   >> "$QWEN_RUN/checkpoint-watcher-v2.log" 2>&1
 echo "[$(timestamp)] Qwen 200K completed; starting Comsat exact probe"
 
@@ -179,7 +183,7 @@ admission_sha="$(sha256sum "$COMSAT_ADMISSION" | awk '{print $1}')"
   --training-manifest-sha256 "$training_manifest_sha" \
   --training-manifest-path "$TRAIN_MANIFEST" --base-license cc-by-nc-4.0 \
   --admission-report-sha256 "$admission_sha" \
-  --poll-seconds 5 --settle-seconds 10 --upload --public \
+  --poll-seconds 5 --settle-seconds 10 --upload \
   >> "$COMSAT_RUN/checkpoint-watcher.log" 2>&1 &
 watcher_pid=$!
 cleanup() {
