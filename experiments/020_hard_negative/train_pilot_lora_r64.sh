@@ -208,6 +208,10 @@ if [[ "$AUTO_RESUME_FROM_LATEST_CHECKPOINT" == 1 ]] \
     --seed "${SEED:-42}" > "$resume_report_tmp"
   mv "$resume_report_tmp" "$OUTPUT_DIR/resume-validation.json"
   RESUME_ARGS+=(--resume_from_checkpoint "$resume_checkpoint")
+  # Exact resume loads optimizer/scheduler/RNG pickles this run wrote itself;
+  # allow torch.load for them on the pinned torch 2.5 runtime (see
+  # compat/torch25/sitecustomize.py).
+  export EMBEDDING_TRUST_LOCAL_TORCH_LOAD=1
   echo "resuming exact training contract from ${resume_checkpoint##*/}" >&2
 fi
 
