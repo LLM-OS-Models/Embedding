@@ -457,3 +457,7 @@ Release       rights manifest와 benchmark decontamination을 통과한 weight�
 - [Do Reasoning Models Enhance Embedding Models?](https://arxiv.org/abs/2601.21192)
 - [Search-R3](https://arxiv.org/abs/2510.07048), [LaSER](https://arxiv.org/abs/2603.01425)
 - [Querit-Reranker](https://arxiv.org/abs/2606.19037), [BITEMBED](https://arxiv.org/abs/2606.25674), [TALAS](https://aclanthology.org/2026.acl-long.1509/)
+- [HiNS](https://arxiv.org/abs/2601.14857), [Improving Korean-English Cross-Lingual Retrieval](https://arxiv.org/abs/2507.08480)
+
+2026-07-18 신규 검토분(HiNS, 한·영 교차언어 구성/merging)의 적용 결정은
+[docs/37 §2](37_RESUME_RECOVERY_AND_LITERATURE_2026-07-18.md)에 고정한다.
