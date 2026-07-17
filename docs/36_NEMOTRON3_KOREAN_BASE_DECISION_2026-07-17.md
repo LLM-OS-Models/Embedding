@@ -102,6 +102,12 @@ scripts/run_nemotron3_base_decision.sh
 
 ## 최단 승리 의사결정
 
+완료 후 `scripts/decide_nemotron3_base.py`가 아래 규칙을 기계 판정해
+`outputs/evaluation/nemotron3-base-decision.json`에 쓴다. clean absolute guard는 legal·
+multidomain macro `0.010`, finance·knowledge 각 domain `0.015`이며 reference는 같은 run의
+Qwen/Comsat 중 높은 값이다. raw deficit이 `0.020` 이내이고 clean guard를 통과할 때만
+짧은 Nemotron LoRA로 역전을 시도한다.
+
 1. Nemotron-3 raw macro가 `> 0.7930`이고 clean selector가 Qwen/Comsat 대비 guard 안이면
    Nemotron-3를 즉시 성능 기준 모델로 채택한다.
 2. raw macro는 이기지만 특정 한국어 target이 약하면 전체 200K 재학습보다 그 task의
