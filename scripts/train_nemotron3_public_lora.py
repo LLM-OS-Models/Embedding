@@ -15,6 +15,11 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION_RE = re.compile(r"[0-9a-f]{40}")
+QUERY_PROMPT = (
+    "Instruct: Given a web search query, retrieve relevant passages that answer "
+    "the query\nQuery:"
+)
+TRAINING_PROMPTS = {"anchor": QUERY_PROMPT}
 
 
 def parse_args() -> argparse.Namespace:
@@ -142,6 +147,11 @@ def validate_contract(args: argparse.Namespace) -> dict[str, Any]:
         "architecture": "Ministral3Model",
         "pooling": "masked-mean",
         "normalization": "l2",
+        "training_prompts": {
+            "anchor": QUERY_PROMPT,
+            "positive": "",
+            "negatives": "",
+        },
         "training_data": {
             "path": str(args.train.resolve()),
             "sha256": sha256(args.train),
@@ -312,6 +322,10 @@ def train(args: argparse.Namespace, contract: dict[str, Any]) -> None:
         data_seed=args.seed,
         dataloader_num_workers=2,
         dataloader_persistent_workers=True,
+        # Match the fixed Sionic/Qwen comparison contract exactly: only the
+        # query/anchor receives an instruction. Documents and hard negatives
+        # remain source-native text without a prefix.
+        prompts=TRAINING_PROMPTS,
     )
     trainer = SentenceTransformerTrainer(
         model=model,

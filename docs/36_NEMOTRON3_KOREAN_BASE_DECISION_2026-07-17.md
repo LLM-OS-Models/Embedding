@@ -51,6 +51,9 @@ Nemotron-3가 base gate를 통과할 때의 공개 LoRA 경로는
 complete optimizer/scheduler/trainer checkpoint만 자동 재개한다. 현재는 공개 250K manifest와
 train SHA를 사용한 contract-only 검증 및 단위 테스트까지 통과했다. 실제 1-step backward
 probe는 Sionic 병렬 평가가 GPU에서 내려간 직후 실행한다.
+학습의 `anchor`에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 적용하고 positive와
+hard negative는 무접두 source-native text로 유지한다. 따라서 checkpoint 선택 및 final-once
+평가와 학습의 query/document 입력 형식이 동일하다.
 2-step 이상 실제 run은 `--eval`과 `--eval-manifest`가 필수다. evaluator manifest의 JSONL
 SHA, source-holdout 검증, query/positive/negative/source-document training overlap 0을 확인한
 뒤 save step마다 eval loss를 기록해 public checkpoint watcher의 completion gate와 맞춘다.

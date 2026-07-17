@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from scripts.train_nemotron3_public_lora import (
+    QUERY_PROMPT,
+    TRAINING_PROMPTS,
     convert_example,
     latest_complete_checkpoint,
     validate_contract,
@@ -78,6 +80,9 @@ class TrainNemotron3PublicLoraTest(unittest.TestCase):
             contract = validate_contract(args)
             self.assertEqual(contract["base_revision"], "a" * 40)
             self.assertTrue(contract["training_data"]["release_eligible"])
+            self.assertEqual(contract["training_prompts"]["anchor"], QUERY_PROMPT)
+            self.assertEqual(contract["training_prompts"]["positive"], "")
+            self.assertEqual(TRAINING_PROMPTS, {"anchor": QUERY_PROMPT})
             args.max_steps = 2
             with self.assertRaisesRegex(ValueError, "requires --eval"):
                 validate_contract(args)
