@@ -83,6 +83,8 @@ class TrainNemotron3PublicLoraTest(unittest.TestCase):
             self.assertEqual(contract["training_prompts"]["anchor"], QUERY_PROMPT)
             self.assertEqual(contract["training_prompts"]["positive"], "")
             self.assertEqual(TRAINING_PROMPTS, {"anchor": QUERY_PROMPT})
+            self.assertIn("prepended by the collator", contract["input_contract"]["query"])
+            self.assertIn("no prefix", contract["input_contract"]["document"])
             args.max_steps = 2
             with self.assertRaisesRegex(ValueError, "requires --eval"):
                 validate_contract(args)

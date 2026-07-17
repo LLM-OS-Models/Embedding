@@ -163,8 +163,8 @@ def validate_contract(args: argparse.Namespace) -> dict[str, Any]:
         },
         **({"evaluation_data": eval_contract} if eval_contract is not None else {}),
         "input_contract": {
-            "query": "stored fixed Korean retrieval instruction; no implicit prompt",
-            "document": "stored document text; no implicit prompt",
+            "query": "source query text with exact training_prompts.anchor prepended by the collator",
+            "document": "source-native positive/negative text; no prefix",
             "max_length": args.max_length,
         },
         "adapter": {
