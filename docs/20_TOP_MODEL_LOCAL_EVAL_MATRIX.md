@@ -28,6 +28,12 @@ registered instruction과 task type을 쓰므로 이 표와 평균을 섞지 않
 | 6 | `tencent/KaLM-Embedding-Gemma3-12B-2511` | `98c19ba34197906fbc93f6f1ef79402ca3a33956` | last/causal hybrid | 8192 | 48 | yes |
 | 7 | `nvidia/llama-embed-nemotron-8b` | `aa3b43a495a9b280d1bdb716da37c54bb495d630` | mean/bidirectional | 8192 | 64 | yes |
 
+2026-07-17 익명 복구 뒤 repository-local cache를 hard offline으로 고정해 다섯 추가 모델의
+exact revision `AutoConfig`와 tokenizer를 다시 로드했다. 모두 통과했고 고유 Hub blob 크기는
+F2 14.11GiB, PwC 2.10GiB, Harrier 50.34GiB, KaLM 21.95GiB, Nemotron 14.00GiB다. 따라서
+후속 GPU queue는 model snapshot이나 remote-code/tokenizer 누락 때문에 네트워크로 fallback하지
+않는다.
+
 각 model은 시작 batch에서 1까지 절반씩 낮추며 OOM fallback한다. 완료 task는 MTEB
 ResultCache와 exact float32 embedding cache로 보존하므로 낮은 batch 재시도는 이미 끝난
 encode를 반복하지 않는다. 모델 하나가 실패해도 다음
