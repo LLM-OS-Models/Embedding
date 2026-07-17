@@ -218,6 +218,7 @@ def test_future_lora_runs_upload_reconstructable_private_checkpoints() -> None:
     assert "local continual base requires a verified private upload report" in train
     assert '"$report_weights_sha" != "$expected_base_sha"' in train
     assert '"$watcher_base_revision" =~ ^[0-9a-f]{40}$' in train
+    assert train.count("-u HF_HUB_OFFLINE -u TRANSFORMERS_OFFLINE -u HF_DATASETS_OFFLINE") == 2
 
 
 def test_model_soup_coefficients_are_fixed_before_clean_evaluation() -> None:

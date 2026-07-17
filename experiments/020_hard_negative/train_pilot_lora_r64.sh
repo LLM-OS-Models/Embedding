@@ -229,7 +229,9 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
       --admission-report-sha256 "$(sha256sum "$admission_report" | awk '{print $1}')"
     )
   fi
-  "$TRAIN_ENV/bin/python" "${checkpoint_watcher_args[@]}" \
+  env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
+    -u HF_HUB_OFFLINE -u TRANSFORMERS_OFFLINE -u HF_DATASETS_OFFLINE \
+    "$TRAIN_ENV/bin/python" "${checkpoint_watcher_args[@]}" \
     >> "$OUTPUT_DIR/checkpoint-watcher.log" 2>&1 &
   checkpoint_watcher_pid=$!
   trap stop_checkpoint_watcher EXIT INT TERM
@@ -285,7 +287,9 @@ training_status=0
 
 if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
   stop_checkpoint_watcher
-  if ! "$TRAIN_ENV/bin/python" "${checkpoint_watcher_args[@]}" \
+  if ! env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
+      -u HF_HUB_OFFLINE -u TRANSFORMERS_OFFLINE -u HF_DATASETS_OFFLINE \
+      "$TRAIN_ENV/bin/python" "${checkpoint_watcher_args[@]}" \
       --once --settle-seconds 0 \
       >> "$OUTPUT_DIR/checkpoint-watcher.log" 2>&1; then
     echo "final private checkpoint reconciliation failed; local checkpoints retained" >&2

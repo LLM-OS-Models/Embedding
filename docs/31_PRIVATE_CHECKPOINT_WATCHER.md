@@ -177,7 +177,8 @@ remote manifest 재다운로드가 일치한 뒤 `repo_id`, `commit_sha`, `weigh
 남긴다. 1M은 capacity report, KD는 1M report, specialist/legal/combined는 KD winner report를
 사용한다. 어느 local base든 report의 path·weight SHA·private visibility·remote manifest·commit이
 하나라도 맞지 않으면 다음 watcher를 시작하지 않는다. 학습 프로세스는 Hub token-free offline이고
-watcher만 mode-0600 `.env`를 process memory에서 읽는다.
+watcher child에서만 inherited token과 `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE`/
+`HF_DATASETS_OFFLINE`을 제거한 뒤 mode-0600 `.env`를 process memory에서 읽는다.
 
 ## Idempotency and recovery
 
