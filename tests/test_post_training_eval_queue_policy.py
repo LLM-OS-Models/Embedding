@@ -54,6 +54,9 @@ def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
     assert "qwen3-embedding-8b-ko-performance200k-lora-r64" in source
     assert "comsat-embed-ko-8b-performance200k-lora-r64" in source
     assert "clean-first-selection.json" in source
+    assert "average_lora_checkpoints.py" in source
+    assert "--last-n 5 --minimum-checkpoints 2" in source
+    assert "last-available5-fp32-average-merged" in source
 
 
 def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
@@ -67,6 +70,30 @@ def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
 
     scale_source = SCALE_QUEUE.read_text(encoding="utf-8")
     assert "POSTTRAIN_SELECTION:-$ROOT/outputs/post-training-eval-20260717-frontier/clean-first-selection.json" in scale_source
+    assert "SAVE_TOTAL_LIMIT=5" in frontier
+    assert "SAVE_TOTAL_LIMIT=5" in scale_source
+    assert '"$ROOT/.venv-train-fa2/bin/python"' in frontier
+    assert '"$ROOT/.venv-hf-tools/bin/python"' not in frontier
+
+
+def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
+    queues = (
+        SCALE_QUEUE,
+        ROOT / "scripts/run_legal_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+    )
+    for queue in queues:
+        source = queue.read_text(encoding="utf-8")
+        assert "unset HF_TOKEN HUGGINGFACE_HUB_TOKEN" in source, queue
+        assert "HF_TOKEN=\"$(sed" not in source, queue
+        assert 'PUBLISH_HF_TOKEN_FILE="$ROOT/.env"' in source, queue
+        assert '--hf-token-file "$PUBLISH_HF_TOKEN_FILE"' in source, queue
+        # Dataset publishers still require an environment token, but source the
+        # ignored credential file only after the training checkpoint is chosen.
+        source_token = source.index('source "$PUBLISH_HF_TOKEN_FILE"')
+        selected_checkpoint = source.index("select_best_checkpoint.py")
+        assert selected_checkpoint < source_token, queue
 
 
 def test_campaign_queues_resolve_an_available_training_runtime() -> None:

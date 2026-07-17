@@ -208,6 +208,45 @@ for run_name in "${RUNS[@]}"; do
   if run_clean_with_fallback "$run_name" "$merged_rel" "$revision"; then
     run_robustness_with_fallback "$run_name" "$merged_rel" "$revision" || true
   fi
+
+  # Compare the internally best checkpoint with an FP32 arithmetic mean of up
+  # to the latest five checkpoints from the same exact Trainer version.  Older
+  # runs may only retain 2–3 checkpoints; the manifest records the actual set.
+  # The averaged model is merely another clean-evaluation candidate and cannot
+  # bypass the same near-tie/robustness gate as the single best checkpoint.
+  average_adapter_rel="artifacts/adapters/${run_name}-last-available5-fp32-average"
+  average_adapter="$ROOT/$average_adapter_rel"
+  if [[ ! -s "$average_adapter/average_report.json" ]]; then
+    embedding_require_storage_headroom "$ROOT" 500 1000000
+    embedding_require_storage_headroom /tmp 50 100000
+    run_stage "average-last-checkpoints-$run_name" \
+      "${OFFLINE_ENV[@]}" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/average_lora_checkpoints.py" \
+      --run-dir "$run_dir" --anchor-checkpoint "$checkpoint" \
+      --output-dir "$average_adapter" --last-n 5 --minimum-checkpoints 2 || true
+  fi
+  [[ -s "$average_adapter/average_report.json" ]] || continue
+  average_merged_rel="artifacts/models/${run_name}-last-available5-fp32-average-merged"
+  average_merged="$ROOT/$average_merged_rel"
+  if [[ ! -s "$average_merged/merge_report.json" ]]; then
+    embedding_require_storage_headroom "$ROOT" 500 1000000
+    embedding_require_storage_headroom /tmp 50 100000
+    run_stage "merge-last-checkpoint-average-$run_name" \
+      "${OFFLINE_ENV[@]}" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
+      --adapter "$average_adapter" --output-dir "$average_merged" \
+      --device cuda --dtype bfloat16 --local-files-only || continue
+  fi
+  average_weights_sha="$(jq -r '.model.weights_sha256' "$average_merged/merge_report.json")"
+  average_revision="model-${average_weights_sha:0:12}"
+  candidate_args+=(--candidate-model "$average_merged_rel")
+  if run_clean_with_fallback \
+      "$run_name-last-available5-fp32-average" \
+      "$average_merged_rel" "$average_revision"; then
+    run_robustness_with_fallback \
+      "$run_name-last-available5-fp32-average" \
+      "$average_merged_rel" "$average_revision" || true
+  fi
 done
 
 for run_name in "${FULL_RUNS[@]}"; do

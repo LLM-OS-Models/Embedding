@@ -99,6 +99,11 @@ The watch root may contain ms-swift's `v0-...` version directory; discovery is
 recursive but does not follow symlinks. If two version directories contain the
 same `checkpoint-N`, the watcher fails closed instead of choosing one.
 
+BF16 finite 검증은 기본적으로 PyTorch CPU thread 1개만 사용한다. r64 adapter 전체 payload를
+검사하면서 학습 dataloader의 CPU를 빼앗지 않기 위한 production 기본값이다. 학습이 없는
+maintenance window에서만 `EMBEDDING_WATCHER_TORCH_THREADS=2`처럼 최대 8까지 명시적으로
+올릴 수 있다. watcher는 `torch`와 `safetensors`가 모두 있는 `.venv-train-fa2`로 실행한다.
+
 Use `Ctrl-C` to stop. `--once --upload` processes all currently completed,
 previously unseen checkpoints and exits.
 

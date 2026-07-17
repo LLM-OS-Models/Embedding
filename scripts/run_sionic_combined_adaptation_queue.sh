@@ -23,10 +23,8 @@ OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-combined-target-adapted"
 mkdir -p "$LOG_DIR" "$OUT_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
-fi
+unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
+PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
@@ -163,7 +161,7 @@ train_combined() {
   echo "[$(timestamp)] combined training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$name" env TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
-    MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
+    MAX_STEPS="$MAX_STEPS" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=5 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
     MAX_LENGTH=512 LORA_RANK=64 LORA_ALPHA=128 LORA_DROPOUT=.05 \
     DATASET_SHUFFLE=false TRAIN_DATALOADER_SHUFFLE=false \
@@ -189,20 +187,30 @@ if [[ -z "$checkpoint" ]]; then
     "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 5
 fi
 
-retry_stage upload-combined-curriculum 3 \
-  "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
-  --train "$CURRICULUM" --provenance "$PROVENANCE" --manifest "$MANIFEST" \
-  --quality-audit "$QUALITY" --benchmark-overlap-audit "$OVERLAP" \
-  --repo-id LLM-OS-Models2/korean-embedding-sionic-combined-replay-v1 \
-  --title "Korean Sionic Combined Target Domains with General Replay" \
-  --source-dataset LLM-OS-Models2/korean-embedding-sionic-squad-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models2/korean-embedding-sionic-health-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models2/korean-embedding-sionic-autorag-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1 \
-  --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
-  --upload --public >"$LOG_DIR/dataset-upload.log" 2>&1 &
-DATA_UPLOAD_PID=$!
+DATA_UPLOAD_PID=""
+if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+  (
+    set -a
+    source "$PUBLISH_HF_TOKEN_FILE"
+    set +a
+    retry_stage upload-combined-curriculum 3 \
+      "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
+      --train "$CURRICULUM" --provenance "$PROVENANCE" --manifest "$MANIFEST" \
+      --quality-audit "$QUALITY" --benchmark-overlap-audit "$OVERLAP" \
+      --repo-id LLM-OS-Models2/korean-embedding-sionic-combined-replay-v1 \
+      --title "Korean Sionic Combined Target Domains with General Replay" \
+      --source-dataset LLM-OS-Models2/korean-embedding-sionic-squad-quantile-hn7-replay-v1 \
+      --source-dataset LLM-OS-Models2/korean-embedding-sionic-health-quantile-hn7-replay-v1 \
+      --source-dataset LLM-OS-Models2/korean-embedding-sionic-autorag-quantile-hn7-replay-v1 \
+      --source-dataset LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1 \
+      --source-dataset LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1 \
+      --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
+      --upload --public
+  ) >"$LOG_DIR/dataset-upload.log" 2>&1 &
+  DATA_UPLOAD_PID=$!
+else
+  echo "[$(timestamp)] no token file; combined dataset upload skipped" >&2
+fi
 
 run_stage verify-combined-adapter \
   "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
@@ -237,18 +245,22 @@ CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
 if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
   [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
-  if retry_stage publish-combined-model 3 \
+  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+    echo "[$(timestamp)] no token file; private combined model upload skipped" >&2
+  elif retry_stage publish-combined-model 3 \
     "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
     --training-manifest "$MANIFEST" \
     --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
-    --upload; then
+    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
     run_stage record-combined-result "$ROOT/scripts/commit_campaign_result.sh" \
       --stage sionic-combined --model "$MODEL_REL" \
       --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-sionic-combined-v1-private-candidate \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi
-wait "$DATA_UPLOAD_PID" || echo "[$(timestamp)] combined dataset upload failed" >&2
+if [[ -n "$DATA_UPLOAD_PID" ]]; then
+  wait "$DATA_UPLOAD_PID" || echo "[$(timestamp)] combined dataset upload failed" >&2
+fi
 echo "[$(timestamp)] combined Sionic target-adaptation queue complete"

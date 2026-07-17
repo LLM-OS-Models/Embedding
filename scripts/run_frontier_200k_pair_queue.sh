@@ -76,7 +76,7 @@ fi
 training_manifest_sha="$(sha256sum "$TRAIN_MANIFEST" | awk '{print $1}')"
 admission_sha="$(sha256sum "$COMSAT_ADMISSION" | awk '{print $1}')"
 
-"$ROOT/.venv-hf-tools/bin/python" \
+"$ROOT/.venv-train-fa2/bin/python" \
   "$ROOT/scripts/watch_private_adapter_checkpoints.py" \
   --watch-dir "$COMSAT_RUN" \
   --repo-id LLM-OS-Models2/comsat-embed-ko-8b-performance200k-lora-r64-candidates \
@@ -100,7 +100,7 @@ env EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
   BASE_REVISION="$COMSAT_REVISION" \
   BACKEND_ADMISSION_RUN_KEY="$COMSAT_ADMISSION_KEY" \
   TRAIN_FILE="$TRAIN_FILE" VAL_FILE="$VAL_FILE" \
-  MAX_STEPS=3123 EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
+  MAX_STEPS=3123 EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=5 \
   TRAIN_BATCH_SIZE=16 EVAL_BATCH_SIZE=4 GRAD_ACCUM_STEPS=4 \
   DATASET_SHUFFLE=false TRAIN_DATALOADER_SHUFFLE=false AUTO_SELECT_FA2=1 \
   "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"

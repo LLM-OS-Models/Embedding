@@ -59,10 +59,8 @@ OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-${TARGET_KIND}-target-adap
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
-fi
+unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
+PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/scripts:$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
@@ -226,7 +224,7 @@ train_target() {
   echo "[$(timestamp)] ${TARGET_KIND} training backend=$train_attn env=$train_env admission=$admission_report"
   run_stage "train-$output_name" env TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$output_name" TRAIN_FILE="$CURRICULUM" VAL_FILE="$VAL_FILE" \
-    MAX_STEPS="$MAX_STEPS" EVAL_STEPS=125 SAVE_STEPS=125 SAVE_TOTAL_LIMIT=3 \
+    MAX_STEPS="$MAX_STEPS" EVAL_STEPS=125 SAVE_STEPS=125 SAVE_TOTAL_LIMIT=5 \
     MAX_LENGTH="$TARGET_MAX_LENGTH" \
     EVAL_BATCH_SIZE="$TARGET_EVAL_BATCH_SIZE" \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
@@ -261,17 +259,27 @@ if [[ -z "$checkpoint" ]]; then
     "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 7
 fi
 
-retry_stage "upload-derived-${TARGET_KIND}-replay" 3 \
-  "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
-  --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
-  --manifest "$CURRICULUM_MANIFEST" --mining-manifest "$MINING_MANIFEST" \
-  --mining-audit "$MINING_AUDIT" --quality-audit "$CURRICULUM_QUALITY" \
-  --benchmark-overlap-audit "$CURRICULUM_OVERLAP" \
-  --repo-id "$DERIVED_REPO" --title "$DERIVED_TITLE" \
-  --source-dataset "$TARGET_SOURCE_DATASET" \
-  --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
-  --upload --public >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
-DATA_UPLOAD_PID=$!
+DATA_UPLOAD_PID=""
+if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+  (
+    set -a
+    source "$PUBLISH_HF_TOKEN_FILE"
+    set +a
+    retry_stage "upload-derived-${TARGET_KIND}-replay" 3 \
+      "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
+      --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
+      --manifest "$CURRICULUM_MANIFEST" --mining-manifest "$MINING_MANIFEST" \
+      --mining-audit "$MINING_AUDIT" --quality-audit "$CURRICULUM_QUALITY" \
+      --benchmark-overlap-audit "$CURRICULUM_OVERLAP" \
+      --repo-id "$DERIVED_REPO" --title "$DERIVED_TITLE" \
+      --source-dataset "$TARGET_SOURCE_DATASET" \
+      --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
+      --upload --public
+  ) >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
+  DATA_UPLOAD_PID=$!
+else
+  echo "[$(timestamp)] no token file; derived ${TARGET_KIND} dataset upload skipped" >&2
+fi
 
 run_stage "verify-${TARGET_KIND}-target-adapter" \
   "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
@@ -309,18 +317,22 @@ CLEAN_SUMMARY="$CLEAN_OUT/$safe/$revision/summary.json"
 if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
   [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
-  if retry_stage "publish-${TARGET_KIND}-target-model" 3 \
+  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+    echo "[$(timestamp)] no token file; private ${TARGET_KIND} model upload skipped" >&2
+  elif retry_stage "publish-${TARGET_KIND}-target-model" 3 \
     "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
     --training-manifest "$CURRICULUM_MANIFEST" \
     --repo-id "$PRIVATE_MODEL_REPO" \
-    --upload; then
+    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
     run_stage "record-${TARGET_KIND}-target-result" "$ROOT/scripts/commit_campaign_result.sh" \
       --stage "$CAMPAIGN_STAGE" --model "$MODEL_REL" \
       --repo-id "$PRIVATE_MODEL_REPO" \
       --sionic-summary "$SIONIC_SUMMARY" --official-summary "$OFFICIAL_SUMMARY"
   fi
 fi
-wait "$DATA_UPLOAD_PID" || echo "[$(timestamp)] derived $TARGET_KIND dataset upload failed" >&2
+if [[ -n "$DATA_UPLOAD_PID" ]]; then
+  wait "$DATA_UPLOAD_PID" || echo "[$(timestamp)] derived $TARGET_KIND dataset upload failed" >&2
+fi
 echo "[$(timestamp)] Sionic $TARGET_KIND target-adaptation queue complete"

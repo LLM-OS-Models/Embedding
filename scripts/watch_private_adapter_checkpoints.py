@@ -463,6 +463,23 @@ def inspect_safetensors(path: Path) -> dict[str, Any]:
         raise WatcherError(
             "missing_dependency", "torch and safetensors are required to validate weights"
         ) from None
+    # Full-payload finite checks over a ~700MB r64 adapter otherwise let
+    # PyTorch fan out across every CPU core and starve the active Trainer's
+    # tokenization/dataloader workers.  One validation thread keeps the H100
+    # supplied while the recovery upload proceeds in the background.  A small
+    # explicit override is available for maintenance windows with no training.
+    raw_threads = os.environ.get("EMBEDDING_WATCHER_TORCH_THREADS", "1")
+    try:
+        validation_threads = int(raw_threads)
+    except ValueError:
+        raise WatcherError(
+            "invalid_argument", "watcher validation thread count must be an integer"
+        ) from None
+    if validation_threads < 1 or validation_threads > 8:
+        raise WatcherError(
+            "invalid_argument", "watcher validation thread count must be in [1, 8]"
+        )
+    torch.set_num_threads(validation_threads)
     try:
         # NumPy cannot materialize BF16 safetensors.  PyTorch's CPU backend
         # supports F16/BF16/F32 and lets us validate every payload byte/value.
@@ -530,6 +547,7 @@ def inspect_safetensors(path: Path) -> dict[str, Any]:
         "tensor_count": len(keys),
         "parameter_count": parameter_count,
         "tensor_dtypes": dict(sorted(dtypes.items())),
+        "validation_cpu_threads": validation_threads,
     }
 
 

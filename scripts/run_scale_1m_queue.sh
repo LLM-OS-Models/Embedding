@@ -37,10 +37,8 @@ POSTTRAIN_SELECTION="${POSTTRAIN_SELECTION:-$ROOT/outputs/post-training-eval-202
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
-if [[ -f "$ROOT/.env" ]]; then
-  HF_TOKEN="$(sed -n 's/^HF_TOKEN=//p' "$ROOT/.env" | tail -n 1)"
-  export HF_TOKEN
-fi
+unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
+PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
@@ -236,7 +234,7 @@ train_scale() {
   run_stage "train-$output_name" env \
     TRAIN_ENV="$train_env" ATTN_IMPL="$train_attn" \
     RUN_NAME="$output_name" TRAIN_FILE="$TRAIN_FILE" VAL_FILE="$VAL_FILE" \
-    MAX_STEPS="$MAX_STEPS_1M" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=3 \
+    MAX_STEPS="$MAX_STEPS_1M" EVAL_STEPS=250 SAVE_STEPS=250 SAVE_TOTAL_LIMIT=5 \
     TRAIN_BATCH_SIZE="$batch" GRAD_ACCUM_STEPS="$accum" \
     MAX_LENGTH=512 LORA_RANK=64 LORA_ALPHA=128 LORA_DROPOUT=.05 \
     DATASET_SHUFFLE=false TRAIN_DATALOADER_SHUFFLE=false \
@@ -267,20 +265,29 @@ fi
 
 DATA_UPLOAD_PID=""
 if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
-  retry_stage "upload-derived-performance-1m" 3 \
-    "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
-    --train "$MINED_HOMOGENEOUS_TRAIN" \
-    --provenance "$MINED_HOMOGENEOUS_PROVENANCE" \
-    --manifest "$MINED_HOMOGENEOUS_MANIFEST" \
-    --mining-manifest "$MINING_MANIFEST" --mining-audit "$MINING_AUDIT" \
-    --quality-audit "$MINED_QUALITY_AUDIT" \
-    --benchmark-overlap-audit "$MINED_OVERLAP_AUDIT" \
-    --repo-id LLM-OS-Models2/korean-embedding-performance-1m-quantile-hn7-v1 \
-    --title "Korean Embedding Performance 1M Quantile HN7" \
-    --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
-    --upload --public >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
-  DATA_UPLOAD_PID=$!
-  echo "[$(timestamp)] derived dataset upload started pid=$DATA_UPLOAD_PID"
+  if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+    (
+      set -a
+      source "$PUBLISH_HF_TOKEN_FILE"
+      set +a
+      retry_stage "upload-derived-performance-1m" 3 \
+        "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
+        --train "$MINED_HOMOGENEOUS_TRAIN" \
+        --provenance "$MINED_HOMOGENEOUS_PROVENANCE" \
+        --manifest "$MINED_HOMOGENEOUS_MANIFEST" \
+        --mining-manifest "$MINING_MANIFEST" --mining-audit "$MINING_AUDIT" \
+        --quality-audit "$MINED_QUALITY_AUDIT" \
+        --benchmark-overlap-audit "$MINED_OVERLAP_AUDIT" \
+        --repo-id LLM-OS-Models2/korean-embedding-performance-1m-quantile-hn7-v1 \
+        --title "Korean Embedding Performance 1M Quantile HN7" \
+        --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
+        --upload --public
+    ) >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
+    DATA_UPLOAD_PID=$!
+    echo "[$(timestamp)] derived dataset upload started pid=$DATA_UPLOAD_PID"
+  else
+    echo "[$(timestamp)] no token file; derived dataset upload skipped" >&2
+  fi
 fi
 
 run_stage "verify-$RUN_NAME" \
@@ -333,7 +340,9 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   robustness_args=()
   [[ -s "$ROBUST_SUMMARY" ]] && \
     robustness_args+=(--robustness-summary "$ROBUST_SUMMARY")
-  if retry_stage "publish-$RUN_NAME" 3 \
+  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+    echo "[$(timestamp)] no token file; private model upload skipped" >&2
+  elif retry_stage "publish-$RUN_NAME" 3 \
     "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" \
     --sionic-summary "$SIONIC_SUMMARY" \
@@ -342,7 +351,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
     "${robustness_args[@]}" \
     --training-manifest "$TRAINING_MANIFEST" \
     --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-1m-v1-private-candidate \
-    --upload; then
+    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
     run_stage "record-scale-1m-result" \
       "$ROOT/scripts/commit_campaign_result.sh" \
       --stage scale-1m --model "$MODEL_REL" \

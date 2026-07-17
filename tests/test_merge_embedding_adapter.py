@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sys
 import tempfile
@@ -101,6 +102,48 @@ class ContractTests(unittest.TestCase):
         adapter.mkdir(parents=True)
         (run / "DISQUALIFIED.json").write_text("{}\n", encoding="utf-8")
         merge.assert_adapter_publishable(adapter, allow_diagnostic=True)
+
+    def test_average_report_is_bound_to_exact_adapter_files(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        adapter = Path(temp.name)
+        weights = adapter / "adapter_model.safetensors"
+        config = adapter / "adapter_config.json"
+        weights.write_bytes(b"weights")
+        config.write_text('{"peft_type":"LORA"}\n', encoding="utf-8")
+        weights_sha = hashlib.sha256(weights.read_bytes()).hexdigest()
+        config_sha = hashlib.sha256(config.read_bytes()).hexdigest()
+        report = {
+            "schema_version": 1,
+            "artifact_type": merge.AVERAGE_ARTIFACT_TYPE,
+            "status": "pass",
+            "selection": {"checkpoint_count": 2, "steps": [10, 20]},
+            "sources": [{"step": 10}, {"step": 20}],
+            "averaging": {
+                "method": "arithmetic_mean",
+                "accumulation_dtype": "float32",
+                "output_floating_dtype": "float32",
+            },
+            "output": {
+                "weights_sha256": weights_sha,
+                "config_sha256": config_sha,
+            },
+        }
+        (adapter / merge.AVERAGE_REPORT_NAME).write_text(
+            json.dumps(report), encoding="utf-8"
+        )
+        validated = merge.validate_adapter_average_report(
+            adapter,
+            weights_sha256=weights_sha,
+            config_sha256=config_sha,
+        )
+        self.assertEqual(validated["selection"]["steps"], [10, 20])
+        with self.assertRaisesRegex(ValueError, "weights hash"):
+            merge.validate_adapter_average_report(
+                adapter,
+                weights_sha256="0" * 64,
+                config_sha256=config_sha,
+            )
 
 
 class ParityTests(unittest.TestCase):

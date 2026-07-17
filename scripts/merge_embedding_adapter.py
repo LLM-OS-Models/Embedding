@@ -28,6 +28,8 @@ from typing import Any, Sequence
 
 DEFAULT_BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
 DEFAULT_BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+AVERAGE_REPORT_NAME = "average_report.json"
+AVERAGE_ARTIFACT_TYPE = "fp32-lora-checkpoint-average"
 QUERY_PROMPT = (
     "Instruct: Given a web search query, retrieve relevant passages that answer "
     "the query\nQuery:"
@@ -196,6 +198,56 @@ def assert_adapter_publishable(adapter_dir: Path, allow_diagnostic: bool) -> Non
     )
 
 
+def validate_adapter_average_report(
+    adapter_dir: Path, *, weights_sha256: str, config_sha256: str
+) -> dict[str, Any] | None:
+    """Validate optional checkpoint-average provenance against exact files."""
+
+    report_path = adapter_dir / AVERAGE_REPORT_NAME
+    if not report_path.exists():
+        return None
+    if report_path.is_symlink() or not report_path.is_file():
+        raise ValueError("Adapter average report is not a regular file")
+    report = read_json(report_path)
+    if not isinstance(report, dict):
+        raise ValueError("Adapter average report must contain a JSON object")
+    if report.get("schema_version") != 1:
+        raise ValueError("Unsupported adapter average report schema")
+    if report.get("artifact_type") != AVERAGE_ARTIFACT_TYPE:
+        raise ValueError("Unexpected adapter average artifact type")
+    if report.get("status") != "pass":
+        raise ValueError("Adapter average report did not pass")
+    selection = report.get("selection", {})
+    count = selection.get("checkpoint_count")
+    steps = selection.get("steps")
+    sources = report.get("sources")
+    if (
+        isinstance(count, bool)
+        or not isinstance(count, int)
+        or count < 2
+        or not isinstance(steps, list)
+        or len(steps) != count
+        or not all(isinstance(step, int) and step > 0 for step in steps)
+        or steps != sorted(set(steps))
+        or not isinstance(sources, list)
+        or len(sources) != count
+    ):
+        raise ValueError("Adapter average checkpoint provenance is malformed")
+    averaging = report.get("averaging", {})
+    if (
+        averaging.get("method") != "arithmetic_mean"
+        or averaging.get("accumulation_dtype") != "float32"
+        or averaging.get("output_floating_dtype") != "float32"
+    ):
+        raise ValueError("Adapter was not averaged and emitted in FP32")
+    output = report.get("output", {})
+    if output.get("weights_sha256") != weights_sha256:
+        raise ValueError("Adapter average report weights hash does not match")
+    if output.get("config_sha256") != config_sha256:
+        raise ValueError("Adapter average report config hash does not match")
+    return report
+
+
 def validate_adapter(adapter_dir: Path) -> dict[str, Any]:
     config_path = adapter_dir / "adapter_config.json"
     if not config_path.is_file():
@@ -215,6 +267,13 @@ def validate_adapter(adapter_dir: Path) -> dict[str, Any]:
     ):
         raise ValueError("Adapter target_modules must be a non-empty list")
     weight_path = adapter_weight_path(adapter_dir)
+    config_sha256 = sha256(config_path)
+    weights_sha256 = sha256(weight_path)
+    average_report = validate_adapter_average_report(
+        adapter_dir,
+        weights_sha256=weights_sha256,
+        config_sha256=config_sha256,
+    )
     training: dict[str, Any] = {}
     args_path = adapter_dir / "args.json"
     if args_path.is_file():
@@ -251,10 +310,16 @@ def validate_adapter(adapter_dir: Path) -> dict[str, Any]:
                 break
     return {
         "config": config,
-        "config_sha256": sha256(config_path),
+        "config_sha256": config_sha256,
         "weights_filename": weight_path.name,
-        "weights_sha256": sha256(weight_path),
+        "weights_sha256": weights_sha256,
         "weights_bytes": weight_path.stat().st_size,
+        "checkpoint_average": average_report,
+        "checkpoint_average_report_sha256": (
+            sha256(adapter_dir / AVERAGE_REPORT_NAME)
+            if average_report is not None
+            else None
+        ),
         "training": training,
     }
 
