@@ -127,6 +127,10 @@ Qwen 원 run의 exact validation은
   source/revision/license/redistribution approval을 갖고, 독립 text-hash audit에서 고정
   benchmark query/evaluation/corpus exact overlap이 모두 0이다. bootstrap negative는 최종
   학습 전에 채택한 current student로 다시 mining한다.
+- mining·provenance projection·batch ordering 뒤에는
+  `scripts/finalize_public_training_manifest.py`가 마지막 transform SHA, 모든 row의
+  source/revision/license, 최종 benchmark-overlap audit를 다시 결합한다. 이 gate를 통과한
+  manifest만 public model trainer와 uploader가 받는다.
 - 재배포가 허용된 학습 데이터와 derived dataset은 기본 public이다.
 - dataset card에 upstream repository/revision, license, row별 source/provenance, 변환,
   dedup과 benchmark-overlap 감사를 기록한다.
