@@ -45,6 +45,13 @@ hard-offline에서 열려다 종료됐다. 모델 오류나 OOM이 아니며 com
 Sionic shard만 token 없는 익명 다운로드를 허용하도록 수정했다. Mr.TyDi restore와 평가
 진입을 확인했다.
 
+Nemotron-3가 base gate를 통과할 때의 공개 LoRA 경로는
+`scripts/train_nemotron3_public_lora.py`로 고정했다. SentenceTransformers 5.6.0 + PEFT
+0.19.1, q/k/v/o LoRA, cached all-negative loss, BF16/FA2, gradient checkpointing을 쓰며
+complete optimizer/scheduler/trainer checkpoint만 자동 재개한다. 현재는 공개 250K manifest와
+train SHA를 사용한 contract-only 검증 및 단위 테스트까지 통과했다. 실제 1-step backward
+probe는 Sionic 병렬 평가가 GPU에서 내려간 직후 실행한다.
+
 ## 중단 후 재개
 
 모델과 평가 데이터는 NFS에 고정했고, 대형 retrieval embedding은 chunk 단위 atomic
