@@ -17,10 +17,16 @@ ENABLE_PRIVATE_CHECKPOINT_WATCHER="${ENABLE_PRIVATE_CHECKPOINT_WATCHER:-0}"
 CHECKPOINT_TRAINING_MANIFEST="${CHECKPOINT_TRAINING_MANIFEST:-}"
 CHECKPOINT_BASE_UPLOAD_REPORT="${CHECKPOINT_BASE_UPLOAD_REPORT:-}"
 PRIVATE_CHECKPOINT_REPO_ID="${PRIVATE_CHECKPOINT_REPO_ID:-LLM-OS-Models2/${RUN_NAME}-candidates}"
+AUTO_RESUME_FROM_LATEST_CHECKPOINT="${AUTO_RESUME_FROM_LATEST_CHECKPOINT:-1}"
 
 if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" != 0 \
     && "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" != 1 ]]; then
   echo "ENABLE_PRIVATE_CHECKPOINT_WATCHER must be 0 or 1" >&2
+  exit 2
+fi
+if [[ "$AUTO_RESUME_FROM_LATEST_CHECKPOINT" != 0 \
+    && "$AUTO_RESUME_FROM_LATEST_CHECKPOINT" != 1 ]]; then
+  echo "AUTO_RESUME_FROM_LATEST_CHECKPOINT must be 0 or 1" >&2
   exit 2
 fi
 
@@ -149,6 +155,38 @@ if [[ "${ENABLE_LISTWISE_KD:-0}" == 1 ]]; then
 else
   "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
     "$TRAIN_FILE" "$VAL_FILE"
+fi
+
+RESUME_ARGS=()
+if [[ "$AUTO_RESUME_FROM_LATEST_CHECKPOINT" == 1 ]] \
+    && find "$OUTPUT_DIR" -mindepth 2 -maxdepth 2 -type d \
+      -name 'checkpoint-*' -print -quit 2>/dev/null | grep -q .; then
+  resume_checkpoint="$("$TRAIN_ENV/bin/python" \
+    "$ROOT/scripts/select_best_checkpoint.py" "$OUTPUT_DIR" \
+    --checkpoint-kind adapter --latest-resume --print-path 2>/dev/null)" || {
+      echo "existing checkpoint history has no unambiguous complete resume point" >&2
+      exit 2
+    }
+  resume_loss_type=infonce
+  [[ "${ENABLE_LISTWISE_KD:-0}" == 1 ]] && resume_loss_type=listwise_embedding_kd
+  resume_report_tmp="$OUTPUT_DIR/.resume-validation.json.tmp.$$"
+  "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_resume_checkpoint.py" \
+    --checkpoint "$resume_checkpoint" --run-dir "$OUTPUT_DIR" \
+    --train-file "$TRAIN_FILE" --val-file "$VAL_FILE" \
+    --base-model "$BASE_MODEL" --base-revision "$BASE_REVISION" \
+    --max-steps "${MAX_STEPS:-160}" \
+    --train-batch-size "${TRAIN_BATCH_SIZE:-16}" \
+    --grad-accum-steps "${GRAD_ACCUM_STEPS:-4}" \
+    --max-length "${MAX_LENGTH:-512}" \
+    --lora-rank "${LORA_RANK:-64}" --lora-alpha "${LORA_ALPHA:-128}" \
+    --lora-dropout "${LORA_DROPOUT:-0.05}" \
+    --learning-rate "${LEARNING_RATE:-2e-5}" --loss-type "$resume_loss_type" \
+    --dataset-shuffle "${DATASET_SHUFFLE:-${TRAIN_DATALOADER_SHUFFLE:-true}}" \
+    --train-dataloader-shuffle "${TRAIN_DATALOADER_SHUFFLE:-true}" \
+    --seed "${SEED:-42}" > "$resume_report_tmp"
+  mv "$resume_report_tmp" "$OUTPUT_DIR/resume-validation.json"
+  RESUME_ARGS+=(--resume_from_checkpoint "$resume_checkpoint")
+  echo "resuming exact training contract from ${resume_checkpoint##*/}" >&2
 fi
 
 checkpoint_watcher_pid=""
@@ -282,6 +320,7 @@ training_status=0
   --seed "${SEED:-42}" \
   --report_to none \
   --output_dir "$OUTPUT_DIR" \
+  "${RESUME_ARGS[@]}" \
   "${LOSS_ARGS[@]}" \
   2>&1 | tee "$OUTPUT_DIR/train.log" || training_status=$?
 

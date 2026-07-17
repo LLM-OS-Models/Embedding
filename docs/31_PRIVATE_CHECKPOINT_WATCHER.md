@@ -180,6 +180,22 @@ remote manifest 재다운로드가 일치한 뒤 `repo_id`, `commit_sha`, `weigh
 watcher child에서만 inherited token과 `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE`/
 `HF_DATASETS_OFFLINE`을 제거한 뒤 mode-0600 `.env`를 process memory에서 읽는다.
 
+## Exact Trainer resume
+
+`AUTO_RESUME_FROM_LATEST_CHECKPOINT=1`이 LoRA entrypoint 기본값이다. 기존 checkpoint가 하나라도
+있으면 `select_best_checkpoint.py --latest-resume`가 최신 step 하나만 고른다. adapter와
+`trainer_state.json`, optimizer/scheduler/RNG/training args가 모두 non-empty regular file이고,
+directory step과 `global_step`, 같은 step finite `eval_loss`가 일치해야 한다. 서로 다른 training
+version에 같은 step이 두 개면 임의로 고르지 않고 실패한다.
+
+이어 `validate_resume_checkpoint.py`가 train/validation exact path, base model/revision,
+max steps, microbatch/accumulation, max length, LoRA rank/alpha/dropout, learning rate, loss,
+두 shuffle flag와 seed를 현재 invocation과 비교한다. 전부 맞을 때만 Swift에
+`--resume_from_checkpoint`를 전달하고 atomic `resume-validation.json`을 남긴다. existing history가
+있는데 valid resume point가 없으면 새 v1 run을 조용히 시작하지 않는다. 현재 Qwen step 1000
+checkpoint도 원래 legacy validation path를 명시한 exact contract로 이 validator를 통과했다.
+legacy eval loss는 여전히 성능 선택에 사용하지 않고 독립 Grade-I 10K로 재선택한다.
+
 ## Idempotency and recovery
 
 The local state is

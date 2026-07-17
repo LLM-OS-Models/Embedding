@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--print-path", action="store_true")
     parser.add_argument(
         "--checkpoint-kind", choices=("adapter", "full", "auto"), default="adapter"
+    )
+    parser.add_argument(
+        "--latest-resume",
+        action="store_true",
+        help="Select the latest unambiguous checkpoint with complete optimizer state",
     )
     return parser.parse_args()
 
@@ -58,6 +64,37 @@ def complete_checkpoint(path: Path, kind: str) -> bool:
     return {"adapter": adapter, "full": full, "auto": adapter or full}[kind]
 
 
+def regular_nonempty_file(path: Path) -> bool:
+    return path.is_file() and not path.is_symlink() and path.stat().st_size > 0
+
+
+def complete_resume_checkpoint(path: Path, kind: str) -> bool:
+    if path.is_symlink() or not complete_checkpoint(path, kind):
+        return False
+    required = (
+        "trainer_state.json",
+        "optimizer.pt",
+        "scheduler.pt",
+        "rng_state.pth",
+        "training_args.bin",
+        "args.json",
+    )
+    if not all(regular_nonempty_file(path / name) for name in required):
+        return False
+    try:
+        state = json.loads((path / "trainer_state.json").read_text(encoding="utf-8"))
+        step = checkpoint_step(path)
+        if int(state.get("global_step", -1)) != step:
+            return False
+        max_steps = int(state.get("max_steps", -1))
+        if max_steps < step or step < 1:
+            return False
+        loss = evaluation_losses(state).get(step)
+        return loss is not None and math.isfinite(loss)
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        return False
+
+
 def main() -> None:
     args = parse_args()
     run_dir = args.run_dir.resolve()
@@ -65,7 +102,11 @@ def main() -> None:
         (
             path
             for path in run_dir.glob("**/checkpoint-*")
-            if path.is_dir() and complete_checkpoint(path, args.checkpoint_kind)
+            if path.is_dir()
+            and not path.is_symlink()
+            and path.resolve() == path
+            and path.resolve().is_relative_to(run_dir)
+            and complete_checkpoint(path, args.checkpoint_kind)
         ),
         key=checkpoint_step,
     )
@@ -73,6 +114,40 @@ def main() -> None:
         raise FileNotFoundError(
             f"No complete {args.checkpoint_kind} checkpoint under {run_dir}"
         )
+
+    if args.latest_resume:
+        resume_checkpoints = [
+            path
+            for path in checkpoints
+            if complete_resume_checkpoint(path, args.checkpoint_kind)
+        ]
+        if not resume_checkpoints:
+            raise FileNotFoundError(
+                f"No resumable {args.checkpoint_kind} checkpoint under {run_dir}"
+            )
+        steps: dict[int, list[Path]] = {}
+        for path in resume_checkpoints:
+            steps.setdefault(checkpoint_step(path), []).append(path)
+        duplicates = [step for step, paths in steps.items() if len(paths) != 1]
+        if duplicates:
+            raise ValueError("Latest resume checkpoint step is ambiguous across versions")
+        best_step = max(steps)
+        best = steps[best_step][0]
+        report = {
+            "run_dir": str(run_dir),
+            "selected_checkpoint": str(best),
+            "selected_step": best_step,
+            "reason": "latest_complete_resume_checkpoint",
+            "checkpoint_kind": args.checkpoint_kind,
+            "resumable_checkpoints": [
+                str(path) for path in sorted(resume_checkpoints, key=checkpoint_step)
+            ],
+        }
+        if args.print_path:
+            print(best)
+        else:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
 
     checkpoint_losses: dict[Path, float] = {}
     for checkpoint in checkpoints:
