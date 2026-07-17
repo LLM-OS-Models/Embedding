@@ -59,6 +59,11 @@ SHA, source-holdout 검증, query/positive/negative/source-document training ove
 32, mini-batch 2, save/eval 50 step이며 각 완결 checkpoint를
 `LLM-OS-Models2/nemotron3-ko-public-lora-r16-checkpoints`에 public으로 검증·업로드한다. trainer
 종료 뒤 watcher `--once`를 한 번 더 실행해 마지막 checkpoint 누락을 막는다.
+상위 `scripts/run_nemotron3_public_pipeline.sh`는 backward probe pass 뒤 public 250K를 pinned
+Nemotron으로 FAISS HN7 mining하고, provenance projection → source-homogeneous length-bucketed
+batch32 → 최종 benchmark audit → rights finalization을 순서대로 실행한다. exact 원격 payload를
+`LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1`에 public 배포한 뒤 위 trainer를
+호출한다. 각 대형 stage의 manifest/cache를 재사용하므로 중단 후 같은 명령으로 재개한다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를
