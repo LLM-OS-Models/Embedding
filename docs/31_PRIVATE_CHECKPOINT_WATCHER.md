@@ -170,6 +170,18 @@ Step 250은 Trainer 회전으로 full checkpoint가 사라지고 sanitized archi
 private visibility를 최신 v2 head에서 다시 확인했다. eval loss는 step 250/500/750/1000 순서로
 `0.003494835924357176`/`0.00343669`/`0.00342328`/`0.0034344`이며 성능 선택에는 쓰지 않는다.
 
+같은 watcher는 2026-07-17 16:37 KST에 새 step 1250도 자동 보존했다. private immutable commit은
+`38ae9b1dabb022b36ce296036e66ae1a6b8343c1`, adapter SHA는
+`86846cb39594687ee3301db6164375752fd0b4632866dc6db35741fc10f08d8e`, config SHA는
+`eac78f0773789a361251829e3cde41561a94873bf0d5fece6cd94d22661b4d3d`, manifest SHA는
+`1887f0fe3f26b858239ead6034ef919c3a19f62113141649f149a075257ce6ef`다. 독립 remote
+재조회에서 private visibility, exact 3-file prefix, 698,419,728-byte adapter LFS SHA/size,
+config/manifest download SHA, base revision, actual train SHA `8e2731ab…`, training manifest
+`eeed4fcd…`, admission report `c409291a…`를 모두 local archive/state와 대조했다. 같은 step의
+legacy eval loss `0.00344981`은 completion/finite 증거일 뿐 checkpoint 선택 점수가 아니다.
+full local checkpoint에는 adapter와 optimizer/scheduler/RNG/trainer state가 모두 남아 exact
+resume 가능하고, sanitized archive는 adapter/config/archive manifest 세 파일만 갖는다.
+
 ## Continual-base 복구 사슬
 
 selection-only 200K lineage winner와 capacity 포함 winner는 public benchmark를 호출하지 않은
