@@ -34,7 +34,8 @@ fi
 QWEN_REVISION="4e423935c619ae4df87b646a3ce949610c66241c"
 QWEN_OFFICIAL_SUMMARY="$OFFICIAL_OUT/Qwen__Qwen3-Embedding-8B/$QWEN_REVISION/summary.json"
 if [[ ! -s "$QWEN_OFFICIAL_SUMMARY" ]]; then
-  for candidate_batch in 192 96 48; do
+  candidate_batch=192
+  while (( candidate_batch >= 1 )); do
     echo "[$(timestamp)] START Qwen official Korean v1 batch=$candidate_batch"
     if "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/evaluate_mteb_korean_v1.py" \
         --model Qwen/Qwen3-Embedding-8B --revision "$QWEN_REVISION" \
@@ -47,6 +48,8 @@ if [[ ! -s "$QWEN_OFFICIAL_SUMMARY" ]]; then
     fi
     echo "[$(timestamp)] END Qwen official Korean v1 batch=$candidate_batch status=$status"
     [[ -s "$QWEN_OFFICIAL_SUMMARY" ]] && break
+    (( candidate_batch == 1 )) && break
+    candidate_batch=$((candidate_batch / 2))
   done
 fi
 if [[ -s "$QWEN_OFFICIAL_SUMMARY" ]]; then
@@ -71,8 +74,8 @@ for model in "${models[@]}"; do
   safe="${model//\//__}"
   cache="$ROOT/outputs/embedding-cache/sionic9-top-models/$safe"
   success=0
-  for candidate_batch in "$batch" "$((batch / 2))" "$((batch / 4))"; do
-    (( candidate_batch < 1 )) && candidate_batch=1
+  candidate_batch="$batch"
+  while (( candidate_batch >= 1 )); do
     args=(
       --model "$model"
       --revision "$revision"
@@ -91,6 +94,8 @@ for model in "${models[@]}"; do
       success=1
       break
     fi
+    (( candidate_batch == 1 )) && break
+    candidate_batch=$((candidate_batch / 2))
   done
   if (( success != 1 )); then
     echo "[$(timestamp)] FAILED all batches model=$model"

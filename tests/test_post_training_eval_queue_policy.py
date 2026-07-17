@@ -74,6 +74,8 @@ def test_top_model_queue_is_anonymous_and_fails_closed() -> None:
     assert 'failures+=("Qwen official Korean v1 evaluation")' in source
     assert "top-model queue incomplete" in source
     assert "exit 1" in source
+    assert source.count("while (( candidate_batch >= 1 ))") == 2
+    assert "for candidate_batch in" not in source
 
 
 def test_git_publishers_load_only_github_credential(tmp_path: Path) -> None:

@@ -28,8 +28,9 @@ registered instruction과 task type을 쓰므로 이 표와 평균을 섞지 않
 | 6 | `tencent/KaLM-Embedding-Gemma3-12B-2511` | `98c19ba34197906fbc93f6f1ef79402ca3a33956` | last/causal hybrid | 8192 | 48 | yes |
 | 7 | `nvidia/llama-embed-nemotron-8b` | `aa3b43a495a9b280d1bdb716da37c54bb495d630` | mean/bidirectional | 8192 | 64 | yes |
 
-각 model은 시작 batch, 1/2, 1/4 순으로 OOM fallback한다. 완료 task는 MTEB
-ResultCache와 exact float32 embedding cache로 보존한다. 모델 하나가 실패해도 다음
+각 model은 시작 batch에서 1까지 절반씩 낮추며 OOM fallback한다. 완료 task는 MTEB
+ResultCache와 exact float32 embedding cache로 보존하므로 낮은 batch 재시도는 이미 끝난
+encode를 반복하지 않는다. 모델 하나가 실패해도 다음
 모델은 실행하지만, 하나라도 완결되지 않으면 전체 queue는 nonzero로 끝나 불완전한
 비교를 성공으로 오인하지 않는다. 공개 모델과 공개 평가 데이터만 사용하므로 `.env`를
 읽지 않고, 저장된 Hub credential의 implicit 전송도 차단한 익명 read-only 경로다.
