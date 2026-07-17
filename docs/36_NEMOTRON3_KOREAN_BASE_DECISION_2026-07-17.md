@@ -70,6 +70,14 @@ outputs/embedding-cache/sionic9-nemotron3/full-fixed-prompt/
   <sha256-prefix>/<sha256>.json
 ```
 
+Sionic 재개부터 Nemotron/Qwen/Comsat의 legal·multidomain 동등 비교까지 한 번에 실행하려면
+다음을 사용한다. 모든 모델 revision과 snapshot 존재 여부를 먼저 검사하고 network/token을
+차단한다.
+
+```bash
+scripts/run_nemotron3_base_decision.sh
+```
+
 ## 최단 승리 의사결정
 
 1. Nemotron-3 raw macro가 `> 0.7930`이고 clean selector가 Qwen/Comsat 대비 guard 안이면
