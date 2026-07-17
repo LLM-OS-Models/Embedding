@@ -82,10 +82,10 @@ if [[ "$RUN_NAME" == *performance200k* && "${AUTO_SELECT_FA2:-1}" == 1 ]]; then
     echo "performance200k requires dataset_shuffle=false and train_dataloader_shuffle=false" >&2
     exit 2
   fi
-  admission_key=performance200k-lora-r64
+  admission_key="${BACKEND_ADMISSION_RUN_KEY:-performance200k-lora-r64}"
   if [[ "${TRAIN_BATCH_SIZE:-16}:${GRAD_ACCUM_STEPS:-4}:${MAX_LENGTH:-512}" \
       != "16:4:512" ]]; then
-    admission_key="performance200k-lora-r64-b${TRAIN_BATCH_SIZE:-16}-a${GRAD_ACCUM_STEPS:-4}-m${MAX_LENGTH:-512}"
+    admission_key="${admission_key}-b${TRAIN_BATCH_SIZE:-16}-a${GRAD_ACCUM_STEPS:-4}-m${MAX_LENGTH:-512}"
   fi
   if embedding_select_fa2_backend "$TRAIN_FILE" "$admission_key" \
       "${TRAIN_BATCH_SIZE:-16}" "${GRAD_ACCUM_STEPS:-4}" \

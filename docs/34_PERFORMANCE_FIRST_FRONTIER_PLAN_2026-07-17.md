@@ -311,6 +311,11 @@ legacy warm-start` 순으로 한 요소씩 비교한다.
 - 동일 recipe로 Comsat 200K warm-start를 학습
 - clean Grade-I legal과 별도 held-out loss에서 두 lineage를 비교
 
+2026-07-17 11:46 KST에 Qwen run을 시작했고,
+[`run_frontier_200k_pair_queue.sh`](../scripts/run_frontier_200k_pair_queue.sh)가 Qwen의
+정상 3,123-step 종료를 검증한 뒤 Comsat 전용 5+5-step backend report, 별도 private
+watcher, 동일 3,123-step run을 직렬로 시작하도록 대기 중이다. 두 8B job은 겹치지 않는다.
+
 이 stage가 끝나기 전에는 과거 중단 run의 loss나 문서상 결과를 새 checkpoint 결과로
 간주하지 않는다.
 
@@ -415,7 +420,7 @@ credential이 없다. `.env`는 ignored 상태로 존재하지만 public restore
 3. submodule, pinned dataset, Qwen/Comsat/reranker core model을 NFS에 복원한다. — **완료**
 4. 법률 Git 4개를 정확한 commit으로 복원하고 312,581 Markdown inventory를 재검증한다. — **완료**
 5. Qwen 200K exact 5+5-step backend probe와 schema/SHA preflight를 통과한다. — **완료; SDPA 선택**
-6. 200K Qwen과 Comsat 두 run을 처음부터 시작한다. — **Qwen은 2026-07-17 11:46 KST 시작**
+6. 200K Qwen과 Comsat 두 run을 처음부터 시작한다. — **Qwen active, Comsat 직렬 queue armed**
 7. winner에 1M, current-student hybrid mining, reranker stratified KD를 순서대로 적용한다.
 
 이 순서는 저장공간을 먼저 보호하면서도, 이전 결과를 복구했다는 착각 없이 가장 빠르게
