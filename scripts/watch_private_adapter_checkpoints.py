@@ -30,7 +30,7 @@ from typing import Any, Callable, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPO_ID = (
-    "LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates"
+    "LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates-v2"
 )
 DEFAULT_BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
 DEFAULT_BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"

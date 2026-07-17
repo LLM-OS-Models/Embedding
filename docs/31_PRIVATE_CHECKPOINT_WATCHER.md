@@ -5,7 +5,7 @@ for completed `checkpoint-N` directories and incrementally commits only
 verified adapter candidates to a private model repository. The active Qwen
 200K repository is:
 
-`LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates`
+`LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates-v2`
 
 The watcher does not start or modify training and uploading is disabled unless
 `--upload` is given. The active Qwen process uses a separately supervised
@@ -145,28 +145,30 @@ can be tightened with `--remote-attempts` and `--remote-retry-seconds`.
 
 ### 2026-07-17 Qwen 복구 실측
 
-첫 새 production checkpoint인 step 250은 same-step `eval_loss=0.003494835924357176`,
-698,419,728-byte adapter 전체 finite 검증을 통과했다. private repo
-`LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates`의 commit
-`7da3a5737e332f0a85981a5fcaa02aecfe7df6c7`에 allowlist 3파일이 올라갔다. 원격
-`candidate_manifest.json` SHA `4a9bc1e73b6aeab2c253ccfd23ee1f77b543a0287f59723fe8dbc12b4b3f6270`와
-adapter SHA `f004b4fb012eb69807147f4b24b40cddb6ab4a00380397a1c45a74a3c3b68ac2`는 local state와
-재조회 결과가 exact match였고 repo visibility는 private였다.
+첫 watcher command가 실제 train SHA `8e2731ab25299ff558af675f067b253a6ce4375a850aa925acfe3b3117505e3c`
+대신 `8e2731a93fb6...`를 manifest lineage에 잘못 넣은 사실을 step 1000 원격 재감사에서
+발견했다. adapter payload와 finite 검증은 맞았지만 provenance가 틀렸으므로 기존 private repo는
+성능 선택/복구에서 제외했고 root commit `9ec6b86bf0d1f13d645824179e7989c3b3fff2d9`에
+superseded card를 올렸다. 기존 artifact는 감사 추적을 위해 덮어쓰거나 삭제하지 않았다.
 
-Step 500도 `eval_loss=0.00343669`로 step 250보다 개선됐으며 commit
-`ea613d324cbccdacb1385bb9e437fa877df35af3`에 업로드됐다. 원격 prefix는 allowlist 3파일만
-포함했고, 698,419,728-byte LFS object SHA
-`36268988d5b529dc364ad242ef98900d0f80d126d490b40a0bbbe2d32cc386f7`와 manifest SHA
-`f77f0ac6788adda45a48eb60d5d088f625d5f111c8ef099753d2af5beb9ca249`가 local state와
-일치했으며 repo visibility도 private로 재확인했다.
+새 private `...-candidates-v2`는 실제 파일에서 계산한 SHA를 사용한다. 회전 전에 full checkpoint가
+남은 step 500/750/1000은 각각 commits `ade73a6a554ce715edd9aeed253b55c850290537`,
+`fecf0c730552c8b1cef038aac1f2e322c092ab2e`,
+`684a680765e58123f6b48f8d4aab859c2813974a`로 watcher가 다시 전체 finite 검증했다.
+manifest SHA는 각각 `a434f20a17c6defc2edd3ed15355de659f2872e509ed849abc672e3414a232c7`,
+`2ba942388f8aeb603353bd9228047fe2c34f5f3151d5fe6aea485be98224b054`,
+`e058c0160a8199310d4c481229ebabffe04a35eb82eca6f72fef66ccc775f8e8`다.
 
-Step 750은 `eval_loss=0.00342328`, commit
-`adf013c90eeb6e93fe7de905f854870bc707c645`로 보존됐다. Step 1000은
-`eval_loss=0.0034344`, commit `363fede65381bc597904a2f49f4514ced318080b`로 보존됐다.
-Step 1000의 698,419,728-byte remote LFS SHA
-`b5a65f907b63079476f2c80d9ebc4df4cde2c5b0488737a544a2fff36499fe57`와 manifest SHA
-`8222ebb346f1995f0e981f5a2888dbebfda1bd3f41efdd5323b6b296fcf1cb2a`는 local state/archive와
-exact match였고, 해당 commit의 prefix는 allowlist 3파일뿐이며 repo는 private였다.
+Step 250은 Trainer 회전으로 full checkpoint가 사라지고 sanitized archive만 남아 있었다.
+`correct_private_candidate_lineage.py`가 기존 private commit
+`7da3a5737e332f0a85981a5fcaa02aecfe7df6c7`의 same-step eval/full-payload manifest,
+로컬 archive SHA와 698,419,728-byte tensor 전체 finite를 함께 재검증했다. adapter/config bytes를
+바꾸지 않고 lineage correction provenance를 추가해 v2 commit
+`7d3b3ed1103fe50ed94d7b305c5b1461cd487d3e`에 이관했다. corrected manifest SHA는
+`98bc5a8dfc53088e8b02c238b3ed005a23344bdd34499c26683348bb9fc1a744`다.
+네 step 모두 remote prefix 3파일, LFS SHA/size, corrected training SHA, manifest download exact와
+private visibility를 최신 v2 head에서 다시 확인했다. eval loss는 step 250/500/750/1000 순서로
+`0.003494835924357176`/`0.00343669`/`0.00342328`/`0.0034344`이며 성능 선택에는 쓰지 않는다.
 
 ## Continual-base 복구 사슬
 

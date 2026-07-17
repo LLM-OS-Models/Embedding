@@ -13,6 +13,10 @@ cd "$ROOT"
 QWEN_RUN="$ROOT/outputs/qwen3-embedding-8b-ko-performance200k-lora-r64"
 QWEN_LOG="$QWEN_RUN/train.log"
 QWEN_TRAIN_PID="${QWEN_TRAIN_PID:-}"
+QWEN_WATCHER_PID="${QWEN_WATCHER_PID:-}"
+QWEN_CANDIDATE_REPO="LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lora-r64-candidates-v2"
+QWEN_WATCHER_STATE="$QWEN_RUN/.hf-candidate-upload-state-v2.json"
+QWEN_ADMISSION="$ROOT/outputs/backend-probes/performance200k-lora-r64/admission.json"
 COMSAT_RUN_ID="comsat-embed-ko-8b-performance200k-lora-r64"
 COMSAT_RUN="$ROOT/outputs/$COMSAT_RUN_ID"
 COMSAT_MODEL="sionic-ai/comsat-embed-ko-8b-preview"
@@ -48,8 +52,23 @@ qwen_wrapper_alive() {
   [[ "$command" == *experiments/020_hard_negative/train_pilot_lora_r64.sh* ]]
 }
 
+qwen_watcher_alive() {
+  local command current_pgid
+  [[ -n "$QWEN_WATCHER_PID" && -r "/proc/$QWEN_WATCHER_PID/cmdline" ]] || return 1
+  current_pgid="$(ps -o pgid= -p "$QWEN_WATCHER_PID" 2>/dev/null | tr -d ' ')"
+  [[ "$current_pgid" == "$QWEN_WATCHER_PID" ]] || return 1
+  command="$(tr '\0' ' ' < "/proc/$QWEN_WATCHER_PID/cmdline")"
+  [[ "$command" == *scripts/watch_private_adapter_checkpoints.py* \
+      && "$command" == *"--watch-dir outputs/qwen3-embedding-8b-ko-performance200k-lora-r64"* \
+      && "$command" == *"--repo-id $QWEN_CANDIDATE_REPO"* ]]
+}
+
 if [[ -n "$QWEN_TRAIN_PID" && ! "$QWEN_TRAIN_PID" =~ ^[1-9][0-9]*$ ]]; then
   echo "QWEN_TRAIN_PID must be a positive integer" >&2
+  exit 2
+fi
+if [[ -n "$QWEN_WATCHER_PID" && ! "$QWEN_WATCHER_PID" =~ ^[1-9][0-9]*$ ]]; then
+  echo "QWEN_WATCHER_PID must be a positive integer" >&2
   exit 2
 fi
 
@@ -78,6 +97,40 @@ if [[ -n "$QWEN_TRAIN_PID" ]]; then
   echo "[$(timestamp)] Qwen end marker verified; waiting for wrapper pid=$QWEN_TRAIN_PID"
   while qwen_wrapper_alive; do sleep 2; done
 fi
+if qwen_watcher_alive; then
+  echo "[$(timestamp)] stopping Qwen checkpoint watcher pid=$QWEN_WATCHER_PID"
+  kill -TERM -- "-$QWEN_WATCHER_PID"
+  for _ in $(seq 1 60); do
+    qwen_watcher_alive || break
+    sleep 1
+  done
+  if qwen_watcher_alive; then
+    echo "[$(timestamp)] Qwen checkpoint watcher did not stop cleanly" >&2
+    exit 11
+  fi
+fi
+if [[ ! -s "$QWEN_ADMISSION" ]]; then
+  echo "[$(timestamp)] Qwen admission report is unavailable" >&2
+  exit 11
+fi
+qwen_training_sha="$(sha256sum "$TRAIN_FILE" | awk '{print $1}')"
+qwen_manifest_sha="$(sha256sum "$TRAIN_MANIFEST" | awk '{print $1}')"
+qwen_admission_sha="$(sha256sum "$QWEN_ADMISSION" | awk '{print $1}')"
+env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
+  -u HF_HUB_OFFLINE -u TRANSFORMERS_OFFLINE -u HF_DATASETS_OFFLINE \
+  "$ROOT/.venv-train-fa2/bin/python" \
+  "$ROOT/scripts/watch_private_adapter_checkpoints.py" \
+  --watch-dir "$QWEN_RUN" --state-file "$QWEN_WATCHER_STATE" \
+  --repo-id "$QWEN_CANDIDATE_REPO" \
+  --base-model Qwen/Qwen3-Embedding-8B \
+  --base-revision 1d8ad4ca9b3dd8059ad90a75d4983776a23d44af \
+  --run-id qwen3-embedding-8b-ko-performance200k-lora-r64 \
+  --training-data-sha256 "$qwen_training_sha" \
+  --training-manifest-sha256 "$qwen_manifest_sha" \
+  --admission-report-sha256 "$qwen_admission_sha" \
+  --poll-seconds 5 --settle-seconds 0 \
+  --remote-attempts 3 --remote-retry-seconds 15 --once --upload \
+  >> "$QWEN_RUN/checkpoint-watcher-v2.log" 2>&1
 echo "[$(timestamp)] Qwen 200K completed; starting Comsat exact probe"
 
 if [[ ! -s "$VAL_FILE" || ! -s "$VAL_MANIFEST" ]] \

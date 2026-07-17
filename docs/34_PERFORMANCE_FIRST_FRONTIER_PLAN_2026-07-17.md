@@ -48,7 +48,7 @@ data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다
 | Git | 복구/방법론/capacity/soup/runtime storage guard 변경을 `origin/main`에 지속 push; credential은 one-shot helper에서만 사용 |
 | submodule | 4개 모두 pinned commit으로 복원 완료 |
 | 로컬 data/cache/output | 이전 checkpoint는 없음. 13개 pinned dataset, core/teacher 8B 4개, 법률 312,581문서를 exact 복원·검증 |
-| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 211/211 통과 |
+| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 213/213 통과 |
 | valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K와 나머지 frontier campaign 직렬 queue 대기 |
 | GPU | H100 80GB 1장, Qwen production 100% utilization |
 | NFS | `/home/ubuntu/data`, 49TB 중 48TB 가용, 사용률 3%, inode 1% |
@@ -360,6 +360,12 @@ manifest가 없으면 publish하지 않고, final selection 파일이 없으면 
 adapter-only snapshot을 training version별로 별도 보존하므로 최종 last-5 FP32 평균에는
 동일 궤적의 최신 5개를 사용할 수 있다. 이 archive는 optimizer/trainer state와 데이터를
 포함하지 않으며, 이후 run은 full checkpoint도 5개를 유지한다.
+
+2026-07-17 step 1000 재감사에서 최초 watcher의 declared train SHA 오타를 발견했다. 해당
+private repo는 superseded로 표시하고 승격에서 제외했으며, 실제 file SHA를 쓰는 `-candidates-v2`에
+step 250/500/750/1000을 full-payload와 remote allowlist까지 재검증해 보존했다. 회전으로 full
+checkpoint가 사라진 step 250은 기존 immutable private manifest+local sanitized archive를 함께
+검증하는 lineage-only correction 도구로 이관했고 adapter/config bytes는 바꾸지 않았다.
 
 이 stage가 끝나기 전에는 과거 중단 run의 loss나 문서상 결과를 새 checkpoint 결과로
 간주하지 않는다.
