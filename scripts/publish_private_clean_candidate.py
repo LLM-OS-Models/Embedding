@@ -13,7 +13,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -63,6 +65,58 @@ FORBIDDEN_NAME_PARTS = (
     "api_key",
     "access_token",
     "hf_token",
+)
+MODEL_METADATA_FILES = {
+    "added_tokens.json",
+    "chat_template.jinja",
+    "config.json",
+    "config_sentence_transformers.json",
+    "generation_config.json",
+    "merges.txt",
+    "model.safetensors.index.json",
+    "modules.json",
+    "preprocessor_config.json",
+    "sentence_bert_config.json",
+    "special_tokens_map.json",
+    "spiece.model",
+    "tokenizer.json",
+    "tokenizer.model",
+    "tokenizer_config.json",
+    "vocab.json",
+}
+MODEL_CONTRACT_FILES = {
+    "1_Pooling/config.json",
+    "2_Normalize/config.json",
+}
+BYTE_EXACT_MODEL_METADATA = {
+    "merges.txt",
+    "model.safetensors.index.json",
+    "spiece.model",
+    "tokenizer.json",
+    "tokenizer.model",
+    "vocab.json",
+}
+SENSITIVE_JSON_KEYS = {
+    "access_token",
+    "api_key",
+    "apikey",
+    "credential",
+    "credentials",
+    "github_token",
+    "hf_token",
+    "huggingface_hub_token",
+    "password",
+    "secret",
+}
+SECRET_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9])hf_[A-Za-z0-9]{20,}"),
+    re.compile(r"(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"(?<![A-Za-z0-9])gh[oprsu]_[A-Za-z0-9]{20,}"),
+    re.compile(r"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"),
+)
+LOCAL_PATH_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9])(?:/home/|/root/|/tmp/|/workspace/)[^\s\"'`<>]*"
 )
 
 
@@ -116,6 +170,128 @@ def validate_no_sensitive_files(model_dir: Path) -> None:
         lower = path.name.lower()
         if lower in FORBIDDEN_FILE_NAMES or any(part in lower for part in FORBIDDEN_NAME_PARTS):
             raise ValueError(f"Private candidate contains forbidden file: {path.name}")
+
+
+def sanitize_string(value: str) -> str:
+    """Remove host-specific paths and recognized credentials from evidence text."""
+    workspace = str(ROOT.resolve())
+    sanitized = value.replace(workspace, ".")
+    sanitized = LOCAL_PATH_PATTERN.sub("[local-path]", sanitized)
+    for pattern in SECRET_PATTERNS:
+        sanitized = pattern.sub("[REDACTED]", sanitized)
+    return sanitized
+
+
+def sanitize_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, child in value.items():
+            if str(key).lower() in SENSITIVE_JSON_KEYS:
+                sanitized[key] = "[REDACTED]"
+            else:
+                sanitized[key] = sanitize_json_value(child)
+        return sanitized
+    if isinstance(value, list):
+        return [sanitize_json_value(child) for child in value]
+    if isinstance(value, str):
+        return sanitize_string(value)
+    return value
+
+
+def copy_sanitized_text(source: Path, destination: Path) -> None:
+    suffix = source.suffix.lower()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if suffix == ".json":
+        value = json.loads(source.read_text(encoding="utf-8"))
+        destination.write_text(
+            json.dumps(
+                sanitize_json_value(value), ensure_ascii=False, indent=2, sort_keys=True
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return
+    if suffix == ".jsonl":
+        with source.open("r", encoding="utf-8") as reader, destination.open(
+            "w", encoding="utf-8"
+        ) as writer:
+            for line_number, line in enumerate(reader, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError as error:
+                    raise ValueError(
+                        f"Invalid JSONL evidence at line {line_number}: {source.name}"
+                    ) from error
+                writer.write(
+                    json.dumps(
+                        sanitize_json_value(value),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+        return
+    destination.write_text(
+        sanitize_string(source.read_text(encoding="utf-8")), encoding="utf-8"
+    )
+
+
+def link_or_copy_immutable(source: Path, destination: Path) -> None:
+    source = source.resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(source, destination)
+    except OSError:
+        shutil.copy2(source, destination)
+
+
+def stage_model_payload(
+    model_dir: Path, publication_dir: Path, evidence_name: str
+) -> None:
+    """Stage only load-bearing model files; never upload the mutable source tree."""
+    allowed_relative = set(MODEL_CONTRACT_FILES)
+    for source in sorted(model_dir.rglob("*")):
+        if source.is_dir():
+            continue
+        relative = source.relative_to(model_dir).as_posix()
+        allowed = (
+            relative == evidence_name
+            or relative in allowed_relative
+            or ("/" not in relative and relative in MODEL_METADATA_FILES)
+            or (
+                "/" not in relative
+                and source.name.startswith("model")
+                and source.suffix == ".safetensors"
+            )
+        )
+        if not allowed:
+            raise ValueError(f"Private candidate contains an unapproved payload: {relative}")
+        destination = publication_dir / relative
+        if "/" not in relative and source.name in BYTE_EXACT_MODEL_METADATA:
+            link_or_copy_immutable(source, destination)
+        elif relative == evidence_name or source.suffix.lower() in {".json", ".jsonl"}:
+            copy_sanitized_text(source, destination)
+        elif source.suffix.lower() in {".md", ".txt", ".jinja"}:
+            copy_sanitized_text(source, destination)
+        else:
+            link_or_copy_immutable(source, destination)
+
+
+def validate_staged_text(publication_dir: Path) -> None:
+    """Fail closed if normalized publication metadata still names this host/secrets."""
+    excluded_large_text = {"tokenizer.json", "vocab.json", "merges.txt"}
+    for path in publication_dir.rglob("*"):
+        if not path.is_file() or path.name in excluded_large_text:
+            continue
+        if path.suffix.lower() not in {".json", ".jsonl", ".md", ".txt", ".jinja"}:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if str(ROOT.resolve()) in text or LOCAL_PATH_PATTERN.search(text):
+            raise ValueError(f"Staged publication still contains a local path: {path.name}")
+        if any(pattern.search(text) for pattern in SECRET_PATTERNS):
+            raise ValueError(f"Staged publication still contains a credential: {path.name}")
 
 
 def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
@@ -226,9 +402,17 @@ source-document-held-out retrieval과 대화형 noise robustness만으로 선택
 """
 
 
-def prepare_publication(args: argparse.Namespace, validated: dict[str, Any]) -> Path:
+def prepare_publication(
+    args: argparse.Namespace,
+    validated: dict[str, Any],
+    publication_dir: Path,
+) -> Path:
     model_dir: Path = validated["model_dir"]
-    evidence_dir = model_dir / "evaluation/clean_selection"
+    if publication_dir.exists() and any(publication_dir.iterdir()):
+        raise FileExistsError("Private publication staging directory is not empty")
+    publication_dir.mkdir(parents=True, exist_ok=True)
+    stage_model_payload(model_dir, publication_dir, validated["evidence_name"])
+    evidence_dir = publication_dir / "evaluation/clean_selection"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     files = {
         "selection.json": validated["selection_path"],
@@ -241,15 +425,16 @@ def prepare_publication(args: argparse.Namespace, validated: dict[str, Any]) -> 
     for name, source in files.items():
         if not source.is_file():
             raise FileNotFoundError(f"Missing clean-selection evidence: {name}")
-        shutil.copy2(source, evidence_dir / name)
-    card_path = model_dir / "README.md"
+        copy_sanitized_text(source, evidence_dir / name)
+    card_path = publication_dir / "README.md"
     card_path.write_text(build_card(args, validated), encoding="utf-8")
     model_shards = {
         shard.name: {"sha256": sha256(shard), "size_bytes": shard.stat().st_size}
-        for shard in sorted(model_dir.glob("model*.safetensors"))
+        for shard in sorted(publication_dir.glob("model*.safetensors"))
     }
     if not model_shards:
         raise FileNotFoundError("Merged model has no safetensors shards")
+    bound_files = publication_files(publication_dir)
     manifest = {
         "schema_version": 1,
         "artifact_type": ARTIFACT_TYPE,
@@ -262,7 +447,7 @@ def prepare_publication(args: argparse.Namespace, validated: dict[str, Any]) -> 
             "weights_sha256": validated["weights_sha256"],
             "evidence": {
                 "file": validated["evidence_name"],
-                "sha256": sha256(validated["evidence_path"]),
+                "sha256": sha256(publication_dir / validated["evidence_name"]),
             },
             "shards": model_shards,
         },
@@ -276,6 +461,14 @@ def prepare_publication(args: argparse.Namespace, validated: dict[str, Any]) -> 
             name: {"sha256": sha256(evidence_dir / name)} for name in files
         },
         "card_sha256": sha256(card_path),
+        "files_excluding_manifest": bound_files,
+        "publication_safety": {
+            "isolated_staging": True,
+            "source_model_mutated": False,
+            "allowlisted_model_payload": True,
+            "local_paths_removed": True,
+            "recognized_credentials_removed": True,
+        },
         "excluded_artifacts": [
             "optimizer state",
             "scheduler state",
@@ -283,69 +476,135 @@ def prepare_publication(args: argparse.Namespace, validated: dict[str, Any]) -> 
             "credentials",
         ],
     }
-    manifest_path = model_dir / "private_candidate_manifest.json"
+    manifest_path = publication_dir / "private_candidate_manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    validate_no_sensitive_files(model_dir)
+    validate_no_sensitive_files(publication_dir)
+    validate_staged_text(publication_dir)
+    if model_weights_sha256(publication_dir) != validated["weights_sha256"]:
+        raise RuntimeError("Staged model shards drifted from clean-selected weights")
     return manifest_path
+
+
+def publication_files(publication_dir: Path) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for path in sorted(publication_dir.rglob("*")):
+        if not path.is_file() or ".cache" in path.parts:
+            continue
+        relative = path.relative_to(publication_dir).as_posix()
+        result[relative] = {"sha256": sha256(path), "size_bytes": path.stat().st_size}
+    return result
+
+
+def verify_remote_publication(
+    *, api: Any, repo_id: str, revision: str, token: str, expected: dict[str, dict[str, Any]]
+) -> None:
+    from huggingface_hub import hf_hub_download
+
+    info = api.model_info(repo_id=repo_id, revision=revision, files_metadata=True)
+    if getattr(info, "private", None) is not True:
+        raise RuntimeError("Remote clean candidate is not private")
+    siblings = {item.rfilename: item for item in info.siblings}
+    remote_files = set(siblings)
+    missing = set(expected) - remote_files
+    unexpected = remote_files - set(expected) - {".gitattributes"}
+    if missing or unexpected:
+        raise RuntimeError(
+            f"Remote private candidate file-set mismatch: missing={sorted(missing)}, "
+            f"unexpected={sorted(unexpected)}"
+        )
+    for name, evidence in expected.items():
+        sibling = siblings[name]
+        if name.endswith(".safetensors"):
+            lfs = getattr(sibling, "lfs", None)
+            if isinstance(lfs, dict):
+                remote_sha = lfs.get("sha256")
+                remote_size = lfs.get("size")
+            else:
+                remote_sha = getattr(lfs, "sha256", None) if lfs is not None else None
+                remote_size = getattr(lfs, "size", None) if lfs is not None else None
+            if remote_sha != evidence["sha256"] or remote_size != evidence["size_bytes"]:
+                raise RuntimeError(f"Remote LFS object mismatch: {name}")
+            continue
+        downloaded = Path(
+            hf_hub_download(
+                repo_id=repo_id,
+                filename=name,
+                revision=revision,
+                token=token,
+            )
+        )
+        if sha256(downloaded) != evidence["sha256"]:
+            raise RuntimeError(f"Remote metadata hash mismatch: {name}")
 
 
 def main() -> None:
     args = parse_args()
     validated = validate_candidate(args)
-    manifest_path = prepare_publication(args, validated)
-    report: dict[str, Any] = {
-        "repo_id": args.repo_id,
-        "visibility": "private",
-        "model": validated["model_rel"],
-        "revision": validated["revision"],
-        "weights_sha256": validated["weights_sha256"],
-        "private_candidate_manifest_sha256": sha256(manifest_path),
-        "upload_requested": bool(args.upload),
-        "validated": True,
-    }
-    if args.upload:
-        token = load_hf_token(args.hf_token_file)
-        from huggingface_hub import HfApi, hf_hub_download
+    staging_parent = validated["model_dir"].parent
+    with tempfile.TemporaryDirectory(
+        prefix=f".{validated['model_dir'].name}.private-publish-", dir=staging_parent
+    ) as temporary:
+        publication_dir = Path(temporary)
+        manifest_path = prepare_publication(args, validated, publication_dir)
+        expected_files = publication_files(publication_dir)
+        report: dict[str, Any] = {
+            "repo_id": args.repo_id,
+            "visibility": "private",
+            "model": validated["model_rel"],
+            "revision": validated["revision"],
+            "weights_sha256": validated["weights_sha256"],
+            "private_candidate_manifest_sha256": sha256(manifest_path),
+            "publication_file_count": len(expected_files),
+            "isolated_staging": True,
+            "upload_requested": bool(args.upload),
+            "validated": True,
+        }
+        if args.upload:
+            token = load_hf_token(args.hf_token_file)
+            from huggingface_hub import HfApi
 
-        api = HfApi(token=token)
-        # Explicit checks surround upload_large_folder; a pre-existing public
-        # repo with this name is rejected instead of silently changing it.
-        api.create_repo(
-            repo_id=args.repo_id, repo_type="model", private=True, exist_ok=True
-        )
-        require_remote_visibility(api, args.repo_id, public=False)
-        api.upload_large_folder(
-            repo_id=args.repo_id,
-            repo_type="model",
-            folder_path=validated["model_dir"],
-            private=True,
-            num_workers=1,
-            print_report_every=60,
-        )
-        require_remote_visibility(api, args.repo_id, public=False)
-        info = api.model_info(repo_id=args.repo_id, files_metadata=True)
-        remote_files = {item.rfilename for item in info.siblings}
-        expected_shards = set(
-            read_json(manifest_path).get("model", {}).get("shards", {})
-        )
-        if not expected_shards.issubset(remote_files):
-            raise RuntimeError("Remote private candidate is missing model shards")
-        remote_manifest = Path(
-            hf_hub_download(
+            api = HfApi(token=token)
+            # Explicit checks surround upload_large_folder; a pre-existing public
+            # repo with this name is rejected instead of silently changing it.
+            api.create_repo(
+                repo_id=args.repo_id, repo_type="model", private=True, exist_ok=True
+            )
+            require_remote_visibility(api, args.repo_id, public=False)
+            pre_info = api.model_info(repo_id=args.repo_id, files_metadata=True)
+            pre_files = {item.rfilename for item in pre_info.siblings}
+            unexpected_preexisting = pre_files - set(expected_files) - {".gitattributes"}
+            if unexpected_preexisting:
+                raise RuntimeError(
+                    "Remote private candidate contains unexpected pre-existing files: "
+                    f"{sorted(unexpected_preexisting)}"
+                )
+            api.upload_large_folder(
                 repo_id=args.repo_id,
-                filename=manifest_path.name,
+                repo_type="model",
+                folder_path=publication_dir,
+                private=True,
+                num_workers=1,
+                print_report_every=60,
+            )
+            require_remote_visibility(api, args.repo_id, public=False)
+            info = api.model_info(repo_id=args.repo_id, files_metadata=True)
+            verify_remote_publication(
+                api=api,
+                repo_id=args.repo_id,
                 revision=info.sha,
                 token=token,
+                expected=expected_files,
             )
-        )
-        if sha256(remote_manifest) != sha256(manifest_path):
-            raise RuntimeError("Remote private candidate manifest hash mismatch")
-        report["commit_sha"] = info.sha
-        report["remote_manifest_exact"] = True
-        report["url"] = f"https://huggingface.co/{args.repo_id}"
+            if model_weights_sha256(validated["model_dir"]) != validated["weights_sha256"]:
+                raise RuntimeError("Source model changed during private upload")
+            report["commit_sha"] = info.sha
+            report["remote_manifest_exact"] = True
+            report["remote_file_set_exact"] = True
+            report["remote_files_verified"] = len(expected_files)
+            report["url"] = f"https://huggingface.co/{args.repo_id}"
     if args.report_output:
         report_output = args.report_output.expanduser().resolve()
         report_output.parent.mkdir(parents=True, exist_ok=True)

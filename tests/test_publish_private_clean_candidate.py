@@ -10,6 +10,77 @@ import pytest
 from scripts import publish_private_clean_candidate as publisher
 
 
+FAKE_HF_CREDENTIAL = "hf_" + "a" * 24
+
+
+def _publication_fixture(tmp_path: Path) -> tuple[SimpleNamespace, dict, Path]:
+    root = tmp_path / "workspace"
+    model = root / "artifacts/models/kd-winner"
+    model.mkdir(parents=True)
+    (model / "model.safetensors").write_bytes(b"model-weights")
+    (model / "config.json").write_text(
+        json.dumps({"_name_or_path": f"{root}/private/base", "hidden_size": 4096})
+    )
+    (model / "modules.json").write_text("[]")
+    (model / "tokenizer.json").write_text(
+        json.dumps(
+            {
+                "model": {
+                    "vocab": {
+                        "/home/is-a-vocabulary-token": 1,
+                        FAKE_HF_CREDENTIAL: 2,
+                    }
+                }
+            },
+            separators=(",", ":"),
+        )
+    )
+    (model / "1_Pooling").mkdir()
+    (model / "1_Pooling/config.json").write_text('{"pooling_mode_lasttoken":true}')
+    evidence = model / "full_tuning_report.json"
+    evidence.write_text(
+        json.dumps(
+            {
+                "status": "pass",
+                "source_checkpoint": f"{root}/outputs/checkpoint-10",
+                "hf_token": FAKE_HF_CREDENTIAL,
+            }
+        )
+    )
+    selection = root / "selection.json"
+    training = root / "training.json"
+    clean = root / "clean/summary.json"
+    robust = root / "robust/summary.json"
+    for summary in (clean, robust):
+        summary.parent.mkdir(parents=True)
+        summary.write_text(json.dumps({"local": f"{root}/eval/private"}))
+        (summary.parent / "ranks.jsonl").write_text(
+            json.dumps({"rank": 1, "path": f"{root}/corpus"}) + "\n"
+        )
+    selection.write_text(json.dumps({"path": f"{root}/selection"}))
+    training.write_text(json.dumps({"password": "do-not-upload", "rows": 10}))
+    weights_sha = publisher.model_weights_sha256(model)
+    args = SimpleNamespace(repo_id="LLM-OS-Models2/kd-clean-private")
+    validated = {
+        "model_dir": model,
+        "model_rel": "artifacts/models/kd-winner",
+        "selection_path": selection,
+        "training_manifest_path": training,
+        "clean_path": clean,
+        "robustness_path": robust,
+        "clean": {"clean_ndcg_at_10": 0.8},
+        "robustness": {
+            "robustness_floor_ndcg_at_10": 0.7,
+            "max_noise_intrusion_at_10": 0.1,
+        },
+        "evidence_path": evidence,
+        "evidence_name": evidence.name,
+        "weights_sha256": weights_sha,
+        "revision": f"model-{weights_sha[:12]}",
+    }
+    return args, validated, root
+
+
 def test_repo_id_is_strictly_models2() -> None:
     publisher.validate_repo_id("LLM-OS-Models2/clean-candidate-v1")
     for invalid in (
@@ -30,6 +101,119 @@ def test_sensitive_file_gate_allows_tokenizer_but_rejects_credentials(
     (tmp_path / "optimizer.pt").write_bytes(b"state")
     with pytest.raises(ValueError, match="forbidden file"):
         publisher.validate_no_sensitive_files(tmp_path)
+
+
+def test_isolated_publication_sanitizes_evidence_without_mutating_model(
+    tmp_path: Path,
+) -> None:
+    args, validated, root = _publication_fixture(tmp_path)
+    model = validated["model_dir"]
+    original = {
+        path.relative_to(model).as_posix(): path.read_bytes()
+        for path in model.rglob("*")
+        if path.is_file()
+    }
+    staging = root / "staging"
+    with patch.object(publisher, "ROOT", root):
+        manifest = publisher.prepare_publication(args, validated, staging)
+        publisher.validate_staged_text(staging)
+    observed = {
+        path.relative_to(model).as_posix(): path.read_bytes()
+        for path in model.rglob("*")
+        if path.is_file()
+    }
+    assert observed == original
+    assert publisher.model_weights_sha256(staging) == validated["weights_sha256"]
+    assert (staging / "tokenizer.json").read_bytes() == original["tokenizer.json"]
+    staged_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in staging.rglob("*")
+        if path.is_file()
+        and path.suffix in {".json", ".jsonl", ".md"}
+        and path.name not in {"tokenizer.json", "vocab.json"}
+    )
+    assert str(root) not in staged_text
+    assert FAKE_HF_CREDENTIAL not in staged_text
+    assert "do-not-upload" not in staged_text
+    assert "[REDACTED]" in staged_text
+    manifest_value = json.loads(manifest.read_text())
+    assert manifest_value["files_excluding_manifest"]["tokenizer.json"]["sha256"] == (
+        publisher.sha256(model / "tokenizer.json")
+    )
+    assert manifest_value["publication_safety"] == {
+        "allowlisted_model_payload": True,
+        "isolated_staging": True,
+        "local_paths_removed": True,
+        "recognized_credentials_removed": True,
+        "source_model_mutated": False,
+    }
+
+
+def test_publication_rejects_unapproved_model_payload(tmp_path: Path) -> None:
+    args, validated, root = _publication_fixture(tmp_path)
+    (validated["model_dir"] / "train.log").write_text("must remain local")
+    with (
+        patch.object(publisher, "ROOT", root),
+        pytest.raises(ValueError, match="unapproved payload"),
+    ):
+        publisher.prepare_publication(args, validated, root / "staging")
+
+
+def test_remote_publication_requires_exact_files_and_lfs_hashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import huggingface_hub
+
+    metadata = tmp_path / "config.json"
+    metadata.write_text('{"hidden_size":4096}\n')
+    shard = tmp_path / "model.safetensors"
+    shard.write_bytes(b"weights")
+    expected = {
+        "config.json": {
+            "sha256": publisher.sha256(metadata),
+            "size_bytes": metadata.stat().st_size,
+        },
+        "model.safetensors": {
+            "sha256": publisher.sha256(shard),
+            "size_bytes": shard.stat().st_size,
+        },
+    }
+    info = SimpleNamespace(
+        private=True,
+        siblings=[
+            SimpleNamespace(rfilename="config.json", lfs=None),
+            SimpleNamespace(
+                rfilename="model.safetensors",
+                lfs={
+                    "sha256": expected["model.safetensors"]["sha256"],
+                    "size": shard.stat().st_size,
+                },
+            ),
+            SimpleNamespace(rfilename=".gitattributes", lfs=None),
+        ],
+    )
+    api = SimpleNamespace(model_info=lambda **_: info)
+    monkeypatch.setattr(
+        huggingface_hub,
+        "hf_hub_download",
+        lambda **kwargs: str(metadata) if kwargs["filename"] == "config.json" else None,
+    )
+    publisher.verify_remote_publication(
+        api=api,
+        repo_id="LLM-OS-Models2/exact-private",
+        revision="a" * 40,
+        token="not-a-real-token",
+        expected=expected,
+    )
+    info.siblings.append(SimpleNamespace(rfilename="train.log", lfs=None))
+    with pytest.raises(RuntimeError, match="file-set mismatch"):
+        publisher.verify_remote_publication(
+            api=api,
+            repo_id="LLM-OS-Models2/exact-private",
+            revision="a" * 40,
+            token="not-a-real-token",
+            expected=expected,
+        )
 
 
 @pytest.mark.parametrize(

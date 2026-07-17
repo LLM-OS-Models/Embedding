@@ -212,7 +212,7 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
       exit 2
     fi
     report_contract="$(jq -r \
-      '.visibility + ":" + (.remote_manifest_exact|tostring)' \
+      '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
       "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
     report_model="$(jq -r '.model // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
     report_weights_sha="$(jq -r '.weights_sha256 // empty' "$CHECKPOINT_BASE_UPLOAD_REPORT" 2>/dev/null || true)"
@@ -233,7 +233,7 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
       exit 2
     fi
     expected_base_sha="$(jq -r '.model.weights_sha256 // empty' "$base_evidence" 2>/dev/null)"
-    if [[ "$report_contract" != private:true \
+    if [[ "$report_contract" != private:true:true \
         || "$watcher_base_model" != LLM-OS-Models2/* \
         || ! "$watcher_base_revision" =~ ^[0-9a-f]{40}$ \
         || ! "$report_weights_sha" =~ ^[0-9a-f]{64}$ \

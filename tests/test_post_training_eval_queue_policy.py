@@ -307,3 +307,17 @@ def test_queue_can_only_publish_the_clean_selected_private_candidate() -> None:
     assert "--comprehensive-summary" in source
     assert "--upload --public" not in source
     assert "public_benchmark_used_for_selection" not in source
+
+
+def test_private_full_model_lineage_requires_exact_remote_file_set() -> None:
+    paths = (
+        PILOT_TRAIN,
+        QUEUE,
+        SCALE_QUEUE,
+        ROOT / "scripts/run_reranker_kd_ablation_queue.sh",
+    )
+    for path in paths:
+        source = path.read_text(encoding="utf-8")
+        assert "remote_manifest_exact" in source, path
+        assert "remote_file_set_exact" in source, path
+        assert "private:true:true" in source, path

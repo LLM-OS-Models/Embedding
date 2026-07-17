@@ -478,8 +478,8 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
       --repo-id "$SELECTION_PRIVATE_REPO_ID" \
       --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
       --report-output "$SELECTION_UPLOAD_REPORT" --upload || exit 21
-    if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
-        "$SELECTION_UPLOAD_REPORT" 2>/dev/null)" != "private:true" ]]; then
+    if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+        "$SELECTION_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
       echo "[$(timestamp)] private clean-winner upload report failed verification" >&2
       exit 21
     fi

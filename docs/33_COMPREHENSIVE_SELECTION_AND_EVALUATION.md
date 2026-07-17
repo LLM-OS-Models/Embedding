@@ -112,6 +112,18 @@ weight SHA와 이 report의 private repo/commit을 대조한 뒤에만 시작한
 그 adapter가 의존한 continual base를 잃는 복구 공백도 허용하지 않는다. 학습은 명시적 offline,
 token-free이고 uploader/watcher만 ignored mode-0600 `.env`를 메모리에서 읽는다.
 
+전체 모델 private backup은 source model directory를 직접 업로드하지 않는다. 같은 NFS의
+일회성 격리 staging에 safetensors를 hardlink하고, SentenceTransformers/Qwen 로딩에 필요한
+고정 allowlist metadata와 clean-selection evidence만 복사한다. JSON/JSONL evidence의 host
+절대경로와 인식 가능한 credential은 staging에서 정규화하고 `train.log`, optimizer/trainer
+state, 임의 파일 또는 symlink가 하나라도 있으면 fail closed한다. 원본 모델 directory에는
+README/evaluation/manifest를 쓰지 않는다. tokenizer vocabulary/merges와 weight index는
+byte-exact로 보존하고 manifest가 자신을 제외한 모든 staged file의 SHA-256/size를 결속한다.
+성공 report는 `private:true`,
+`remote_manifest_exact:true`, `remote_file_set_exact:true`를 모두 가져야 하며, 모든 model
+safetensors의 Hub LFS SHA-256/size와 모든 metadata download SHA-256을 exact commit에서 다시
+검증한다. 이 세 조건이 없는 report는 다음 continual base lineage로 사용할 수 없다.
+
 ## Clean-first 선택 정책
 
 ### 1. 후보 자격

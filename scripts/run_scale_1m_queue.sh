@@ -360,8 +360,8 @@ run_stage "select-clean-$RUN_NAME" \
   "$CLEAN_OUT" "$ROBUST_OUT" --workspace-root "$ROOT" \
   --output "$SCALE_SELECTION" --disqualification-root "$ROOT/outputs" \
   --candidate-model "$MODEL_REL" || exit 6
-if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
-    "$SCALE_UPLOAD_REPORT" 2>/dev/null)" != "private:true" ]]; then
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$SCALE_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
   if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
     echo "[$(timestamp)] token file unavailable for required 1M private backup" >&2
     exit 6
@@ -374,6 +374,11 @@ if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
     --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance1m-clean-winner-v1-private \
     --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
     --report-output "$SCALE_UPLOAD_REPORT" --upload || exit 6
+fi
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$SCALE_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
+  echo "[$(timestamp)] 1M private clean-winner remote verification is incomplete" >&2
+  exit 6
 fi
 if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
     && -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then

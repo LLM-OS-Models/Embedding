@@ -261,8 +261,8 @@ run_stage select-clean-reranker-kd-winner \
   "${candidate_args[@]}" || exit 6
 
 MODEL_UPLOAD_REPORT="$LOG_DIR/private-clean-candidate-upload.json"
-if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
-    "$MODEL_UPLOAD_REPORT" 2>/dev/null)" != "private:true" ]]; then
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$MODEL_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
   if [[ ! -f "$ROOT/.env" ]]; then
     echo "[$(timestamp)] .env unavailable for required KD winner backup" >&2
     exit 7
@@ -292,6 +292,11 @@ if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring)' \
     echo "[$(timestamp)] selected KD winner is unavailable for private backup" >&2
     exit 7
   fi
+fi
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$MODEL_UPLOAD_REPORT" 2>/dev/null)" != "private:true:true" ]]; then
+  echo "[$(timestamp)] KD winner private remote verification is incomplete" >&2
+  exit 7
 fi
 
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
