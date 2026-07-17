@@ -6,7 +6,8 @@ source "$ROOT/scripts/common_runtime.sh"
 MODE="${1:-}"
 SWIFT="${TRAIN_ENV:-$ROOT/.venv-train}/bin/swift"
 DATA="${DATA:-$ROOT/data/processed/ko_triplet_smoke/train.jsonl}"
-REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
+BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
 if [[ "${TRAIN_ENV:-$ROOT/.venv-train}" == "$ROOT/.venv-train-fa2" ]]; then
   embedding_enable_torch25_swift_compat
@@ -21,7 +22,7 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export INFONCE_TEMPERATURE="0.02"
 export INFONCE_USE_BATCH="true"
-export INFONCE_HARD_NEGATIVES="1"
+export INFONCE_HARD_NEGATIVES="${INFONCE_HARD_NEGATIVES:-1}"
 export INFONCE_MASK_FAKE_NEGATIVE="true"
 export INFONCE_FAKE_NEG_MARGIN="0.1"
 export INFONCE_INCLUDE_QQ="false"
@@ -29,9 +30,8 @@ export INFONCE_INCLUDE_DD="false"
 
 COMMON=(
   sft
-  --model Qwen/Qwen3-Embedding-8B
+  --model "$BASE_MODEL"
   --use_hf true
-  --model_revision "$REVISION"
   --model_type qwen3_emb
   --task_type embedding
   --dataset "$DATA"
@@ -40,8 +40,8 @@ COMMON=(
   --attn_impl "${ATTN_IMPL:-flash_attention_2}"
   --torch_dtype bfloat16
   --max_length "${MAX_LENGTH:-512}"
-  --per_device_train_batch_size 1
-  --gradient_accumulation_steps 1
+  --per_device_train_batch_size "${TRAIN_BATCH_SIZE:-1}"
+  --gradient_accumulation_steps "${GRAD_ACCUM_STEPS:-1}"
   --learning_rate 6e-6
   --weight_decay 0.01
   --lr_scheduler_type constant
@@ -53,10 +53,15 @@ COMMON=(
   --dataloader_drop_last true
   --dataloader_num_workers 0
   --dataset_num_proc 1
+  --dataset_shuffle false
+  --train_dataloader_shuffle false
   --seed 42
   --report_to none
   --loss_type infonce
 )
+if [[ -n "$BASE_REVISION" ]]; then
+  COMMON+=(--model_revision "$BASE_REVISION")
+fi
 
 suffix="${PROBE_SUFFIX:-}"
 [[ -z "$suffix" ]] || suffix="-$suffix"

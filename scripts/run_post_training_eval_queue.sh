@@ -12,6 +12,7 @@ embedding_resolve_train_runtime
 UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
+SELECTION_ONLY="${SELECTION_ONLY:-0}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain-contract-v1"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain-contract-v1"
@@ -53,6 +54,7 @@ RUNS=(
 )
 FULL_RUNS=(
   qwen3-embedding-8b-ko-performance200k-last4
+  comsat-embed-ko-8b-performance200k-last4
 )
 SOUP_MODELS=(
   qwen3-embedding-8b-ko-soup-general50-combined50
@@ -68,6 +70,10 @@ exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
 unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
 PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
+if [[ "$SELECTION_ONLY" != 0 && "$SELECTION_ONLY" != 1 ]]; then
+  echo "SELECTION_ONLY must be 0 or 1" >&2
+  exit 2
+fi
 read -r -a EVAL_BATCHES <<< "${CAMPAIGN_EVAL_BATCH_SIZES:-192 128 64 32 16 8 4 2}"
 for batch in "${EVAL_BATCHES[@]}"; do
   [[ "$batch" =~ ^[1-9][0-9]*$ ]] || {
@@ -274,6 +280,15 @@ for run_name in "${RUNS[@]}"; do
   checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$run_dir" --print-path 2>/dev/null)" || continue
   [[ -n "$checkpoint" ]] || continue
+  merge_base_args=()
+  case "$run_name" in
+    comsat-embed-ko-8b-performance200k-*)
+      merge_base_args=(
+        --base-model sionic-ai/comsat-embed-ko-8b-preview
+        --base-revision a5cc22b651c1b2e51cdd8bf671774ae93584f0ab
+      )
+      ;;
+  esac
   merged_rel="artifacts/models/${run_name}-best-merged"
   merged="$ROOT/$merged_rel"
   if [[ ! -s "$merged/merge_report.json" ]]; then
@@ -281,6 +296,7 @@ for run_name in "${RUNS[@]}"; do
       "${OFFLINE_ENV[@]}" \
       "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
       --adapter "$checkpoint" --output-dir "$merged" \
+      "${merge_base_args[@]}" \
       --device cuda --dtype bfloat16 --local-files-only || continue
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$merged/merge_report.json")"
@@ -316,6 +332,7 @@ for run_name in "${RUNS[@]}"; do
       "${OFFLINE_ENV[@]}" \
       "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
       --adapter "$average_adapter" --output-dir "$average_merged" \
+      "${merge_base_args[@]}" \
       --device cuda --dtype bfloat16 --local-files-only || continue
   fi
   average_weights_sha="$(jq -r '.model.weights_sha256' "$average_merged/merge_report.json")"
@@ -342,11 +359,24 @@ for run_name in "${FULL_RUNS[@]}"; do
   [[ -n "$checkpoint" ]] || continue
   packaged_rel="artifacts/models/${run_name}-best-full"
   packaged="$ROOT/$packaged_rel"
+  training_contract="$run_dir/capacity_run_manifest.json"
+  [[ -s "$training_contract" ]] || {
+    echo "[$(timestamp)] skip full candidate without capacity contract: $run_name" >&2
+    continue
+  }
+  base_model="$(jq -r '.base_model // empty' "$training_contract")"
+  base_revision="$(jq -r '.base_revision // empty' "$training_contract")"
+  [[ -n "$base_model" && -n "$base_revision" ]] || {
+    echo "[$(timestamp)] invalid full candidate base contract: $run_name" >&2
+    continue
+  }
   if [[ ! -s "$packaged/full_tuning_report.json" ]]; then
     run_stage "package-$run_name" \
       "${OFFLINE_ENV[@]}" \
       "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/package_full_embedding_checkpoint.py" \
       --checkpoint "$checkpoint" --output-dir "$packaged" \
+      --base-model "$base_model" --base-revision "$base_revision" \
+      --training-contract "$training_contract" \
       --device cuda --dtype bfloat16 --attn-implementation flash_attention_2 || continue
   fi
   weights_sha="$(jq -r '.model.weights_sha256' "$packaged/full_tuning_report.json")"
@@ -381,6 +411,15 @@ if (( ${#candidate_args[@]} > 0 )); then
     "${candidate_args[@]}" || true
 else
   echo "[$(timestamp)] no packaged candidates are eligible for clean selection"
+fi
+
+if [[ "$SELECTION_ONLY" == 1 ]]; then
+  if [[ ! -s "$SELECTION" ]]; then
+    echo "[$(timestamp)] selection-only run produced no clean selection" >&2
+    exit 20
+  fi
+  echo "[$(timestamp)] selection-only run complete; public evaluation and publication skipped"
+  exit 0
 fi
 
 best_model=""

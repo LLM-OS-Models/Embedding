@@ -33,7 +33,7 @@ MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
 MODEL_DIR="$ROOT/$MODEL_REL"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-scale1m"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-scale1m"
-POSTTRAIN_SELECTION="${POSTTRAIN_SELECTION:-$ROOT/outputs/post-training-eval-20260717-frontier/clean-first-selection.json}"
+POSTTRAIN_SELECTION="${POSTTRAIN_SELECTION:-$ROOT/outputs/post-capacity-eval-20260717-frontier/clean-first-selection.json}"
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 

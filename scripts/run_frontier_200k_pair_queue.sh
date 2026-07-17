@@ -23,6 +23,9 @@ VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.
 QUEUE_LOG="$ROOT/outputs/frontier-200k-pair-queue.log"
 POST_EVAL_LOG="$ROOT/outputs/post-training-eval-20260717-frontier"
 POST_EVAL_SELECTION="$POST_EVAL_LOG/clean-first-selection.json"
+CAPACITY_LOG="$ROOT/outputs/capacity-ablation-20260717-frontier"
+CAPACITY_EVAL_LOG="$ROOT/outputs/post-capacity-eval-20260717-frontier"
+CAPACITY_EVAL_SELECTION="$CAPACITY_EVAL_LOG/clean-first-selection.json"
 SCALE_LOG="$ROOT/outputs/scale-1m-20260717-frontier"
 LEGAL_LOG="$ROOT/outputs/legal-adaptation-20260717-frontier"
 FINAL_EVAL_LOG="$ROOT/outputs/final-frontier-selection-20260717"
@@ -118,8 +121,8 @@ trap - EXIT INT TERM
 
 embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
-echo "[$(timestamp)] starting clean-first Qwen/Comsat comparison"
-env WAIT_PID= LOG_DIR="$POST_EVAL_LOG" \
+echo "[$(timestamp)] starting clean-only Qwen/Comsat lineage comparison"
+env WAIT_PID= SELECTION_ONLY=1 LOG_DIR="$POST_EVAL_LOG" \
   CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
   bash "$ROOT/scripts/run_post_training_eval_queue.sh"
 if [[ ! -s "$POST_EVAL_SELECTION" ]]; then
@@ -129,9 +132,26 @@ fi
 
 embedding_require_storage_headroom "$ROOT" 500 1000000
 embedding_require_storage_headroom /tmp 50 100000
+echo "[$(timestamp)] starting selected-lineage last4 capacity challenger"
+env LOG_DIR="$CAPACITY_LOG" LINEAGE_SELECTION="$POST_EVAL_SELECTION" \
+  bash "$ROOT/scripts/run_capacity_ablation_queue.sh"
+
+embedding_require_storage_headroom "$ROOT" 500 1000000
+embedding_require_storage_headroom /tmp 50 100000
+echo "[$(timestamp)] selecting final 200K winner including capacity challenger"
+env WAIT_PID= SELECTION_ONLY=0 LOG_DIR="$CAPACITY_EVAL_LOG" \
+  CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
+  bash "$ROOT/scripts/run_post_training_eval_queue.sh"
+if [[ ! -s "$CAPACITY_EVAL_SELECTION" ]]; then
+  echo "[$(timestamp)] post-capacity clean-first selection was not produced" >&2
+  exit 21
+fi
+
+embedding_require_storage_headroom "$ROOT" 500 1000000
+embedding_require_storage_headroom /tmp 50 100000
 echo "[$(timestamp)] starting 1M scale from the clean-selected lineage"
 env WAIT_PID= LOG_DIR="$SCALE_LOG" \
-  POSTTRAIN_SELECTION="$POST_EVAL_SELECTION" \
+  POSTTRAIN_SELECTION="$CAPACITY_EVAL_SELECTION" \
   bash "$ROOT/scripts/run_scale_1m_queue.sh"
 
 embedding_require_storage_headroom "$ROOT" 500 1000000

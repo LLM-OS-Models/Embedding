@@ -9,7 +9,8 @@ TRAIN_ENV="${TRAIN_ENV:-$EMBEDDING_TRAIN_ENV}"
 SWIFT="$TRAIN_ENV/bin/swift"
 TRAIN_FILE="${TRAIN_FILE:-$ROOT/outputs/data/performance-v1/ablation-200k/train.homogeneous-b16.jsonl}"
 VAL_FILE="${VAL_FILE:-$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl}"
-REVISION="1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3-Embedding-8B}"
+BASE_REVISION="${BASE_REVISION-1d8ad4ca9b3dd8059ad90a75d4983776a23d44af}"
 
 if [[ "$TRAIN_ENV" == "$ROOT/.venv-train-fa2" ]]; then
   embedding_enable_torch25_swift_compat
@@ -28,6 +29,10 @@ for path in "$TRAIN_FILE" "$VAL_FILE"; do
 done
 
 embedding_configure_hf_access
+embedding_require_storage_headroom "$ROOT" \
+  "${MIN_WORKSPACE_FREE_GIB:-500}" "${MIN_WORKSPACE_FREE_INODES:-1000000}"
+embedding_require_storage_headroom /tmp \
+  "${MIN_TMP_FREE_GIB:-50}" "${MIN_TMP_FREE_INODES:-100000}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export INFONCE_TEMPERATURE="${INFONCE_TEMPERATURE:-0.02}"
@@ -49,12 +54,16 @@ else
   GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-16}"
 fi
 LEARNING_RATE="${LEARNING_RATE:-6e-6}"
+SAVE_TOTAL_LIMIT="${SAVE_TOTAL_LIMIT:-5}"
+
+MODEL_ARGS=(--model "$BASE_MODEL" --use_hf true)
+if [[ -n "$BASE_REVISION" ]]; then
+  MODEL_ARGS+=(--model_revision "$BASE_REVISION")
+fi
 
 COMMON=(
   sft
-  --model Qwen/Qwen3-Embedding-8B
-  --use_hf true
-  --model_revision "$REVISION"
+  "${MODEL_ARGS[@]}"
   --model_type qwen3_emb
   --task_type embedding
   --tuner_type full
@@ -81,7 +90,7 @@ COMMON=(
   --eval_strategy steps
   --eval_steps 250
   --save_steps 250
-  --save_total_limit 2
+  --save_total_limit "$SAVE_TOTAL_LIMIT"
   --load_best_model_at_end true
   --metric_for_best_model eval_loss
   --greater_is_better false
@@ -131,4 +140,76 @@ esac
 mkdir -p "$OUTPUT_DIR"
 "$TRAIN_ENV/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
   "$TRAIN_FILE" "$VAL_FILE"
+
+manifest_tmp="$OUTPUT_DIR/.capacity_run_manifest.json.tmp.$$"
+"$TRAIN_ENV/bin/python" - "$manifest_tmp" "$MODE" "$RUN_NAME" \
+  "$BASE_MODEL" "$BASE_REVISION" "$TRAIN_FILE" "$VAL_FILE" \
+  "$MAX_STEPS" "$TRAIN_BATCH_SIZE" "$GRAD_ACCUM_STEPS" \
+  "$LEARNING_RATE" "$SAVE_TOTAL_LIMIT" <<'PY'
+import hashlib
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+(
+    output,
+    mode,
+    run_name,
+    base_model,
+    base_revision,
+    train_file,
+    validation_file,
+    max_steps,
+    batch_size,
+    accumulation_steps,
+    learning_rate,
+    save_total_limit,
+) = sys.argv[1:]
+train_path = Path(train_file).resolve()
+validation_path = Path(validation_file).resolve()
+payload = {
+    "schema_version": 1,
+    "artifact_type": "embedding-capacity-training-contract",
+    "created_at_utc": datetime.now(timezone.utc).isoformat(),
+    "status": "armed",
+    "mode": mode,
+    "run_name": run_name,
+    "base_model": base_model,
+    "base_revision": base_revision,
+    "train": {
+        "path": str(train_path),
+        "sha256": sha256(train_path),
+        "size_bytes": train_path.stat().st_size,
+    },
+    "validation": {
+        "path": str(validation_path),
+        "sha256": sha256(validation_path),
+        "size_bytes": validation_path.stat().st_size,
+    },
+    "optimization": {
+        "max_steps": int(max_steps),
+        "per_device_train_batch_size": int(batch_size),
+        "gradient_accumulation_steps": int(accumulation_steps),
+        "global_batch_size": int(batch_size) * int(accumulation_steps),
+        "learning_rate": float(learning_rate),
+        "save_total_limit": int(save_total_limit),
+        "dataset_shuffle": False,
+        "train_dataloader_shuffle": False,
+    },
+}
+path = Path(output)
+path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+os.replace(path, path.parent / "capacity_run_manifest.json")
+PY
 "$SWIFT" "${COMMON[@]}" "${EXTRA[@]}" 2>&1 | tee "$OUTPUT_DIR/train.log"

@@ -81,6 +81,21 @@ Normalize, 4096-d, 실제 positive-margin probe를 확인한다. 이 gate를 통
 Sionic 9/MTEB 평가와 공개 대상으로 승격한다. 야간 queue는 last4 production-length
 memory probe가 통과하면 동일 200K data의 quality run을 자동 실행한다.
 
+2026-07-17 frontier에서는 모든 capacity 조합을 무조건 직렬 실행하지 않는다.
+[`run_capacity_ablation_queue.sh`](../../scripts/run_capacity_ablation_queue.sh)가 Qwen/Comsat
+LoRA를 Grade-I clean/robustness로 먼저 고른 뒤 그 승자 계보의 **원본 pinned base 하나**만
+last4로 학습한다. 199,904행, 3,123 optimizer step, microbatch 8×accumulation 8=global 64,
+HN4, length 512를 LoRA와 맞춘다. 같은 microbatch의 실제 backward probe가 실패하면
+`capacity-skipped.json`을 남기고 기존 후보를 유지한다.
+
+학습 전 `capacity_run_manifest.json`은 base revision, train/validation 파일 SHA, optimizer
+contract를 `armed`로 기록한다. exact 3,123-step 종료 marker와 `logging.jsonl`이 확인된 뒤에만
+두 로그 SHA를 포함한 `complete`로 원자 갱신한다. `package_full_embedding_checkpoint.py`는
+checkpoint가 해당 run 아래에 있는지, base, 데이터와 완료 로그의 현재 SHA가 contract와
+일치하는지를 GPU load 전에 재검증한다. 첫 Qwen/Comsat 계보 선택은 `SELECTION_ONLY=1`이라
+public Sionic/MTEB를 호출하지 않고, last4를 포함한 200K 재선정 winner에만 public 평가와
+private publication을 실행한다.
+
 ## 성공 기준
 
 - 같은 token budget에서 quality/VRAM/GPU-hour Pareto frontier를 작성한다.

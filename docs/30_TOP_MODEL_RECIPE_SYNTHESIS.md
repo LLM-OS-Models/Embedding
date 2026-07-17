@@ -150,6 +150,12 @@ revision, positive evidence span, benchmark-overlap 결과를 가진다. 짧은 
 4. 마지막 한 후보만 고정 Korean retrieval, broad Korean, multilingual, long,
    prompt/noise robustness, throughput·VRAM·저장비용 순으로 전체 평가한다.
 
+2026-07-17 frontier는 LoRA capacity 상한을 그대로 두지 않는다. 동일 200K Qwen/Comsat
+LoRA를 clean-only로 비교한 뒤 승자 계보의 raw base 하나에서 상위 4개 transformer block과
+final norm을 동일 3,123-step/global batch 64로 update한다. 실제 microbatch 8/HN4 backward가
+H100 80GB에서 먼저 통과해야 하며, input/base/completion SHA contract가 없으면 full artifact로
+package하지 않는다. 이 last4 challenger까지 포함한 clean winner가 1M stage의 시작점이다.
+
 ## 4. 금지사항
 
 - `.env`, shell history, process argument, log, manifest, notebook output에 GitHub/HF

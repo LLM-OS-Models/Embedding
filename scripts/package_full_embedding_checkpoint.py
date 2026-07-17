@@ -24,8 +24,8 @@ except ModuleNotFoundError:
     )
 
 
-BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
-BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
+DEFAULT_BASE_MODEL = "Qwen/Qwen3-Embedding-8B"
+DEFAULT_BASE_REVISION = "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af"
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,6 +36,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dtype", default="bfloat16")
     parser.add_argument("--attn-implementation", default="flash_attention_2")
     parser.add_argument("--copy-weights", action="store_true")
+    parser.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
+    parser.add_argument("--base-revision", default=DEFAULT_BASE_REVISION)
+    parser.add_argument("--training-contract", type=Path)
     return parser.parse_args()
 
 
@@ -50,6 +53,73 @@ def hash_model_files(root: Path) -> str:
             for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
                 digest.update(block)
     return digest.hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def validate_training_contract(args: argparse.Namespace) -> dict | None:
+    if args.training_contract is None:
+        return None
+    contract_path = args.training_contract.resolve()
+    if not contract_path.is_file():
+        raise FileNotFoundError(f"Missing training contract: {contract_path}")
+    declared = json.loads(contract_path.read_text(encoding="utf-8"))
+    if declared.get("schema_version") != 1 or declared.get(
+        "artifact_type"
+    ) != "embedding-capacity-training-contract":
+        raise ValueError("Invalid training contract schema/type")
+    if declared.get("status") != "complete":
+        raise ValueError("Training contract is not complete")
+    if declared.get("base_model") != args.base_model or declared.get(
+        "base_revision"
+    ) != args.base_revision:
+        raise ValueError("Training contract base model/revision mismatch")
+    checkpoint = args.checkpoint.resolve()
+    if not checkpoint.is_dir() or not checkpoint.is_relative_to(contract_path.parent):
+        raise ValueError("Checkpoint is outside the contracted run directory")
+    optimization = declared.get("optimization")
+    if declared.get("mode") != "last4" or not isinstance(optimization, dict):
+        raise ValueError("Training contract is not the admitted last4 capacity run")
+    expected_optimization = {
+        "max_steps": 3123,
+        "global_batch_size": 64,
+        "dataset_shuffle": False,
+        "train_dataloader_shuffle": False,
+    }
+    for field, expected in expected_optimization.items():
+        if optimization.get(field) != expected:
+            raise ValueError(f"Training contract optimization mismatch: {field}")
+    for field in ("train", "validation"):
+        evidence = declared.get(field)
+        if not isinstance(evidence, dict):
+            raise ValueError(f"Missing {field} evidence in training contract")
+        source = Path(str(evidence.get("path", ""))).resolve()
+        if not source.is_file() or source.stat().st_size != evidence.get("size_bytes"):
+            raise ValueError(f"Training contract {field} file/size mismatch")
+        if sha256_file(source) != evidence.get("sha256"):
+            raise ValueError(f"Training contract {field} hash mismatch")
+    completion = declared.get("completion")
+    if not isinstance(completion, dict) or completion.get("expected_steps") != 3123:
+        raise ValueError("Training contract has no exact completion evidence")
+    for field in ("train_log", "logging_jsonl"):
+        evidence = completion.get(field)
+        if not isinstance(evidence, dict):
+            raise ValueError(f"Missing completion evidence: {field}")
+        source = Path(str(evidence.get("path", ""))).resolve()
+        if not source.is_file() or not source.is_relative_to(contract_path.parent):
+            raise ValueError(f"Unsafe completion evidence path: {field}")
+        if sha256_file(source) != evidence.get("sha256"):
+            raise ValueError(f"Completion evidence hash mismatch: {field}")
+    return {
+        "path": str(contract_path),
+        "sha256": sha256_file(contract_path),
+    }
 
 
 def link_or_copy(source: Path, destination: Path, copy_weights: bool) -> None:
@@ -105,6 +175,7 @@ def stage_checkpoint(checkpoint: Path, output: Path, copy_weights: bool) -> None
 
 
 def verify(output: Path, args: argparse.Namespace) -> dict:
+    training_contract = validate_training_contract(args)
     import numpy as np
     import torch
     from sentence_transformers import SentenceTransformer
@@ -152,9 +223,10 @@ def verify(output: Path, args: argparse.Namespace) -> dict:
         "status": "pass",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "training_method": "partial-full-parameter-update",
-        "base_model": BASE_MODEL,
-        "base_revision": BASE_REVISION,
+        "base_model": args.base_model,
+        "base_revision": args.base_revision,
         "source_checkpoint": str(args.checkpoint.resolve()),
+        "training_contract": training_contract,
         "model": {"weights_sha256": hash_model_files(output)},
         "sentence_transformers_contract": contract,
         "probe": {
