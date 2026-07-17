@@ -252,6 +252,36 @@ def test_model_soup_coefficients_are_fixed_before_clean_evaluation() -> None:
     assert "evaluate_sionic9.py" not in source
     assert "evaluate_mteb_korean_v1.py" not in source
     assert "HF_TOKEN" in source and "unset HF_TOKEN" in source
+    assert "required soup inputs are unavailable" in source
+    assert "general winner has no eligible local parent" in source
+    assert "balanced soups skipped" not in source
+
+
+def test_required_specialists_and_derived_uploads_fail_closed() -> None:
+    scale = SCALE_QUEUE.read_text(encoding="utf-8")
+    for script, code in (
+        ("run_sionic_retrieval_adaptation_queue.sh", 8),
+        ("run_sionic_squad_adaptation_queue.sh", 9),
+        ("run_sionic_health_adaptation_queue.sh", 10),
+        ("run_sionic_autorag_adaptation_queue.sh", 11),
+    ):
+        assert f'bash "$ROOT/scripts/{script}" || exit {code}' in scale
+    assert "derived performance 1M dataset upload failed" in scale
+
+    required_upload_queues = (
+        ROOT / "scripts/run_reranker_kd_ablation_queue.sh",
+        ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ROOT / "scripts/run_legal_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+    )
+    for queue in required_upload_queues:
+        source = queue.read_text(encoding="utf-8")
+        assert "dataset upload failed" in source, queue
+        assert "dataset upload skipped" not in source, queue
+    legal = (ROOT / "scripts/run_legal_adaptation_queue.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'bash "$ROOT/scripts/run_sionic_combined_adaptation_queue.sh" || exit 10' in legal
 
 
 def test_capacity_queue_runs_one_selected_lineage_last4_challenger() -> None:

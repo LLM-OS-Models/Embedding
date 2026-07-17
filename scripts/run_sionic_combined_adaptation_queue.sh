@@ -224,7 +224,8 @@ if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
   ) >"$LOG_DIR/dataset-upload.log" 2>&1 &
   DATA_UPLOAD_PID=$!
 else
-  echo "[$(timestamp)] no token file; combined dataset upload skipped" >&2
+  echo "[$(timestamp)] token file unavailable for required combined dataset upload" >&2
+  exit 8
 fi
 
 run_stage verify-combined-adapter \
@@ -281,6 +282,9 @@ if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
   fi
 fi
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
-  wait "$DATA_UPLOAD_PID" || echo "[$(timestamp)] combined dataset upload failed" >&2
+  if ! wait "$DATA_UPLOAD_PID"; then
+    echo "[$(timestamp)] combined dataset upload failed" >&2
+    exit 8
+  fi
 fi
 echo "[$(timestamp)] combined Sionic target-adaptation queue complete"

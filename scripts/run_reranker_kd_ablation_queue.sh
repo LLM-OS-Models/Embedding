@@ -157,7 +157,8 @@ if [[ -f "$ROOT/.env" ]]; then
   DATA_UPLOAD_PID=$!
   echo "[$(timestamp)] private KD dataset upload started pid=$DATA_UPLOAD_PID"
 else
-  echo "[$(timestamp)] .env unavailable; private KD dataset upload skipped" >&2
+  echo "[$(timestamp)] .env unavailable for required private KD dataset upload" >&2
+  exit 7
 fi
 
 variants=(
@@ -320,6 +321,7 @@ if [[ -n "$DATA_UPLOAD_PID" ]]; then
     echo "[$(timestamp)] private KD dataset upload complete"
   else
     echo "[$(timestamp)] private KD dataset upload failed; see upload log" >&2
+    exit 7
   fi
 fi
 

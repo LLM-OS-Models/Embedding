@@ -263,7 +263,8 @@ if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
   DATA_UPLOAD_PID=$!
   echo "[$(timestamp)] derived legal dataset upload started pid=$DATA_UPLOAD_PID"
 else
-  echo "[$(timestamp)] no token file; derived legal dataset upload skipped" >&2
+  echo "[$(timestamp)] token file unavailable for required derived legal dataset upload" >&2
+  exit 9
 fi
 
 run_stage verify-legal-adapter \
@@ -341,12 +342,13 @@ if [[ -n "$DATA_UPLOAD_PID" ]]; then
     echo "[$(timestamp)] derived legal dataset upload complete"
   else
     echo "[$(timestamp)] derived legal dataset upload failed; see log" >&2
+    exit 9
   fi
 fi
 if [[ "${ENABLE_SIONIC_COMBINED_ADAPTATION:-1}" == 1 ]]; then
   run_stage sionic-combined-target-adaptation env \
     LOG_DIR="$ROOT/outputs/sionic-combined-adaptation-20260712" \
-    bash "$ROOT/scripts/run_sionic_combined_adaptation_queue.sh" || true
+    bash "$ROOT/scripts/run_sionic_combined_adaptation_queue.sh" || exit 10
 fi
 
 echo "[$(timestamp)] legal target-adaptation queue complete"

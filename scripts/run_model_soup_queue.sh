@@ -88,6 +88,18 @@ combined="$(resolve_merged_model \
   qwen3-embedding-8b-ko-sionic-combined-target-lora-r64 \
   qwen3-embedding-8b-ko-sionic-combined-target-lora-r64-b4)" || combined=""
 
+missing_models=()
+[[ -n "$retrieval" ]] || missing_models+=(retrieval)
+[[ -n "$squad" ]] || missing_models+=(squad)
+[[ -n "$health" ]] || missing_models+=(health)
+[[ -n "$autorag" ]] || missing_models+=(autorag)
+[[ -n "$legal" ]] || missing_models+=(legal)
+[[ -n "$combined" ]] || missing_models+=(combined)
+if (( ${#missing_models[@]} > 0 )); then
+  echo "[$(timestamp)] required soup inputs are unavailable: ${missing_models[*]}" >&2
+  exit 3
+fi
+
 build_soup() {
   local label="$1"; shift
   local output="$ROOT/artifacts/models/$label"
@@ -112,52 +124,38 @@ if [[ -n "$general_parent" ]]; then
     --model "$general" --weight .5 \
     --model "$general_parent" --weight .5
 else
-  echo "[$(timestamp)] general winner has no eligible local parent; parent interpolation skipped" >&2
+  echo "[$(timestamp)] general winner has no eligible local parent" >&2
+  exit 3
 fi
 
-if [[ -n "$combined" ]]; then
-  build_soup qwen3-embedding-8b-ko-soup-general50-combined50 \
-    --model "$general" --weight .5 \
-    --model "$combined" --weight .5
-  build_soup qwen3-embedding-8b-ko-soup-general25-combined75 \
-    --model "$general" --weight .25 \
-    --model "$combined" --weight .75
-else
-  echo "[$(timestamp)] combined model unavailable; combined soups skipped" >&2
-fi
+build_soup qwen3-embedding-8b-ko-soup-general50-combined50 \
+  --model "$general" --weight .5 \
+  --model "$combined" --weight .5
+build_soup qwen3-embedding-8b-ko-soup-general25-combined75 \
+  --model "$general" --weight .25 \
+  --model "$combined" --weight .75
 
-specialists=("$retrieval" "$squad" "$health" "$autorag" "$legal")
-all_specialists=1
-for specialist in "${specialists[@]}"; do
-  [[ -n "$specialist" ]] || all_specialists=0
-done
-if (( all_specialists == 1 )); then
-  build_soup qwen3-embedding-8b-ko-soup-general50-specialists10x5 \
-    --model "$general" --weight .5 \
-    --model "$retrieval" --weight .1 \
-    --model "$squad" --weight .1 \
-    --model "$health" --weight .1 \
-    --model "$autorag" --weight .1 \
-    --model "$legal" --weight .1
-  if [[ -n "$combined" ]]; then
-    build_soup qwen3-embedding-8b-ko-soup-general25-combined25-specialists10x5 \
-      --model "$general" --weight .25 \
-      --model "$combined" --weight .25 \
-      --model "$retrieval" --weight .1 \
-      --model "$squad" --weight .1 \
-      --model "$health" --weight .1 \
-      --model "$autorag" --weight .1 \
-      --model "$legal" --weight .1
-    build_soup qwen3-embedding-8b-ko-soup-combined50-specialists10x5 \
-      --model "$combined" --weight .5 \
-      --model "$retrieval" --weight .1 \
-      --model "$squad" --weight .1 \
-      --model "$health" --weight .1 \
-      --model "$autorag" --weight .1 \
-      --model "$legal" --weight .1
-  fi
-else
-  echo "[$(timestamp)] one or more specialist models unavailable; balanced soups skipped" >&2
-fi
+build_soup qwen3-embedding-8b-ko-soup-general50-specialists10x5 \
+  --model "$general" --weight .5 \
+  --model "$retrieval" --weight .1 \
+  --model "$squad" --weight .1 \
+  --model "$health" --weight .1 \
+  --model "$autorag" --weight .1 \
+  --model "$legal" --weight .1
+build_soup qwen3-embedding-8b-ko-soup-general25-combined25-specialists10x5 \
+  --model "$general" --weight .25 \
+  --model "$combined" --weight .25 \
+  --model "$retrieval" --weight .1 \
+  --model "$squad" --weight .1 \
+  --model "$health" --weight .1 \
+  --model "$autorag" --weight .1 \
+  --model "$legal" --weight .1
+build_soup qwen3-embedding-8b-ko-soup-combined50-specialists10x5 \
+  --model "$combined" --weight .5 \
+  --model "$retrieval" --weight .1 \
+  --model "$squad" --weight .1 \
+  --model "$health" --weight .1 \
+  --model "$autorag" --weight .1 \
+  --model "$legal" --weight .1
 
 echo "[$(timestamp)] fixed model soup queue complete"

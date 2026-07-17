@@ -284,3 +284,9 @@ FP32 평균을 추가 후보로 만들어 clean-first 비교해 평가 비용과
 개선되지 않아도 원본을 정당하게 선택할 수 있다. 반면 이 A/B 자체가 실패했거나 선택된 model,
 weights SHA, private exact remote file set, immutable commit이 서로 일치하지 않으면 fallback
 base로 조용히 넘어가지 않고 전문가·법률 stage를 시작하지 않는다.
+
+retrieval-family, SQuAD, health, AutoRAG, legal, combined의 여섯 target candidate와 각 derived
+dataset Models2 upload도 campaign 필수 산출물이다. 개별 queue의 microbatch fallback까지
+실패하거나 background upload가 재시도 뒤 실패하면 그 사실을 성공으로 삼키지 않는다.
+여섯 모델과 general의 eligible local parent가 모두 있어야 사전 고정한 일곱 full-weight soup를
+전부 만들고 최종 selector로 넘어간다.

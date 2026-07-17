@@ -104,7 +104,7 @@ row는 101개였다.
 | Hugging Face 새 publish namespace | `LLM-OS-Models2` private model repo 생성+README write 실검증 완료; 기존 `LLM-OS-Models`는 source read-only | [`embedding-upload-permission-test-20260717`](https://huggingface.co/LLM-OS-Models2/embedding-upload-permission-test-20260717) |
 | Qwen3-Embedding 공식 저장소 | pinned submodule 복원 완료 (`44548aa5`) | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
 | 공식 후속학습 프레임워크 `ms-swift` | pinned submodule `3d61b931`, NFS `.venv-train-fa2`, CUDA 12.6/PyTorch 2.5 import+8B backward 통과 | [`third_party/ms-swift/`](third_party/ms-swift/) |
-| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 219/219 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
+| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 220/220 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
 | 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B revision은 고정; 재시작 후 local cache 복원 대기 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
 | Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
 | 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
@@ -138,7 +138,7 @@ row는 101개였다.
 | text-only comprehensive diagnostic | 7 tasks·414 selected subsets; K-HATERS는 unsupported registered task, visual-document 5 assets는 modality 불일치로 명시 제외; public medium/high contamination diagnostic | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
 | Qwen3 reranker teacher scorer/KD | `Qwen3-Reranker-8B@77d193c`; official yes/no logits, 5개 약 16GB LFS content SHA 전수 검증 후 local-only load. wide pool200→quantile15 compiler, hard InfoNCE+listwise KL/MarginMSE, queue4096 A/B와 1M 원본을 clean-first 비교. 선택·가중치 SHA·private exact file set·immutable commit이 모두 일치하지 않으면 전문가/법률 stage로 진행하지 않음. 아직 실제 score/KD 성능 결과 없음 | [teacher scorer](experiments/030_teacher_distillation/) |
 | last-available-5 FP32 LoRA 평균 | 같은 Trainer version의 최신 최대 5개만 config/key/shape/dtype/finite gate 뒤 FP32 평균·atomic 저장; safe merge parity 후 single best와 동일 clean selector에서 비교. 첫 active Qwen도 검증 adapter archive로 5개를 보존하고 이후 run은 full checkpoint 5개도 유지 | [model merge](experiments/050_model_merge/) |
-| basis-safe full-weight soup | 독립 LoRA factor 평균 금지; safe-merged general/parent/retrieval/SQuAD/health/AutoRAG/legal/combined full weight를 FP32 누적→BF16 sharded 출력. parent retention 2종, general↔combined 2종, specialist 3종의 사전 고정 7개 coefficient만 최종 clean selector에 추가; 실제 성능 결과 대기 | [model merge](experiments/050_model_merge/) |
+| basis-safe full-weight soup | 독립 LoRA factor 평균 금지; safe-merged general/parent/retrieval/SQuAD/health/AutoRAG/legal/combined full weight를 FP32 누적→BF16 sharded 출력. 6개 target 모델·local parent·Models2 derived-data upload를 필수 gate로 두고, parent retention 2종, general↔combined 2종, specialist 3종의 사전 고정 7개 coefficient를 모두 최종 clean selector에 추가; 실제 성능 결과 대기 | [model merge](experiments/050_model_merge/) |
 | 첫 8B LoRA smoke | 학습·저장·재로딩 검증 통과, 성능 주장은 없음 | [experiments/010_qwen3_8b_ko_lora/](experiments/010_qwen3_8b_ko_lora/) |
 | smoke adapter HF artifact | private 업로드 완료, raw data/optimizer 제외 | [`LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711`](https://huggingface.co/LLM-OS-Models/qwen3-embedding-8b-ko-smoke-20260711) |
 | LoRA vs full tuning | 메모리·품질 비교 진행 중 | [experiments/070_tuning_strategy/](experiments/070_tuning_strategy/) |

@@ -316,7 +316,8 @@ if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
     DATA_UPLOAD_PID=$!
     echo "[$(timestamp)] derived dataset upload started pid=$DATA_UPLOAD_PID"
   else
-    echo "[$(timestamp)] no token file; derived dataset upload skipped" >&2
+    echo "[$(timestamp)] token file unavailable for required derived dataset upload" >&2
+    exit 6
   fi
 fi
 
@@ -429,6 +430,7 @@ if [[ -n "$DATA_UPLOAD_PID" ]]; then
     echo "[$(timestamp)] derived performance 1M dataset upload complete"
   else
     echo "[$(timestamp)] derived performance 1M dataset upload failed; see log" >&2
+    exit 6
   fi
 fi
 
@@ -463,28 +465,28 @@ if [[ "${ENABLE_SIONIC_RETRIEVAL_ADAPTATION:-1}" == 1 ]]; then
     GENERAL_SELECTION="$GENERAL_SELECTION" \
     GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-retrieval-family-adaptation-20260712" \
-    bash "$ROOT/scripts/run_sionic_retrieval_adaptation_queue.sh" || true
+    bash "$ROOT/scripts/run_sionic_retrieval_adaptation_queue.sh" || exit 8
 fi
 if [[ "${ENABLE_SIONIC_SQUAD_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-squad-train-family-adaptation" env WAIT_PID= \
     GENERAL_SELECTION="$GENERAL_SELECTION" \
     GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-squad-adaptation-20260712" \
-    bash "$ROOT/scripts/run_sionic_squad_adaptation_queue.sh" || true
+    bash "$ROOT/scripts/run_sionic_squad_adaptation_queue.sh" || exit 9
 fi
 if [[ "${ENABLE_SIONIC_HEALTH_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-health-domain-adaptation" env WAIT_PID= \
     GENERAL_SELECTION="$GENERAL_SELECTION" \
     GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-health-adaptation-20260712" \
-    bash "$ROOT/scripts/run_sionic_health_adaptation_queue.sh" || true
+    bash "$ROOT/scripts/run_sionic_health_adaptation_queue.sh" || exit 10
 fi
 if [[ "${ENABLE_SIONIC_AUTORAG_ADAPTATION:-1}" == 1 ]]; then
   run_stage "sionic-autorag-domain-adaptation" env WAIT_PID= \
     GENERAL_SELECTION="$GENERAL_SELECTION" \
     GENERAL_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     LOG_DIR="$ROOT/outputs/sionic-autorag-adaptation-20260712" \
-    bash "$ROOT/scripts/run_sionic_autorag_adaptation_queue.sh" || true
+    bash "$ROOT/scripts/run_sionic_autorag_adaptation_queue.sh" || exit 11
 fi
 
 echo "[$(timestamp)] 1M scale queue complete"

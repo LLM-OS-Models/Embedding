@@ -293,7 +293,8 @@ if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
   ) >"$LOG_DIR/derived-dataset-upload.log" 2>&1 &
   DATA_UPLOAD_PID=$!
 else
-  echo "[$(timestamp)] no token file; derived ${TARGET_KIND} dataset upload skipped" >&2
+  echo "[$(timestamp)] token file unavailable for required derived ${TARGET_KIND} dataset upload" >&2
+  exit 10
 fi
 
 run_stage "verify-${TARGET_KIND}-target-adapter" \
@@ -353,6 +354,9 @@ if [[ "$ENABLE_PUBLIC_INTERMEDIATE_EVAL" == 1 \
   fi
 fi
 if [[ -n "$DATA_UPLOAD_PID" ]]; then
-  wait "$DATA_UPLOAD_PID" || echo "[$(timestamp)] derived $TARGET_KIND dataset upload failed" >&2
+  if ! wait "$DATA_UPLOAD_PID"; then
+    echo "[$(timestamp)] derived $TARGET_KIND dataset upload failed" >&2
+    exit 10
+  fi
 fi
 echo "[$(timestamp)] Sionic $TARGET_KIND target-adaptation queue complete"
