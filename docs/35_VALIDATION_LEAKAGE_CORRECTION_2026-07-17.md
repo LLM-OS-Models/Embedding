@@ -63,6 +63,34 @@ artifact는
 [`LLM-OS-Models2/korean-legal-source-heldout-retrieval-v2-text-strict@ce9d3bb5`](https://huggingface.co/datasets/LLM-OS-Models2/korean-legal-source-heldout-retrieval-v2-text-strict/tree/ce9d3bb57ca4dc5144753f6d0f8b4a2256851e97)에
 업로드했고, remote visibility·allowlist·5개 manifest/data SHA를 다시 내려받아 일치시켰다.
 
+## 후보 snapshot 보존
+
+재시작 뒤 후보 242,675행을 다시 추출하지 않아도 v2 선택을 재현할 수 있도록, pinned
+Legalize-KR revision에서 만든 shard `12, 13, 14, 15 / 16`의 JSONL 16개와 추출
+manifest 16개를 private snapshot으로 보존했다. 이 snapshot은 clean 평가 결과가 아니라
+v2 builder의 중간 입력 증거이며, 독립성·training-text·benchmark exclusion은 최종 v2
+builder와 manifest가 별도로 강제한다.
+
+- repository:
+  [`LLM-OS-Models2/korean-legal-holdout-candidates-v1-shards12-15@18cbfef7`](https://huggingface.co/datasets/LLM-OS-Models2/korean-legal-holdout-candidates-v1-shards12-15/tree/18cbfef7162fe07470d5377e198062301698ef33)
+- commit: `18cbfef7162fe07470d5377e198062301698ef33`
+- candidate rows/files: `242,675 / 16`
+- extractor manifests: `16`
+- snapshot manifest SHA-256:
+  `dca58ecb1f89a50e901097988bf15f11b1922b9640841eccf0e01dc1fd07485c`
+- 검증: private visibility, exact remote allowlist, 32개 evidence content SHA 모두 일치
+
+로컬 후보와 v2 reference manifest를 다시 묶어 검증·게시하는 명령은 다음과 같다. 토큰은
+`.env`에서 프로세스 안으로만 읽으며 로그나 repository에 쓰지 않는다.
+
+```bash
+python scripts/publish_legal_candidate_snapshot.py \
+  --candidate-dir outputs/data/legal-holdout-candidates-v1 \
+  --reference-manifest outputs/evaluation/legal-source-heldout-i-v2-text-strict/manifest.json \
+  --repo-id LLM-OS-Models2/korean-legal-holdout-candidates-v1-shards12-15 \
+  --hf-token-file .env --upload
+```
+
 - 네 Legalize-KR repository에서 정확히 128행씩, 총 512행
 - query/positive마다 서로 다른 whole source document
 - 같은 repository의 IDF-weighted word/character-bigram lexical hard negative 4개
