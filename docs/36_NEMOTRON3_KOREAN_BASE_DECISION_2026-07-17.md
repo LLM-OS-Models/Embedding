@@ -101,6 +101,10 @@ masked mean, L2 normalize, query-only 고정 prompt를 보존한다. PEFT adapte
 license/NOTICE와 adapter·selection·training manifest SHA도 merge report에 묶는다.
 최종 public publisher도 upstream lineage가 Nemotron이면 `masked_mean+Ministral3Model`,
 Qwen이면 `last_token`을 별도 검증하고 카드의 방법 설명에 실제 pooling을 넣는다.
+병합 뒤 `scripts/gate_nemotron3_final_candidate.py`가 merged weight SHA와 legal·multidomain·
+Sionic summary model/revision을 exact 결합한다. Qwen/Comsat 최고 reference 대비 legal 및
+multidomain macro `-0.010`, finance/knowledge 각각 `-0.015`, Sionic strict `>0.7930`을
+모두 요구하며 public score가 checkpoint 선택에 쓰이지 않았음을 report에 남긴다.
 
 별도 `run_top_model_sionic_queue.sh`가 Comsat full Sionic을 병렬 계산하고 있었지만 공식
 동일 protocol `0.7930`이 이미 있고 base-decision runner가 뒤에서 Comsat clean selector를
