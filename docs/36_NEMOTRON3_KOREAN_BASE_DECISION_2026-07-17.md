@@ -189,6 +189,8 @@ Qwen 원 run의 exact validation은
   권리 gate와 동일한 계약을 사용한다.
 - publisher는 이 manifest의 exact `artifact_id`를 우선 매핑해 모델 카드에 실제 public
   Nemotron HN dataset만 연결하며 과거 Qwen용 target-adapted repo를 추정해 적지 않는다.
+- transform의 benchmark-adaptation은 canonical `target-adapted-legal-public-source`로
+  기록해 모델 카드의 legal/public clean-zero-shot 금지 경고가 반드시 활성화된다.
 - 재배포가 허용된 학습 데이터와 derived dataset은 기본 public이다.
 - dataset card에 upstream repository/revision, license, row별 source/provenance, 변환,
   dedup과 benchmark-overlap 감사를 기록한다.

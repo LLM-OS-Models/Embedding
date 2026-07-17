@@ -99,7 +99,7 @@ if [[ ! -s "$ORDERED_MANIFEST" ]]; then
     --train "$MINED" --provenance "$MINED_PROVENANCE" \
     --output "$ORDERED" --provenance-output "$ORDERED_PROVENANCE" \
     --manifest-output "$ORDERED_MANIFEST" --batch-size 32 --seed 42 \
-    --length-bucketed --benchmark-adaptation legal-public-source-target-adapted
+    --length-bucketed --benchmark-adaptation target-adapted-legal-public-source
 fi
 
 run_stage audit-final-public-curriculum \
