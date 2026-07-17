@@ -200,7 +200,8 @@ package하지 않는다. 이 last4 challenger까지 포함한 clean winner가 1M
 
 2026-07-17 구현에서는 Nemotron의 equal-average 근거와 독립 adapter factor의 basis ambiguity를
 함께 반영했다. 서로 다른 specialist LoRA의 A/B를 직접 평균하지 않고 safe-merged full model
-weight를 tensor별 FP32로 누적한다. general/combined/specialist의 네 fixed coefficient만
+weight를 tensor별 FP32로 누적한다. immediate parent retention 2종, general/combined 2종,
+specialist 3종의 일곱 fixed coefficient만
 사전에 등록하며, source shard와 model evidence SHA 및 ST contract가 모두 같은 경우에만
 BF16 sharded soup를 생성한다. 실제 clean 결과 전에는 개선을 주장하지 않는다.
 - evaluation task/data revision, backend, dtype, batch, raw result path와 실패/OOM 기록

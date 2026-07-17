@@ -50,13 +50,18 @@ SentenceTransformers metadata, tensor key/shape/dtype/finite를 확인한다. te
 [`run_model_soup_queue.sh`](../../scripts/run_model_soup_queue.sh)의 coefficient는 평가 전에
 고정돼 있다.
 
+- general/KD winner `.75` + 그 immediate local parent `.25`
+- general/KD winner `.5` + 그 immediate local parent `.5`
 - general `.5` + combined `.5`
+- general `.25` + combined `.75`
 - general `.5` + retrieval/SQuAD/health/AutoRAG/legal 각 `.1`
 - general `.25` + combined `.25` + specialist 5개 각 `.1`
 - combined `.5` + specialist 5개 각 `.1`
 
-public Sionic/MTEB는 soup 생성이나 coefficient 선택에 사용하지 않는다. 네 candidate는
+public Sionic/MTEB는 soup 생성이나 coefficient 선택에 사용하지 않는다. 일곱 candidate는
 single-best/checkpoint-average와 같은 최종 Grade-I clean/robustness selector에 들어간다.
-source가 하나라도 없으면 그 balanced variant를 만들지 않으며, weight 합이 `1±1e-9`가
+parent interpolation은 general winner의 `merge_report.json`이 workspace의 exact local
+model evidence 하나로 연결될 때만 만들고, source가 하나라도 없으면 그 balanced variant를
+만들지 않는다. weight 합이 `1±1e-9`가
 아니거나 shard index/payload가 어긋나면 실패한다. adaptive/greedy coefficient는 더 넓은
 clean general-domain dev가 생기기 전까지 보류한다.

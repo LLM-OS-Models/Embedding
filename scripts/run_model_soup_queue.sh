@@ -41,6 +41,23 @@ resolve_merged_model() {
   return 1
 }
 
+resolve_local_parent_model() {
+  local model="$1" raw candidate evidence_count=0
+  [[ -s "$model/merge_report.json" ]] || return 1
+  raw="$(jq -r '.base_model // empty' "$model/merge_report.json")"
+  [[ -n "$raw" && "$raw" == /* ]] || return 1
+  candidate="$(realpath -e "$raw" 2>/dev/null)" || return 1
+  case "$candidate" in
+    "$ROOT"/artifacts/models/*) ;;
+    *) return 1 ;;
+  esac
+  [[ -s "$candidate/merge_report.json" ]] && evidence_count=$((evidence_count + 1))
+  [[ -s "$candidate/full_tuning_report.json" ]] && evidence_count=$((evidence_count + 1))
+  [[ -s "$candidate/soup_report.json" ]] && evidence_count=$((evidence_count + 1))
+  (( evidence_count == 1 )) || return 1
+  printf '%s\n' "$candidate"
+}
+
 if [[ ! -s "$GENERAL_SELECTION" ]]; then
   echo "[$(timestamp)] general clean selection is unavailable" >&2
   exit 2
@@ -86,12 +103,27 @@ build_soup() {
     --torch-threads "${SOUP_TORCH_THREADS:-4}"
 }
 
+general_parent="$(resolve_local_parent_model "$general")" || general_parent=""
+if [[ -n "$general_parent" ]]; then
+  build_soup qwen3-embedding-8b-ko-soup-general75-parent25 \
+    --model "$general" --weight .75 \
+    --model "$general_parent" --weight .25
+  build_soup qwen3-embedding-8b-ko-soup-general50-parent50 \
+    --model "$general" --weight .5 \
+    --model "$general_parent" --weight .5
+else
+  echo "[$(timestamp)] general winner has no eligible local parent; parent interpolation skipped" >&2
+fi
+
 if [[ -n "$combined" ]]; then
   build_soup qwen3-embedding-8b-ko-soup-general50-combined50 \
     --model "$general" --weight .5 \
     --model "$combined" --weight .5
+  build_soup qwen3-embedding-8b-ko-soup-general25-combined75 \
+    --model "$general" --weight .25 \
+    --model "$combined" --weight .75
 else
-  echo "[$(timestamp)] combined model unavailable; two combined soups skipped" >&2
+  echo "[$(timestamp)] combined model unavailable; combined soups skipped" >&2
 fi
 
 specialists=("$retrieval" "$squad" "$health" "$autorag" "$legal")

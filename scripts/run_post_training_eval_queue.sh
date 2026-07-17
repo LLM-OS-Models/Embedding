@@ -57,7 +57,10 @@ FULL_RUNS=(
   comsat-embed-ko-8b-performance200k-last4
 )
 SOUP_MODELS=(
+  qwen3-embedding-8b-ko-soup-general75-parent25
+  qwen3-embedding-8b-ko-soup-general50-parent50
   qwen3-embedding-8b-ko-soup-general50-combined50
+  qwen3-embedding-8b-ko-soup-general25-combined75
   qwen3-embedding-8b-ko-soup-general50-specialists10x5
   qwen3-embedding-8b-ko-soup-general25-combined25-specialists10x5
   qwen3-embedding-8b-ko-soup-combined50-specialists10x5

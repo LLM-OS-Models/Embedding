@@ -148,13 +148,18 @@ def test_frontier_queues_keep_hf_token_out_of_training_and_evaluation() -> None:
 def test_model_soup_coefficients_are_fixed_before_clean_evaluation() -> None:
     source = SOUP_QUEUE.read_text(encoding="utf-8")
     for label in (
+        "soup-general75-parent25",
+        "soup-general50-parent50",
         "soup-general50-combined50",
+        "soup-general25-combined75",
         "soup-general50-specialists10x5",
         "soup-general25-combined25-specialists10x5",
         "soup-combined50-specialists10x5",
     ):
         assert label in source
     assert "merge_full_model_soup.py" in source
+    assert "resolve_local_parent_model" in source
+    assert '"$ROOT"/artifacts/models/*' in source
     assert "evaluate_sionic9.py" not in source
     assert "evaluate_mteb_korean_v1.py" not in source
     assert "HF_TOKEN" in source and "unset HF_TOKEN" in source
