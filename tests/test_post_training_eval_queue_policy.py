@@ -321,3 +321,9 @@ def test_private_full_model_lineage_requires_exact_remote_file_set() -> None:
         assert "remote_manifest_exact" in source, path
         assert "remote_file_set_exact" in source, path
         assert "private:true:true" in source, path
+    post = QUEUE.read_text(encoding="utf-8")
+    for code in (23, 24, 25, 26, 27, 28):
+        assert f"exit {code}" in post
+    frontier = FRONTIER_QUEUE.read_text(encoding="utf-8")
+    assert "FINAL_PUBLICATION_REPORT" in frontier
+    assert "final model publication completion evidence is invalid" in frontier

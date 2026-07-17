@@ -36,6 +36,7 @@ SCALE_LOG="$ROOT/outputs/scale-1m-20260717-frontier"
 LEGAL_LOG="$ROOT/outputs/legal-adaptation-20260717-frontier"
 FINAL_EVAL_LOG="$ROOT/outputs/final-frontier-selection-20260717"
 FINAL_EVAL_SELECTION="$FINAL_EVAL_LOG/clean-first-selection.json"
+FINAL_PUBLICATION_REPORT="$FINAL_EVAL_LOG/final-publication-report.json"
 SOUP_LOG="$ROOT/outputs/model-soup-20260717-frontier"
 
 mkdir -p "$COMSAT_RUN"
@@ -263,6 +264,13 @@ env WAIT_PID= LOG_DIR="$FINAL_EVAL_LOG" \
 if [[ ! -s "$FINAL_EVAL_SELECTION" ]]; then
   echo "[$(timestamp)] final clean-first selection was not produced" >&2
   exit 30
+fi
+if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$FINAL_PUBLICATION_REPORT" 2>/dev/null)" != "private:true:true" \
+    || ! "$(jq -r '.commit_sha // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null)" \
+       =~ ^[0-9a-f]{40}$ ]]; then
+  echo "[$(timestamp)] final model publication completion evidence is invalid" >&2
+  exit 31
 fi
 
 echo "[$(timestamp)] frontier campaign queue completed"

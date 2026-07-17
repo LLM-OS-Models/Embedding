@@ -16,6 +16,7 @@ SELECTION_ONLY="${SELECTION_ONLY:-0}"
 SELECTION_PRIVATE_REPO_ID="${SELECTION_PRIVATE_REPO_ID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
 SELECTION_UPLOAD_REPORT="${SELECTION_UPLOAD_REPORT:-$LOG_DIR/private-clean-candidate-upload.json}"
+FINAL_PUBLICATION_REPORT="${FINAL_PUBLICATION_REPORT:-$LOG_DIR/final-publication-report.json}"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-posttrain-contract-v1"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-posttrain-contract-v1"
 COMPREHENSIVE_OUT="$ROOT/outputs/evaluation/comprehensive-text-v1-posttrain"
@@ -491,7 +492,10 @@ fi
 
 best_model=""
 local_revision=""
-if [[ -s "$SELECTION" ]]; then
+if [[ ! -s "$SELECTION" ]]; then
+  echo "[$(timestamp)] final evaluation requires a clean-first selection" >&2
+  exit 22
+else
   best_model="$(jq -r '.best.model' "$SELECTION")"
   best_abs="$ROOT/$best_model"
   if [[ -s "$best_abs/merge_report.json" ]]; then
@@ -513,49 +517,69 @@ if [[ -s "$SELECTION" ]]; then
     "$ROOT/outputs/embedding-cache/sionic9-final-selected"; then
     sionic_summary="$LAST_SIONIC_SUMMARY"
   else
-    echo "[$(timestamp)] final selected model Sionic9 evaluation failed"
+    echo "[$(timestamp)] final selected model Sionic9 evaluation failed" >&2
+    exit 23
   fi
   if run_official_with_fallback "v1-final-selected" "$best_model" "$local_revision" \
     "$ROOT/outputs/embedding-cache/official-final-selected"; then
     official_summary="$LAST_OFFICIAL_SUMMARY"
   else
-    echo "[$(timestamp)] final selected model official evaluation failed"
+    echo "[$(timestamp)] final selected model official evaluation failed" >&2
+    exit 24
   fi
   if run_comprehensive_with_fallback \
     "v1-final-selected" "$best_model" "$local_revision" \
     "$ROOT/outputs/embedding-cache/comprehensive-text-final-selected"; then
     comprehensive_summary="$LAST_COMPREHENSIVE_SUMMARY"
   else
-    echo "[$(timestamp)] final selected model comprehensive text evaluation failed"
+    echo "[$(timestamp)] final selected model comprehensive text evaluation failed" >&2
+    exit 25
   fi
   training_manifest="$(resolve_training_manifest "$best_model" 2>/dev/null)" || training_manifest=""
-  if [[ -s "$official_summary" && -s "$sionic_summary" \
-      && -s "$comprehensive_summary" && -s "$training_manifest" ]]; then
-    clean_args=()
-    [[ -s "$clean_summary" ]] && clean_args+=(--clean-summary "$clean_summary")
-    robustness_args=()
-    [[ -s "$robustness_summary" ]] && \
-      robustness_args+=(--robustness-summary "$robustness_summary")
-    if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
-      echo "[$(timestamp)] no Hugging Face token file available; skip private publication"
-    elif retry_stage "publish-best-private-candidate" 3 \
-      "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
-      --model-dir "$best_abs" \
-      --sionic-summary "$sionic_summary" \
-      --official-summary "$official_summary" \
-      --comprehensive-summary "$comprehensive_summary" \
-      --training-manifest "$training_manifest" \
-      "${clean_args[@]}" \
-      "${robustness_args[@]}" \
-      --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
-      --hf-token-file "$PUBLISH_HF_TOKEN_FILE" --upload; then
-      run_stage "record-pilot-best-result" \
-        "$ROOT/scripts/commit_campaign_result.sh" \
-        --stage pilot-best --model "$best_model" \
-        --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
-        --sionic-summary "$sionic_summary" --official-summary "$official_summary"
-    fi
+  if [[ ! -s "$official_summary" || ! -s "$sionic_summary" \
+      || ! -s "$comprehensive_summary" || ! -s "$training_manifest" ]]; then
+    echo "[$(timestamp)] final evaluation evidence or training manifest is incomplete" >&2
+    exit 26
   fi
+  clean_args=()
+  [[ -s "$clean_summary" ]] && clean_args+=(--clean-summary "$clean_summary")
+  robustness_args=()
+  [[ -s "$robustness_summary" ]] && \
+    robustness_args+=(--robustness-summary "$robustness_summary")
+  if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
+    echo "[$(timestamp)] Hugging Face token file is required for final private publication" >&2
+    exit 27
+  fi
+  retry_stage "publish-best-private-candidate" 3 \
+    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
+    --model-dir "$best_abs" \
+    --sionic-summary "$sionic_summary" \
+    --official-summary "$official_summary" \
+    --comprehensive-summary "$comprehensive_summary" \
+    --training-manifest "$training_manifest" \
+    "${clean_args[@]}" \
+    "${robustness_args[@]}" \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
+    --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
+    --report-output "$FINAL_PUBLICATION_REPORT" --upload || exit 27
+  report_contract="$(jq -r \
+    '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
+    "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
+  report_model="$(jq -r '.model_dir // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
+  report_weights_sha="$(jq -r '.weights_sha256 // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
+  report_commit="$(jq -r '.commit_sha // empty' "$FINAL_PUBLICATION_REPORT" 2>/dev/null || true)"
+  if [[ "$report_contract" != "private:true:true" \
+      || "$report_model" != "$best_model" \
+      || "$report_weights_sha" != "$weights_sha" \
+      || ! "$report_commit" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "[$(timestamp)] final private publication report failed exact verification" >&2
+    exit 27
+  fi
+  run_stage "record-pilot-best-result" \
+    "$ROOT/scripts/commit_campaign_result.sh" \
+    --stage pilot-best --model "$best_model" \
+    --repo-id LLM-OS-Models2/qwen3-embedding-8b-ko-performance-v1-private-candidate \
+    --sionic-summary "$sionic_summary" --official-summary "$official_summary" || exit 28
 fi
 
 # Add trusted baselines to the same disclosed Grade-I comparison after local

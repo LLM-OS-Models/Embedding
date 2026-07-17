@@ -248,7 +248,11 @@ def link_or_copy_immutable(source: Path, destination: Path) -> None:
 
 
 def stage_model_payload(
-    model_dir: Path, publication_dir: Path, evidence_name: str
+    model_dir: Path,
+    publication_dir: Path,
+    evidence_name: str,
+    *,
+    ignore_existing_publication: bool = False,
 ) -> None:
     """Stage only load-bearing model files; never upload the mutable source tree."""
     allowed_relative = set(MODEL_CONTRACT_FILES)
@@ -256,6 +260,11 @@ def stage_model_payload(
         if source.is_dir():
             continue
         relative = source.relative_to(model_dir).as_posix()
+        if ignore_existing_publication and (
+            relative in {"README.md", "publication_manifest.json"}
+            or relative.startswith("evaluation/")
+        ):
+            continue
         allowed = (
             relative == evidence_name
             or relative in allowed_relative
@@ -499,13 +508,20 @@ def publication_files(publication_dir: Path) -> dict[str, dict[str, Any]]:
 
 
 def verify_remote_publication(
-    *, api: Any, repo_id: str, revision: str, token: str, expected: dict[str, dict[str, Any]]
+    *,
+    api: Any,
+    repo_id: str,
+    revision: str,
+    token: str,
+    expected: dict[str, dict[str, Any]],
+    expected_private: bool = True,
 ) -> None:
     from huggingface_hub import hf_hub_download
 
     info = api.model_info(repo_id=repo_id, revision=revision, files_metadata=True)
-    if getattr(info, "private", None) is not True:
-        raise RuntimeError("Remote clean candidate is not private")
+    if getattr(info, "private", None) is not expected_private:
+        visibility = "private" if expected_private else "public"
+        raise RuntimeError(f"Remote publication is not confirmed {visibility}")
     siblings = {item.rfilename: item for item in info.siblings}
     remote_files = set(siblings)
     missing = set(expected) - remote_files

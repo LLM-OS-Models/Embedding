@@ -10,6 +10,7 @@ import math
 import os
 import shutil
 import stat
+import tempfile
 from statistics import fmean
 from pathlib import Path
 from typing import Any, Mapping
@@ -70,6 +71,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Secure file containing one HF_TOKEN= entry; only used with --upload.",
     )
+    parser.add_argument(
+        "--report-output",
+        type=Path,
+        help="Atomic machine-readable publication completion report.",
+    )
     return parser.parse_args()
 
 
@@ -89,6 +95,11 @@ def sha256(path: Path) -> str:
 
 
 def copy_json_tree(source_root: Path, destination_root: Path) -> list[dict[str, Any]]:
+    try:
+        from scripts.publish_private_clean_candidate import copy_sanitized_text
+    except ImportError:  # pragma: no cover - direct script execution fallback
+        from publish_private_clean_candidate import copy_sanitized_text
+
     copied: list[dict[str, Any]] = []
     if not source_root.is_dir():
         return copied
@@ -96,7 +107,7 @@ def copy_json_tree(source_root: Path, destination_root: Path) -> list[dict[str, 
         relative = source.relative_to(source_root)
         destination = destination_root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+        copy_sanitized_text(source, destination)
         copied.append(
             {
                 "path": str(destination.relative_to(destination_root.parent.parent)),
@@ -1007,8 +1018,132 @@ benchmark한다.
 """
 
 
+def prepare_isolated_upload_staging(
+    *, model_dir: Path, evidence_name: str, publication_dir: Path
+) -> Path:
+    try:
+        from scripts.publish_private_clean_candidate import (
+            copy_sanitized_text,
+            publication_files,
+            stage_model_payload,
+            validate_no_sensitive_files,
+            validate_staged_text,
+        )
+    except ImportError:  # pragma: no cover - direct script execution fallback
+        from publish_private_clean_candidate import (
+            copy_sanitized_text,
+            publication_files,
+            stage_model_payload,
+            validate_no_sensitive_files,
+            validate_staged_text,
+        )
+
+    model_dir = model_dir.resolve()
+    expected_root = (ROOT / "artifacts/models").resolve()
+    try:
+        model_rel = model_dir.relative_to(ROOT.resolve()).as_posix()
+        model_dir.relative_to(expected_root)
+    except ValueError as error:
+        raise ValueError("Uploaded model must be under workspace artifacts/models") from error
+    if publication_dir.exists() and any(publication_dir.iterdir()):
+        raise FileExistsError("Final publication staging directory is not empty")
+    publication_dir.mkdir(parents=True, exist_ok=True)
+    stage_model_payload(
+        model_dir,
+        publication_dir,
+        evidence_name,
+        ignore_existing_publication=True,
+    )
+    for name in ("README.md", "publication_manifest.json"):
+        source = model_dir / name
+        if not source.is_file():
+            raise FileNotFoundError(f"Final publication source is missing {name}")
+        copy_sanitized_text(source, publication_dir / name)
+    evaluation_root = model_dir / "evaluation"
+    if not evaluation_root.is_dir():
+        raise FileNotFoundError("Final publication evaluation evidence is missing")
+    source_manifest = read_json(model_dir / "publication_manifest.json")
+    declared_evaluation_files = {
+        f"evaluation/{name}" for name in source_manifest.get("evidence", {})
+    }
+    for records in source_manifest.get("raw_evaluation_json", {}).values():
+        if not isinstance(records, list):
+            raise ValueError("Final publication raw evaluation manifest is invalid")
+        for record in records:
+            if not isinstance(record, dict):
+                raise ValueError("Final publication raw evaluation record is invalid")
+            declared_evaluation_files.add(str(record.get("path", "")))
+    for relative in sorted(declared_evaluation_files):
+        relative_path = Path(relative)
+        if (
+            not relative.startswith("evaluation/")
+            or relative_path.is_absolute()
+            or ".." in relative_path.parts
+        ):
+            raise ValueError("Final publication evaluation path is unsafe")
+        source = model_dir / relative_path
+        if (
+            not source.is_file()
+            or source.is_symlink()
+            or source.suffix.lower() not in {".json", ".jsonl"}
+        ):
+            raise ValueError("Final publication contains unsafe evaluation payload")
+        destination = publication_dir / relative_path
+        copy_sanitized_text(source, destination)
+
+    staged_manifest_path = publication_dir / "publication_manifest.json"
+    staged_manifest = read_json(staged_manifest_path)
+    staged_manifest["model_dir"] = model_rel
+    staged_manifest["model_evidence"]["sha256"] = sha256(
+        publication_dir / evidence_name
+    )
+    files = publication_files(publication_dir)
+    files.pop("publication_manifest.json", None)
+    staged_manifest["files_excluding_manifest"] = files
+    staged_manifest["publication_safety"] = {
+        "isolated_staging": True,
+        "source_model_mutated_during_upload": False,
+        "allowlisted_model_payload": True,
+        "local_paths_removed": True,
+        "recognized_credentials_removed": True,
+        "remote_exact_verification_required": True,
+    }
+    staged_manifest_path.write_text(
+        json.dumps(staged_manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    validate_no_sensitive_files(publication_dir)
+    validate_staged_text(publication_dir)
+    if model_weights_sha256(publication_dir) != model_weights_sha256(model_dir):
+        raise RuntimeError("Final publication staging changed model shards")
+    return staged_manifest_path
+
+
+def write_atomic_report(path: Path, report: dict[str, Any]) -> None:
+    output = path.expanduser().resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(f".{output.name}.tmp.{os.getpid()}")
+    temporary.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(output)
+
+
 def main() -> None:
     args = parse_args()
+    try:
+        from scripts.publish_private_clean_candidate import (
+            copy_sanitized_text,
+            publication_files,
+            verify_remote_publication,
+        )
+    except ImportError:  # pragma: no cover - direct script execution fallback
+        from publish_private_clean_candidate import (
+            copy_sanitized_text,
+            publication_files,
+            verify_remote_publication,
+        )
     (
         evidence,
         sionic,
@@ -1069,7 +1204,7 @@ def main() -> None:
             args.release_approval.resolve()
         )
     for name, source in evidence_files.items():
-        shutil.copy2(source, evidence_dir / name)
+        copy_sanitized_text(source, evidence_dir / name)
     raw_evidence = {
         "sionic9": copy_json_tree(
             args.sionic_summary.resolve().parent / "mteb_cache",
@@ -1093,10 +1228,14 @@ def main() -> None:
         if is_model_soup(evidence)
         else ("full_tuning_report.json" if is_full_update(evidence) else "merge_report.json")
     )
+    try:
+        recorded_model_dir = model_dir.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        recorded_model_dir = f"local:{model_dir.name}"
     publication_manifest = {
         "schema_version": 1,
         "repo_id": args.repo_id,
-        "model_dir": str(model_dir),
+        "model_dir": recorded_model_dir,
         "model_evidence": {
             "file": evidence_name,
             "sha256": sha256(model_dir / evidence_name),
@@ -1136,9 +1275,10 @@ def main() -> None:
     )
     report = {
         "repo_id": args.repo_id,
-        "model_dir": str(model_dir),
-        "card": str(card_path),
-        "publication_manifest": str(model_dir / "publication_manifest.json"),
+        "model_dir": recorded_model_dir,
+        "card": "README.md",
+        "publication_manifest": "publication_manifest.json",
+        "weights_sha256": evidence["model"]["weights_sha256"],
         "sionic9_average": sionic["average"],
         "official_mean_task": official["mean_task_leaderboard_points"],
         "visibility": "public" if args.public else "private",
@@ -1162,10 +1302,61 @@ def main() -> None:
         from huggingface_hub import HfApi
 
         api = HfApi(token=token)
-        upload_model_folder(
-            api, repo_id=args.repo_id, model_dir=model_dir, public=args.public
-        )
-        report["url"] = f"https://huggingface.co/{args.repo_id}"
+        with tempfile.TemporaryDirectory(
+            prefix=f".{model_dir.name}.final-publish-", dir=model_dir.parent
+        ) as temporary:
+            publication_dir = Path(temporary)
+            staged_manifest = prepare_isolated_upload_staging(
+                model_dir=model_dir,
+                evidence_name=evidence_name,
+                publication_dir=publication_dir,
+            )
+            expected_files = publication_files(publication_dir)
+            api.create_repo(
+                repo_id=args.repo_id,
+                repo_type="model",
+                private=not args.public,
+                exist_ok=True,
+            )
+            require_remote_visibility(api, args.repo_id, public=args.public)
+            pre_info = api.model_info(repo_id=args.repo_id, files_metadata=True)
+            pre_files = {item.rfilename for item in pre_info.siblings}
+            unexpected_preexisting = pre_files - set(expected_files) - {".gitattributes"}
+            if unexpected_preexisting:
+                raise RuntimeError(
+                    "Remote final publication contains unexpected pre-existing files: "
+                    f"{sorted(unexpected_preexisting)}"
+                )
+            source_weights_sha = model_weights_sha256(model_dir)
+            api.upload_large_folder(
+                repo_id=args.repo_id,
+                repo_type="model",
+                folder_path=publication_dir,
+                private=not args.public,
+                num_workers=1,
+                print_report_every=60,
+            )
+            require_remote_visibility(api, args.repo_id, public=args.public)
+            info = api.model_info(repo_id=args.repo_id, files_metadata=True)
+            verify_remote_publication(
+                api=api,
+                repo_id=args.repo_id,
+                revision=info.sha,
+                token=token,
+                expected=expected_files,
+                expected_private=not args.public,
+            )
+            if model_weights_sha256(model_dir) != source_weights_sha:
+                raise RuntimeError("Source model changed during final publication upload")
+            report["commit_sha"] = info.sha
+            report["publication_manifest_sha256"] = sha256(staged_manifest)
+            report["remote_manifest_exact"] = True
+            report["remote_file_set_exact"] = True
+            report["remote_files_verified"] = len(expected_files)
+            report["isolated_staging"] = True
+            report["url"] = f"https://huggingface.co/{args.repo_id}"
+    if args.report_output:
+        write_atomic_report(args.report_output, report)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

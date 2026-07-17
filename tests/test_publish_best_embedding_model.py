@@ -7,7 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
+from scripts import publish_best_embedding_model as publisher
+from scripts import publish_private_clean_candidate as private_publisher
 from scripts.publish_best_embedding_model import (
     COMPREHENSIVE_TEXT_PROTOCOL_ID,
     COMPREHENSIVE_TEXT_TASK_SUBSETS,
@@ -54,6 +57,77 @@ def comprehensive_payload(model: Path, weights_sha256: str) -> dict:
 
 
 class PublishBestModelTests(unittest.TestCase):
+    def test_final_upload_staging_is_isolated_sanitized_and_fully_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model = root / "artifacts/models/final-winner"
+            model.mkdir(parents=True)
+            (model / "model.safetensors").write_bytes(b"final-weights")
+            (model / "config.json").write_text(
+                json.dumps({"_name_or_path": f"{root}/cache/base", "hidden_size": 4096})
+            )
+            (model / "modules.json").write_text("[]")
+            (model / "1_Pooling").mkdir()
+            (model / "1_Pooling/config.json").write_text("{}")
+            evidence_name = "full_tuning_report.json"
+            (model / evidence_name).write_text(
+                json.dumps({"status": "pass", "source_checkpoint": f"{root}/checkpoint"})
+            )
+            (model / "README.md").write_text("# final winner\n")
+            evaluation = model / "evaluation"
+            evaluation.mkdir()
+            (evaluation / "summary.json").write_text(
+                json.dumps({"model": str(model), "score": 0.9})
+            )
+            (model / "publication_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "model_dir": str(model),
+                        "model_evidence": {"file": evidence_name, "sha256": "stale"},
+                        "evidence": {"summary.json": {"sha256": "stale"}},
+                        "raw_evaluation_json": {},
+                    }
+                )
+            )
+            source_before = {
+                path.relative_to(model).as_posix(): path.read_bytes()
+                for path in model.rglob("*")
+                if path.is_file()
+            }
+            staging = root / "staging"
+            with (
+                patch.object(publisher, "ROOT", root),
+                patch.object(private_publisher, "ROOT", root),
+            ):
+                manifest = publisher.prepare_isolated_upload_staging(
+                    model_dir=model,
+                    evidence_name=evidence_name,
+                    publication_dir=staging,
+                )
+                private_publisher.validate_staged_text(staging)
+            source_after = {
+                path.relative_to(model).as_posix(): path.read_bytes()
+                for path in model.rglob("*")
+                if path.is_file()
+            }
+            self.assertEqual(source_after, source_before)
+            staged_manifest = json.loads(manifest.read_text())
+            self.assertEqual(staged_manifest["model_dir"], "artifacts/models/final-winner")
+            self.assertEqual(
+                staged_manifest["model_evidence"]["sha256"],
+                publisher.sha256(staging / evidence_name),
+            )
+            self.assertIn("evaluation/summary.json", staged_manifest["files_excluding_manifest"])
+            self.assertNotIn(
+                "publication_manifest.json", staged_manifest["files_excluding_manifest"]
+            )
+            staged_text = "\n".join(
+                path.read_text(encoding="utf-8")
+                for path in staging.rglob("*")
+                if path.is_file() and path.suffix in {".json", ".md"}
+            )
+            self.assertNotIn(str(root), staged_text)
+
     def test_soup_uses_full_model_weight_evidence(self) -> None:
         evidence = {
             "artifact_type": "weighted-full-model-embedding-soup",
