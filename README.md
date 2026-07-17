@@ -6,23 +6,23 @@
 Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 함께 보며, 실질적으로
 미미한 차이는 near-tie로 취급하고 실패 축과 오염을 숨기지 않습니다.
 
-기준일: **2026-07-17 (Asia/Seoul)**
+기준일: **2026-07-18 (Asia/Seoul)**
 
 ## 한 줄 결론
 
 - 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
-- 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이며, 새 `Nemotron-3-Embed-8B-BF16@2b29550c`의 한국어 base 적합성 평가가 끝날 때까지 재개를 보류한다. Nemotron-3는 SQuADKorV1 `0.92032`로 Qwen 공개 reference `0.9063`과 Comsat `0.9168`을 먼저 넘었고, MIRACL 전체 `0.64994`, Mr.TyDi 전체 `0.49324`를 완료했다. MLDR 8K long-doc 64개는 fragmentation 제거 뒤에도 실제 80GB를 넘어 OOM임을 확인했다. 완료 result와 63개 atomic cache를 보존하고 nominal batch/cache key는 64인 채 encoder microbatch만 OOM 시 32→16으로 반감 재시도한다.
-- 현재 valid performance candidate는 **0개**다. Qwen 200K 직렬 queue는 종료 marker 없이 남아 polling하던 wrapper까지 정지 대상으로 분류했고, Nemotron-3 전체 평가가 base 결정을 내릴 때까지 학습은 재개하지 않는다. Nemotron이 clean selector에서도 우세하면 공개 재배포 가능한 데이터만 쓴 최단 적응으로 전환하고, 아니면 Qwen `checkpoint-1750`을 exact contract로 재개한다.
+- 2026-07-17 19:06 KST에 Qwen 200K가 `1875/3123`에서 외부 종료됐다. 마지막 exact-resumable checkpoint는 `1750`이다. 2026-07-18 00:26 KST에 `Nemotron-3-Embed-8B-BF16@2b29550c`의 고정 Sionic 9 전체 평가를 완료했으며 macro NDCG@10은 **`0.732212`**로 Comsat `0.7930`보다 `-0.060788`이다. 원본 그대로의 교체는 탈락이다. 태스크별 값은 MIRACL `.64994`, Mr.TyDi `.49324`, MLDR `.33463`, AutoRAG `.88550`, Ko-StrategyQA `.79387`, PublicHealthQA `.82497`, Belebele `.95209`, SQuADKorV1 `.92018`, LawIRKo `.73549`다. MLDR nominal batch/cache key 64는 유지하면서 OOM 1회 뒤 실제 encoder microbatch 32로 완료했다.
+- 현재 valid performance candidate는 **0개**다. 자동 chain은 Nemotron/Qwen/Comsat의 독립 legal 10K·finance/knowledge 1.9K 비교를 진행 중이다. raw deficit이 `.020`을 초과하므로 기존 단기 적응 허용 규칙상 Nemotron 채택 가능성은 없고, decision artifact가 이를 확정하면 Qwen `checkpoint-1750`을 exact contract로 재개한다. clean 비교 결과는 Nemotron을 teacher/miner로 쓸지 판단하는 근거로 보존한다.
 - 공개 학습용 첫 권리안전 artifact는 [`LLM-OS-Models2/ko-legal-embedding-training-v1`](https://huggingface.co/datasets/LLM-OS-Models2/ko-legal-embedding-training-v1)이다. 한국 법령·행정규칙·판례·자치법규 source-native pair 250,000행이며 모든 행의 source/revision/license/redistribution 권리를 검증했고, 고정 benchmark blocklist exact overlap은 query/evaluation/corpus 모두 0이다. public immutable commit은 `faf431f53a9d8e8bbfa4d57903012a5d786f8716`이다.
-- Nemotron-3 공개 적응은 `scripts/train_nemotron3_public_lora.py`가 base architecture/mean-pooling/public manifest SHA를 검증하고 PEFT LoRA·cached all-negative loss·optimizer checkpoint를 재개한다. source JSONL에 저장된 기존 `Instruct/Query`를 한 번 제거한 뒤 학습 query에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 붙이고 positive/negative는 무접두 source-native text로 유지해 이중 prompt 없이 train/eval 입력 계약을 맞춘다. contract-only와 단위 검증은 통과했으며 실제 backward probe는 진행 중인 Sionic 평가 종료 직후 실행한다.
+- Nemotron-3 공개 적응은 decision gate가 허용할 때만 `scripts/train_nemotron3_public_lora.py`가 실행한다. base architecture/mean-pooling/public manifest SHA를 검증하고 PEFT LoRA·cached all-negative loss·optimizer checkpoint를 재개한다. source JSONL에 저장된 기존 `Instruct/Query`를 한 번 제거한 뒤 학습 query에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 붙이고 positive/negative는 무접두 source-native text로 유지해 이중 prompt 없이 train/eval 입력 계약을 맞춘다. contract-only와 단위 검증은 통과했다.
 - 현재 자동 chain은 `run_nemotron3_base_decision.sh` → `run_nemotron3_post_decision_probe.sh` → `run_nemotron3_public_pipeline.sh` → `run_nemotron3_post_training_release.sh` 순서로 대기한다. Nemotron gate를 통과하면 저장된 기존 query instruction을 제거하고 학습·평가와 같은 query-only 고정 prompt로 public HN을 mining해 dataset 배포, 300-step LoRA, public checkpoint watcher, winner 병합·전체 final gate·public 최종 모델 검증까지 이어진다. gate가 Qwen을 선택하면 Nemotron mutation/release를 건너뛰고 Qwen exact-resume 대상으로 남긴다.
-- 위 chain의 현재 완료점은 **검증된 public adapter checkpoint**이지 최종 승리 모델 완료가 아니다. 이후 same-step heldout loss로 checkpoint를 고르고, Nemotron masked-mean/normalize/prompt 계약을 보존해 병합한 뒤 legal·multidomain guard → Sionic 9 `>0.7930` → 공식 Korean 6을 통과한 단일 모델을 public Hub repo에 visibility/file-set/LFS SHA까지 재검증해야 목표 완료다.
+- 위 chain은 아직 **검증된 public adapter checkpoint에 도달하지 않았다**. decision이 Nemotron 적응을 허용하는 경우에만 same-step heldout loss로 checkpoint를 고르고, masked-mean/normalize/prompt 계약을 보존해 병합한 뒤 legal·multidomain guard → Sionic 9 `>0.7930` → 공식 Korean 6을 통과한 단일 모델을 public Hub repo에 visibility/file-set/LFS SHA까지 재검증한다.
 - `scripts/select_nemotron3_public_checkpoint.py`는 예정된 step 50/100/150/200/250/300 모두의 adapter/config/trainer/optimizer/scheduler 완결성과 base·public training-manifest SHA를 확인하고, public benchmark가 아닌 같은 step의 독립 512 heldout `eval_loss` 최솟값만 선택한다. 하나라도 없거나 non-finite면 병합으로 진행하지 않는다.
 - `scripts/merge_nemotron3_adapter.py`는 selector가 고른 exact adapter SHA만 pinned Nemotron base에 PEFT safe-merge한다. Qwen용 last-token 병합기를 재사용하지 않고 bidirectional `Ministral3Model`·4,096차원 masked mean·L2 normalize·query-only 고정 prompt를 검증하며, adapter 적용 전후와 병합 후 row cosine/pairwise-score parity가 통과한 경우에만 sibling staging을 최종 디렉터리로 원자 rename한다.
 - `scripts/gate_nemotron3_final_candidate.py`는 merged weight SHA로 legal·multidomain·Sionic summary의 model/revision을 다시 묶고, Qwen/Comsat 최고 clean reference 대비 legal/multidomain macro `-0.010`, finance/knowledge 각각 `-0.015` guard와 Sionic macro strict `>0.7930`을 모두 통과시킨다. public score는 checkpoint 선택에 쓰지 않았음을 report에 고정한다.
 - 최종 `publish_best_embedding_model.py`는 pinned upstream 계보가 Nemotron이면 `masked_mean+Ministral3Model`, Qwen이면 `last_token`을 각각 fail-closed로 검증하고 모델 카드에도 실제 pooling 계약을 기록한다. 따라서 Nemotron winner를 Qwen 계약으로 잘못 포장하거나 반대 경우를 허용하지 않는다.
 - `scripts/approve_nemotron3_public_release.py`는 사용자의 2026-07-17 “모델도 public” 지시를 authorization basis로 남기되, exact merged weight SHA·rights-safe manifest SHA·final gate·Sionic/공식6/comprehensive/clean/robustness summary SHA가 모두 맞을 때만 특정 public repo용 approval을 원자적으로 만든다.
-- Hugging Face 산출물은 **학습/파생 데이터와 모델 모두 public이 기본**이다. 공개 repo에는 source revision·license·변환·dedup·benchmark overlap·모델 계보를 카드와 manifest로 함께 싣고 업로드 전후 visibility/file-set/SHA를 재검증한다. 권리 불명확·재배포 금지 source가 섞인 기존 performance track은 공개하지 않고 rights-safe 데이터로 다시 만든다. 점수 선택 오염을 막기 위한 고정 소규모 holdout만 비공개 예외다.
+- Hugging Face 산출물은 **학습/파생 데이터, 중간 adapter checkpoint, 병합 모델, 최종 모델 모두 public이 기본**이다. 공개 repo에는 source revision·license·변환·dedup·benchmark overlap·모델 계보를 카드와 manifest로 함께 싣고 업로드 전후 visibility/file-set/SHA를 재검증한다. 권리 불명확·재배포 금지 source가 섞인 기존 performance track은 공개하지 않고 rights-safe 데이터로 다시 만든다. 점수 선택 오염을 막기 위한 고정 소규모 holdout만 비공개 예외다.
 - 최종 mined manifest는 `training_track=rights-safe-release`, `use_policy=public-redistributable-training`을 명시한다. 이 필드와 row별 권리·visibility·release blocker·SHA가 모두 맞아야 public checkpoint와 최종 model publisher가 받는다.
 - 최종 모델 카드는 이 manifest의 `artifact_id`를 우선 사용해 실제 학습 artifact인 `LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1`만 연결한다. 과거 Qwen target-adapted 데이터 repo를 문자열 추정으로 잘못 계승하지 않는다.
 - 법률 공개 source 적응 표기는 canonical `target-adapted-legal-public-source`로 고정해 모델 카드가 LawIRKo/AutoRAG 관련 점수를 clean zero-shot으로 오인하지 않도록 경고한다.
@@ -72,6 +72,7 @@ row는 101개였다.
 | `sionic-ai/comsat-embed-ko-8b-preview` | **0.7930** | **0.85261** 실측 | 9개 카드 + 1개 canonical 재현 | 기준 |
 | `Qwen/Qwen3-Embedding-8B` | 0.7825 | 0.82442 실측 | 9개 카드 + 1개 canonical 재현 | -0.0105 |
 | `codefuse-ai/F2LLM-v2-8B` | 0.7621 | 0.76789 실측 | 9개 카드 + 1개 canonical 재현 | -0.0309 |
+| `nvidia/Nemotron-3-Embed-8B-BF16@2b29550c` | 0.732212 실측 | 0.88550 실측 | 9개 canonical 전체 직접 측정 | -0.060788 |
 | `SamilPwC-AXNode-GenAI/PwC-Embedding_expr` | — | 0.78473 실측 | AutoRAG native max 512 | — |
 | 우리 smoke LoRA r32 | — | 미측정 | 성능 주장 금지 | — |
 | 우리 공개 후보 목표 | **> 0.7930** | 회귀 없음 | 9개 전부 직접 측정 | **> 0** |
@@ -114,8 +115,9 @@ row는 101개였다.
 > 역사적 실측을 뜻한다. 재시작 직후에는 `data/`, `outputs/`, 기존 `.venv-*`, model cache가
 > 없었으나, 현재 submodule 5개, 학습/검증 dataset 15개, comprehensive text용 dataset
 > 13개, core/teacher 4개와 외부 비교 모델 5개 cache, H100 학습 환경을 NFS에 exact 복원했다.
-> valid candidate는 아직 0이다. Qwen 200K는 step 1875에서 중단됐고 Nemotron-3
-> full Sionic9 평가가 active다. 정확한 재개 지점과 명령은 docs/36에 있다.
+> valid candidate는 아직 0이다. Qwen 200K는 step 1875에서 중단됐다. Nemotron-3
+> full Sionic9은 `0.732212`로 완료됐고 legal·multidomain base decision이 active다.
+> 정확한 재개 지점과 명령은 docs/36에 있다.
 > cache/env/data/checkpoint는 모두 `/home/ubuntu/data/Embedding`의 NFS 아래에 둔다.
 
 | 항목 | 상태 | 위치 |
