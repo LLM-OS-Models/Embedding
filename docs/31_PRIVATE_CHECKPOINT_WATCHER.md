@@ -58,6 +58,23 @@ The generated manifest contains only checksums, tensor summary, same-step
 validation evidence, pinned base lineage, run ID, and optional input-manifest
 and FA2-admission SHA-256 values. It contains no local path.
 
+## Local averaging archive
+
+Upload mode also retains the already validated adapter snapshot under the
+ignored watch-root directory `.adapter-checkpoint-archive/<training-version>/`.
+Each archived checkpoint contains only the adapter safetensors, the sanitized
+adapter config, and a checksum-bound `archive_manifest.json`. Trainer state,
+optimizer state, logs, data, and credentials are never copied there. The
+snapshot is atomically renamed only after the remote state record is durable.
+
+This archive is deliberately separate from Trainer retention. Even when an
+active run keeps only three full resume checkpoints, the final FP32 averaging
+stage can use the latest five validated adapters from the same exact training
+version. On watcher restart, an uploaded checkpoint that is still local but
+missing from the archive is revalidated and backfilled without another Hub
+commit. `--no-local-archive` is available for storage-constrained runs, but is
+not used by this performance-first campaign.
+
 ## Token handling
 
 Do not put a token on the command line and do not run `huggingface-cli login`.
@@ -117,6 +134,13 @@ previously unseen checkpoints and exits.
 adapter SHA `f004b4fb012eb69807147f4b24b40cddb6ab4a00380397a1c45a74a3c3b68ac2`는 local state와
 재조회 결과가 exact match였고 repo visibility는 private였다.
 
+Step 500도 `eval_loss=0.00343669`로 step 250보다 개선됐으며 commit
+`ea613d324cbccdacb1385bb9e437fa877df35af3`에 업로드됐다. 원격 prefix는 allowlist 3파일만
+포함했고, 698,419,728-byte LFS object SHA
+`36268988d5b529dc364ad242ef98900d0f80d126d490b40a0bbbe2d32cc386f7`와 manifest SHA
+`f77f0ac6788adda45a48eb60d5d088f625d5f111c8ef099753d2af5beb9ca249`가 local state와
+일치했으며 repo visibility도 private로 재확인했다.
+
 ## Idempotency and recovery
 
 The local state is
@@ -146,4 +170,5 @@ python -m pytest -q tests/test_watch_private_adapter_checkpoints.py
 It covers allowlist-only commits, private visibility checks, state and remote
 idempotency, incomplete/changing checkpoints, corrupt and non-finite tensors,
 symlink rejection, source races, token/path redaction, dotenv permissions, and
-public-repository refusal.
+public-repository refusal. It also checks the sanitized local averaging archive
+and archive-aware five-checkpoint selection.

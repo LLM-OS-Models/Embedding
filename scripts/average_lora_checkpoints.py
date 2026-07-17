@@ -28,6 +28,8 @@ WEIGHTS_NAME = "adapter_model.safetensors"
 CONFIG_NAME = "adapter_config.json"
 REPORT_NAME = "average_report.json"
 ARTIFACT_TYPE = "fp32-lora-checkpoint-average"
+ARCHIVE_NAME = ".adapter-checkpoint-archive"
+ARCHIVE_MANIFEST_NAME = "archive_manifest.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -97,6 +99,30 @@ def complete_checkpoint(path: Path) -> bool:
     )
 
 
+def complete_archived_checkpoint(path: Path) -> bool:
+    if not complete_checkpoint(path):
+        return False
+    manifest = path / ARCHIVE_MANIFEST_NAME
+    if manifest.is_symlink() or not manifest.is_file():
+        return False
+    try:
+        payload = load_json_object(manifest)
+        weights = path / WEIGHTS_NAME
+        config = path / CONFIG_NAME
+        adapter = payload["adapter"]
+        return bool(
+            payload.get("schema_version") == 1
+            and payload.get("status") == "complete"
+            and payload.get("checkpoint", {}).get("label") == path.name
+            and adapter["weights"]["sha256"] == sha256_file(weights)
+            and adapter["weights"]["size_bytes"] == weights.stat().st_size
+            and adapter["config"]["sha256"] == sha256_file(config)
+            and adapter["config"]["size_bytes"] == config.stat().st_size
+        )
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
 def select_checkpoints(
     *,
     run_dir: Path,
@@ -123,7 +149,7 @@ def select_checkpoints(
 
     # Averaging across retry/version directories would mix separate optimizer
     # trajectories.  Restrict discovery to the anchor's exact parent.
-    candidates = sorted(
+    live_candidates = sorted(
         (
             path.resolve()
             for path in anchor_checkpoint.parent.glob("checkpoint-*")
@@ -131,13 +157,39 @@ def select_checkpoints(
         ),
         key=lambda path: (checkpoint_step(path), str(path)),
     )
+    archive_version = run_dir / ARCHIVE_NAME / anchor_checkpoint.parent.name
+    archived_candidates: list[Path] = []
+    if archive_version.is_symlink():
+        raise ValueError("Archived training-version directory must not be a symlink")
+    if archive_version.exists() and not archive_version.is_dir():
+        raise ValueError("Archived training-version path is not a directory")
+    if archive_version.is_dir():
+        archive_paths = list(archive_version.glob("checkpoint-*"))
+        invalid_archives = [
+            path for path in archive_paths if not complete_archived_checkpoint(path)
+        ]
+        if invalid_archives:
+            raise ValueError("One or more archived checkpoints failed integrity validation")
+        archived_candidates = sorted(
+            (
+                path.resolve()
+                for path in archive_paths
+            ),
+            key=lambda path: (checkpoint_step(path), str(path)),
+        )
+    anchor_step = checkpoint_step(anchor_checkpoint)
+    use_archive = (
+        len(archived_candidates) >= minimum_checkpoints
+        and any(checkpoint_step(path) == anchor_step for path in archived_candidates)
+    )
+    candidates = archived_candidates if use_archive else live_candidates
     if len(candidates) < minimum_checkpoints:
         raise ValueError(
             f"Only {len(candidates)} complete checkpoints are available; "
             f"need at least {minimum_checkpoints}"
         )
     selected = candidates[-last_n:]
-    if anchor_checkpoint not in candidates:
+    if not use_archive and anchor_checkpoint not in candidates:
         raise ValueError("Anchor checkpoint disappeared during discovery")
     return selected
 
@@ -303,6 +355,11 @@ def build_average(
             "anchor_checkpoint": str(anchor_checkpoint),
             "selection": {
                 "policy": "latest_available_same_training_trajectory",
+                "source_pool": (
+                    "validated_local_archive"
+                    if ARCHIVE_NAME in selected[0].parts
+                    else "live_trainer_checkpoints"
+                ),
                 "requested_last_n": last_n,
                 "minimum_checkpoints": minimum_checkpoints,
                 "checkpoint_count": len(selected),

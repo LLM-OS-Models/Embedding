@@ -42,7 +42,7 @@ data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다
 | Git | 복구/방법론/capacity/soup/runtime storage guard 변경을 `origin/main`에 지속 push; credential은 one-shot helper에서만 사용 |
 | submodule | 4개 모두 pinned commit으로 복원 완료 |
 | 로컬 data/cache/output | 이전 checkpoint는 없음. 13개 pinned dataset, core/teacher 8B 4개, 법률 312,581문서를 exact 복원·검증 |
-| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 189/189 통과 |
+| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 190/190 통과 |
 | valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K와 나머지 frontier campaign 직렬 queue 대기 |
 | GPU | H100 80GB 1장, Qwen production 100% utilization |
 | NFS | `/home/ubuntu/data`, 49TB 중 48TB 가용, 사용률 3%, inode 1% |
@@ -347,6 +347,10 @@ stage는 200K, 1M, KD 세 variant, retrieval/SQuAD/health/AutoRAG, legal, combin
 존재 run과 fallback을 모두 순회하며 single best와 same-trajectory FP32 last-available-5
 평균을 같은 Grade-I clean/robustness gate에서 비교한다. 모델 이름에 맞는 실제 training
 manifest가 없으면 publish하지 않고, final selection 파일이 없으면 campaign을 실패시킨다.
+첫 Qwen run의 full resume checkpoint 보존 한도는 3이지만 private watcher가 검증·정제된
+adapter-only snapshot을 training version별로 별도 보존하므로 최종 last-5 FP32 평균에는
+동일 궤적의 최신 5개를 사용할 수 있다. 이 archive는 optimizer/trainer state와 데이터를
+포함하지 않으며, 이후 run은 full checkpoint도 5개를 유지한다.
 
 이 stage가 끝나기 전에는 과거 중단 run의 loss나 문서상 결과를 새 checkpoint 결과로
 간주하지 않는다.

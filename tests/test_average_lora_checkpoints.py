@@ -90,6 +90,63 @@ def test_average_rejects_config_drift(tmp_path: Path) -> None:
         )
 
 
+def test_average_prefers_validated_archive_beyond_trainer_retention(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    version = run / "v0"
+    anchor = make_checkpoint(version, 50, 5.0)
+    make_checkpoint(version, 40, 4.0)
+    archive_version = run / average.ARCHIVE_NAME / version.name
+    for step, value in ((10, 1.0), (20, 2.0), (30, 3.0), (40, 4.0), (50, 5.0)):
+        checkpoint = make_checkpoint(archive_version, step, value)
+        weights = checkpoint / average.WEIGHTS_NAME
+        config = checkpoint / average.CONFIG_NAME
+        (checkpoint / average.ARCHIVE_MANIFEST_NAME).write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "complete",
+                    "checkpoint": {"label": checkpoint.name, "step": step},
+                    "adapter": {
+                        "weights": {
+                            "sha256": average.sha256_file(weights),
+                            "size_bytes": weights.stat().st_size,
+                        },
+                        "config": {
+                            "sha256": average.sha256_file(config),
+                            "size_bytes": config.stat().st_size,
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+    output = tmp_path / "average"
+    report = average.build_average(
+        run_dir=run,
+        anchor_checkpoint=anchor,
+        output_dir=output,
+        last_n=5,
+        minimum_checkpoints=2,
+    )
+    assert report["selection"]["steps"] == [10, 20, 30, 40, 50]
+    assert report["selection"]["source_pool"] == "validated_local_archive"
+    tensors = load_file(output / average.WEIGHTS_NAME)
+    assert torch.equal(
+        tensors["layer.lora_A.weight"], torch.full((2, 3), 3.0)
+    )
+    with (archive_version / "checkpoint-10" / average.WEIGHTS_NAME).open("ab") as handle:
+        handle.write(b"corrupt")
+    with pytest.raises(ValueError, match="integrity validation"):
+        average.select_checkpoints(
+            run_dir=run,
+            anchor_checkpoint=anchor,
+            last_n=5,
+            minimum_checkpoints=2,
+        )
+
+
 def test_average_rejects_disqualified_or_insufficient_run(tmp_path: Path) -> None:
     run = tmp_path / "run"
     anchor = make_checkpoint(run / "v0", 10, 1.0)

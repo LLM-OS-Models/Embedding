@@ -102,6 +102,7 @@ def make_args(root: Path, *, upload: bool) -> Namespace:
         settle_seconds=0.0,
         once=True,
         upload=upload,
+        no_local_archive=False,
     )
 
 
@@ -321,6 +322,29 @@ class PrivateCheckpointWatcherTests(unittest.TestCase):
             staging = root / watcher.STAGING_NAME
             self.assertEqual(stat.S_IMODE(staging.stat().st_mode), 0o700)
             self.assertEqual(list(staging.iterdir()), [])
+            archive = (
+                root
+                / watcher.ARCHIVE_NAME
+                / checkpoint.parent.name
+                / checkpoint.name
+            )
+            self.assertTrue(archive.is_dir())
+            self.assertEqual(
+                {path.name for path in archive.iterdir()},
+                {
+                    watcher.WEIGHTS_NAME,
+                    watcher.CONFIG_NAME,
+                    watcher.ARCHIVE_MANIFEST_NAME,
+                },
+            )
+            archived_config = json.loads(
+                (archive / watcher.CONFIG_NAME).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                archived_config["base_model_name_or_path"],
+                watcher.DEFAULT_BASE_MODEL,
+            )
+            self.assertNotIn("unknown_local_path", archived_config)
             output = stream.getvalue()
             self.assertNotIn(str(root), output)
             self.assertNotIn("optimizer", output)

@@ -16,6 +16,7 @@ import math
 import os
 import re
 import shlex
+import shutil
 import stat
 import tempfile
 import time
@@ -40,7 +41,10 @@ DEFAULT_RUN_ID = "qwen3-embedding-8b-ko-performance200k-lora-r64"
 STATE_NAME = ".hf-candidate-upload-state.json"
 LOCK_NAME = ".hf-candidate-upload-state.lock"
 STAGING_NAME = ".hf-candidate-staging"
+ARCHIVE_NAME = ".adapter-checkpoint-archive"
+ARCHIVE_MANIFEST_NAME = "archive_manifest.json"
 CHECKPOINT_RE = re.compile(r"checkpoint-([1-9][0-9]*)")
+VERSION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 REPO_ID_RE = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*"
 )
@@ -157,6 +161,14 @@ def parse_args() -> argparse.Namespace:
         "--upload",
         action="store_true",
         help="Create/check the private repo and upload; omitted means local validation only",
+    )
+    parser.add_argument(
+        "--no-local-archive",
+        action="store_true",
+        help=(
+            "Do not retain validated adapter-only snapshots for later checkpoint "
+            "averaging. Upload mode archives them by default."
+        ),
     )
     return parser.parse_args()
 
@@ -297,6 +309,167 @@ def json_bytes(value: dict[str, Any]) -> bytes:
     return (
         json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode()
+
+
+def _prepare_private_directory(path: Path, *, code: str) -> None:
+    try:
+        if path.exists():
+            path_stat = path.lstat()
+            if path.is_symlink() or not stat.S_ISDIR(path_stat.st_mode):
+                raise WatcherError(code, "archive path is not a regular directory")
+            if path_stat.st_uid != os.geteuid():
+                raise WatcherError(code, "archive path has an unexpected owner")
+        else:
+            path.mkdir(mode=0o700)
+        os.chmod(path, 0o700)
+    except WatcherError:
+        raise
+    except OSError as error:
+        raise WatcherError(
+            code, f"archive directory setup failed ({type(error).__name__})"
+        ) from None
+
+
+def archive_destination(checkpoint: Path, archive_root: Path) -> Path:
+    version = checkpoint.parent.name
+    if not VERSION_RE.fullmatch(version):
+        raise WatcherError("unsafe_archive", "training version label is invalid")
+    if not CHECKPOINT_RE.fullmatch(checkpoint.name):
+        raise WatcherError("unsafe_archive", "checkpoint label is invalid")
+    return archive_root / version / checkpoint.name
+
+
+def archived_checkpoint_matches(
+    checkpoint: Path,
+    archive_root: Path,
+    *,
+    expected_weights_sha256: str,
+    expected_config_sha256: str | None = None,
+) -> bool:
+    """Cheaply validate an immutable archive using its creation-time hashes."""
+
+    destination = archive_destination(checkpoint, archive_root)
+    if not destination.exists():
+        return False
+    try:
+        destination_stat = destination.lstat()
+        if destination.is_symlink() or not stat.S_ISDIR(destination_stat.st_mode):
+            raise WatcherError("unsafe_archive", "archive checkpoint is not a directory")
+        if destination_stat.st_uid != os.geteuid():
+            raise WatcherError("unsafe_archive", "archive checkpoint has an unexpected owner")
+        manifest = load_small_json(
+            destination / ARCHIVE_MANIFEST_NAME,
+            max_bytes=1024 * 1024,
+            code="unsafe_archive",
+        )
+        weights = destination / WEIGHTS_NAME
+        config = destination / CONFIG_NAME
+        weights_signature = _regular_signature(weights)
+        config_signature = _regular_signature(config)
+        if weights_signature is None or config_signature is None:
+            raise WatcherError("unsafe_archive", "archive payload is missing or unsafe")
+        if manifest.get("schema_version") != 1 or manifest.get("status") != "complete":
+            raise WatcherError("unsafe_archive", "archive manifest is incomplete")
+        if manifest.get("checkpoint", {}).get("label") != checkpoint.name:
+            raise WatcherError("unsafe_archive", "archive checkpoint label drift")
+        adapter = manifest.get("adapter", {})
+        weights_meta = adapter.get("weights", {})
+        config_meta = adapter.get("config", {})
+        if (
+            weights_meta.get("sha256") != expected_weights_sha256
+            or weights_meta.get("size_bytes") != weights_signature[2]
+            or config_meta.get("size_bytes") != config_signature[2]
+        ):
+            raise WatcherError("unsafe_archive", "archive payload metadata drift")
+        if expected_config_sha256 is not None and (
+            config_meta.get("sha256") != expected_config_sha256
+        ):
+            raise WatcherError("unsafe_archive", "archive config metadata drift")
+        return True
+    except WatcherError:
+        raise
+    except (AttributeError, OSError, TypeError) as error:
+        raise WatcherError(
+            "unsafe_archive", f"archive validation failed ({type(error).__name__})"
+        ) from None
+
+
+def archive_validated_checkpoint(
+    checkpoint: Path,
+    validated: ValidatedCheckpoint,
+    *,
+    archive_root: Path,
+    run_id: str,
+) -> Path:
+    """Atomically retain only validated adapter bytes and sanitized metadata."""
+
+    _prepare_private_directory(archive_root, code="archive_failed")
+    destination = archive_destination(checkpoint, archive_root)
+    version_root = destination.parent
+    _prepare_private_directory(version_root, code="archive_failed")
+    if destination.exists():
+        if archived_checkpoint_matches(
+            checkpoint,
+            archive_root,
+            expected_weights_sha256=validated.weights_sha256,
+            expected_config_sha256=validated.config_sha256,
+        ):
+            return destination
+        raise WatcherError("archive_conflict", "existing archive does not match checkpoint")
+
+    temporary = Path(
+        tempfile.mkdtemp(prefix=f".{checkpoint.name}.archive-", dir=version_root)
+    )
+    try:
+        os.chmod(temporary, 0o700)
+        archived_weights = temporary / WEIGHTS_NAME
+        os.replace(validated.weights_path, archived_weights)
+        os.chmod(archived_weights, 0o600)
+        archived_config = temporary / CONFIG_NAME
+        archived_config.write_bytes(validated.config_bytes)
+        os.chmod(archived_config, 0o600)
+        manifest = {
+            "schema_version": 1,
+            "artifact_kind": "validated-local-lora-checkpoint-archive",
+            "status": "complete",
+            "created_at_utc": utc_now(),
+            "run_id": run_id,
+            "training_version": checkpoint.parent.name,
+            "checkpoint": {"label": validated.label, "step": validated.step},
+            "adapter": {
+                "weights": {
+                    "file": WEIGHTS_NAME,
+                    "sha256": validated.weights_sha256,
+                    "size_bytes": validated.weights_size,
+                },
+                "config": {
+                    "file": CONFIG_NAME,
+                    "sha256": validated.config_sha256,
+                    "size_bytes": len(validated.config_bytes),
+                },
+            },
+            "source_validation_manifest_sha256": validated.manifest_sha256,
+            "contents_allowlist": sorted(
+                {WEIGHTS_NAME, CONFIG_NAME, ARCHIVE_MANIFEST_NAME}
+            ),
+        }
+        manifest_path = temporary / ARCHIVE_MANIFEST_NAME
+        manifest_path.write_bytes(json_bytes(sanitize_json_value(manifest)))
+        os.chmod(manifest_path, 0o600)
+        if sha256_file(archived_weights) != validated.weights_sha256:
+            raise WatcherError("archive_failed", "archived adapter checksum mismatch")
+        if sha256_file(archived_config) != validated.config_sha256:
+            raise WatcherError("archive_failed", "archived config checksum mismatch")
+        os.replace(temporary, destination)
+        return destination
+    except WatcherError:
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise
+    except OSError as error:
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise WatcherError(
+            "archive_failed", f"checkpoint archive failed ({type(error).__name__})"
+        ) from None
 
 
 def load_small_json(path: Path, *, max_bytes: int, code: str) -> dict[str, Any]:
@@ -694,6 +867,8 @@ def discover_checkpoints(watch_dir: Path) -> list[Path]:
             current_path = Path(current)
             safe_directories: list[str] = []
             for name in directories:
+                if current_path == root and name in {STAGING_NAME, ARCHIVE_NAME}:
+                    continue
                 candidate = current_path / name
                 if candidate.is_symlink():
                     if CHECKPOINT_RE.fullmatch(name):
@@ -1012,9 +1187,51 @@ def scan_once(
 ) -> dict[str, Any]:
     state = load_state(state_path, args.repo_id)
     staging_dir = state_path.parent / STAGING_NAME
+    archive_enabled = bool(args.upload and not getattr(args, "no_local_archive", False))
+    archive_root = state_path.parent / ARCHIVE_NAME
     for checkpoint_path in discover_checkpoints(args.watch_dir):
         label = checkpoint_path.name
         if label in state["checkpoints"]:
+            if archive_enabled:
+                record = state["checkpoints"][label]
+                if archived_checkpoint_matches(
+                    checkpoint_path,
+                    archive_root,
+                    expected_weights_sha256=record["adapter_sha256"],
+                    expected_config_sha256=record["adapter_config_sha256"],
+                ):
+                    continue
+                validated = validate_checkpoint(
+                    checkpoint_path,
+                    staging_dir=staging_dir,
+                    base_model=args.base_model,
+                    base_revision=args.base_revision,
+                    run_id=args.run_id,
+                    training_data_sha256=args.training_data_sha256,
+                    training_manifest_sha256=args.training_manifest_sha256,
+                    admission_report_sha256=args.admission_report_sha256,
+                    settle_seconds=args.settle_seconds,
+                    sleep=sleep,
+                )
+                if validated is None:
+                    continue
+                try:
+                    if (
+                        validated.weights_sha256 != record["adapter_sha256"]
+                        or validated.config_sha256 != record["adapter_config_sha256"]
+                    ):
+                        raise WatcherError(
+                            "archive_conflict", "local checkpoint differs from upload state"
+                        )
+                    archive_validated_checkpoint(
+                        checkpoint_path,
+                        validated,
+                        archive_root=archive_root,
+                        run_id=args.run_id,
+                    )
+                    emit("archived_backfill", checkpoint=label, step=validated.step)
+                finally:
+                    validated.weights_path.unlink(missing_ok=True)
             continue
         validated = validate_checkpoint(
             checkpoint_path,
@@ -1063,6 +1280,13 @@ def scan_once(
                 manifest_sha256=recovered_manifest_sha,
             )
             write_state(state_path, state)
+            if archive_enabled:
+                archive_validated_checkpoint(
+                    checkpoint_path,
+                    validated,
+                    archive_root=archive_root,
+                    run_id=args.run_id,
+                )
             emit(
                 "remote_recovered" if recovered else "uploaded",
                 checkpoint=validated.label,
