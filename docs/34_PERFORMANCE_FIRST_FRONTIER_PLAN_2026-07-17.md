@@ -68,6 +68,13 @@ data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다
 500GiB/100만 inode와 `/tmp` 50GiB/10만 inode를 fail-closed 최소 headroom으로
 검사한다. 현재 NFS 약 48TB와 root 약 1.6TB가 가용하다.
 
+장기 stage 사이의 검사만으로는 공용 볼륨의 외부 급증을 잡지 못하므로 runtime watchdog도
+둔다. workspace 500GiB/100만 inode, root 100GiB/20만 inode, `/tmp` 50GiB/10만 inode를
+30초 간격으로 확인하며, 일시적인 `df` 실패를 피하려고 2회 연속 실패만 emergency로 본다.
+emergency에서는 시작 시 자기 자신이 PGID leader임을 확인했고 신호 직전에도 같은 identity인
+우리 Qwen training/watcher/frontier group에만 TERM, 30초 뒤 KILL을 보낸다. 다른 사용자 PID나
+경로를 탐색해 종료하지 않는다.
+
 ## 2. 참고 코드와 법률 원문 위치
 
 ### 고정 Git 코드

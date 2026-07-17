@@ -103,7 +103,7 @@ row는 101개였다.
 | Hugging Face 새 publish namespace | `LLM-OS-Models2` private model repo 생성+README write 실검증 완료; 기존 `LLM-OS-Models`는 source read-only | [`embedding-upload-permission-test-20260717`](https://huggingface.co/LLM-OS-Models2/embedding-upload-permission-test-20260717) |
 | Qwen3-Embedding 공식 저장소 | pinned submodule 복원 완료 (`44548aa5`) | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
 | 공식 후속학습 프레임워크 `ms-swift` | pinned submodule `3d61b931`, NFS `.venv-train-fa2`, CUDA 12.6/PyTorch 2.5 import+8B backward 통과 | [`third_party/ms-swift/`](third_party/ms-swift/) |
-| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 188/188 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
+| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 189/189 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
 | 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B revision은 고정; 재시작 후 local cache 복원 대기 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
 | Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
 | 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
@@ -124,6 +124,7 @@ row는 101개였다.
 | Clean 법률 retrieval 10K | training document overlap 0, benchmark exact overlap 0, 독립 verifier pass | [`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0) |
 | 대화형 noise robustness | prompt on/off × noise 0/1/5%, exact rank·cache·모델 카드 자동화; baseline 실행 대기 | [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md) |
 | 200K 학습 backend | 2026-07-17 exact homogeneous-order 5+5-step: SDPA 11.96, FA2 11.53 s/step(1.0373x); FA2 탈락, exact 검증된 `.venv-train-fa2 + SDPA` 선택 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
+| runtime storage watchdog | workspace 500GiB/100만 inode, root 100GiB/20만 inode, `/tmp` 50GiB/10만 inode를 30초마다 검사. 2회 연속 실패 때만 시작 시 검증한 우리 campaign PGID에 TERM→30초→KILL; 다른 프로세스는 신호하지 않음 | [`watch_storage_headroom.sh`](scripts/watch_storage_headroom.sh) |
 | 200K production·capacity | 2026-07-17 11:46 KST Qwen 시작; 199,904행·3,123-step, 양쪽 shuffle off, offline/token-free. 종료 뒤 Comsat 동일 200K → clean-only 계보 선택 → 승자 raw base last4 partial-full 200K → capacity 포함 재선택 → 1M/KD/전문가/수프/최종 clean selection을 자동 실행하는 단일 직렬 queue active | [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
 | last4 partial-full capacity challenger | Qwen/Comsat clean 승자 계보 하나만 동일 199,904행·3,123-step·global batch 64로 비교. 실제 microbatch 8/HN4 메모리 probe 실패 시 OOM 근거를 남기고 skip; 성공 시 상위 4 block+final norm 771.790M parameter update. input/completion log SHA와 exact base revision이 complete contract에 묶여야 package 가능 | [tuning strategy](experiments/070_tuning_strategy/) |
 | private checkpoint watcher | Qwen step-250 full-payload finite 검증·private upload·원격 재검증 완료: HF commit `7da3a573`, manifest/adapter SHA exact match. watcher CPU thread 1로 제한하고 Comsat도 같은 검증 runtime으로 고정 | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
