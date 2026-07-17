@@ -16,11 +16,18 @@ from scripts.train_nemotron3_public_lora import (
 )
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 class TrainNemotron3PublicLoraTest(unittest.TestCase):
+    def test_training_query_prompt_matches_fixed_sionic_protocol(self) -> None:
+        protocol = json.loads((ROOT / "configs/sionic9_protocol.json").read_text())
+        self.assertEqual(QUERY_PROMPT, protocol["query_prompt"])
+
     def test_contract_requires_public_rights_and_exact_train_sha(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
