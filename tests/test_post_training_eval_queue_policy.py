@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 QUEUE = ROOT / "scripts/run_post_training_eval_queue.sh"
+SCALE_QUEUE = ROOT / "scripts/run_scale_1m_queue.sh"
+FRONTIER_QUEUE = ROOT / "scripts/run_frontier_200k_pair_queue.sh"
 
 
 def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
@@ -27,7 +29,7 @@ def test_post_training_queue_selects_clean_before_public_benchmarks() -> None:
 
 def test_queue_uses_safe_batches_and_token_free_offline_evaluation() -> None:
     source = QUEUE.read_text(encoding="utf-8")
-    assert "CAMPAIGN_EVAL_BATCH_SIZES:-8 4 2" in source
+    assert "CAMPAIGN_EVAL_BATCH_SIZES:-192 128 64 32 16 8 4 2" in source
     assert "CAMPAIGN_EVAL_BATCH_SIZE:-192" not in source
     assert "unset HF_TOKEN HUGGINGFACE_HUB_TOKEN" in source
     assert 'PUBLISH_HF_TOKEN_FILE="$ROOT/.env"' in source
@@ -45,6 +47,41 @@ def test_queue_uses_safe_batches_and_token_free_offline_evaluation() -> None:
         index = source.index(evaluator)
         invocation = source[max(0, index - 180) : index + 250]
         assert '"${OFFLINE_ENV[@]}"' in invocation
+
+
+def test_queue_compares_qwen_and_comsat_under_the_same_200k_contract() -> None:
+    source = QUEUE.read_text(encoding="utf-8")
+    assert "qwen3-embedding-8b-ko-performance200k-lora-r64" in source
+    assert "comsat-embed-ko-8b-performance200k-lora-r64" in source
+    assert "clean-first-selection.json" in source
+
+
+def test_frontier_queue_chains_selection_scale_and_target_adaptation() -> None:
+    frontier = FRONTIER_QUEUE.read_text(encoding="utf-8")
+    post_eval = frontier.index("run_post_training_eval_queue.sh")
+    selection_gate = frontier.index('[[ ! -s "$POST_EVAL_SELECTION" ]]', post_eval)
+    scale = frontier.index("run_scale_1m_queue.sh", selection_gate)
+    legal = frontier.index("run_legal_adaptation_queue.sh", scale)
+    assert post_eval < selection_gate < scale < legal
+    assert frontier.count("embedding_require_storage_headroom") >= 6
+
+    scale_source = SCALE_QUEUE.read_text(encoding="utf-8")
+    assert "POSTTRAIN_SELECTION:-$ROOT/outputs/post-training-eval-20260717-frontier/clean-first-selection.json" in scale_source
+
+
+def test_campaign_queues_resolve_an_available_training_runtime() -> None:
+    queues = (
+        QUEUE,
+        SCALE_QUEUE,
+        ROOT / "scripts/run_legal_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_squad_adaptation_queue.sh",
+        ROOT / "scripts/run_sionic_combined_adaptation_queue.sh",
+        ROOT / "scripts/run_night_gpu_queue.sh",
+    )
+    for queue in queues:
+        source = queue.read_text(encoding="utf-8")
+        assert "embedding_resolve_train_runtime" in source, queue
+        assert ".venv-train/bin/python" not in source, queue
 
 
 def test_queue_can_only_publish_the_clean_selected_private_candidate() -> None:

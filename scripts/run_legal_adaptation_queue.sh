@@ -4,6 +4,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 source "$ROOT/scripts/backend_admission.sh"
+embedding_resolve_train_runtime
+UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/legal-adaptation-20260711}"
@@ -141,7 +143,7 @@ fi
 
 if [[ ! -s "$MINED_PROVENANCE" ]]; then
   run_stage project-legal-provenance \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/project_mined_provenance.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/project_mined_provenance.py" \
     --input-provenance "$DATA_DIR/provenance.jsonl" --mining-audit "$AUDIT" \
     --output "$MINED_PROVENANCE" \
     --manifest-output "$DATA_DIR/provenance.faiss-r095-n7.manifest.json" || exit 4
@@ -150,7 +152,7 @@ fi
 if [[ ! -s "$ORDERED_MANIFEST" \
     || "$(jq -r '.length_bucketed // false' "$ORDERED_MANIFEST")" != true ]]; then
   run_stage order-legal-homogeneous-batches \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/build_homogeneous_batches.py" \
     --train "$MINED" --provenance "$MINED_PROVENANCE" \
     --output "$ORDERED" --provenance-output "$ORDERED_PROVENANCE" \
     --manifest-output "$ORDERED_MANIFEST" --batch-size 16 --seed 42 \
@@ -161,7 +163,7 @@ if [[ ! -s "$CURRICULUM_MANIFEST" ]]; then
   LEGAL_ROWS="$(jq -r '.output_rows' "$ORDERED_MANIFEST")"
   REPLAY_ROWS="$((LEGAL_ROWS * 3))"
   run_stage build-legal25-general75-curriculum \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_replay_curriculum.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/build_replay_curriculum.py" \
     --primary-train "$ORDERED" --primary-provenance "$ORDERED_PROVENANCE" \
     --primary-rows "$LEGAL_ROWS" \
     --replay-train "$GENERAL_TRAIN" --replay-provenance "$GENERAL_PROVENANCE" \
@@ -187,7 +189,7 @@ if (( MAX_STEPS < 1 )); then
   exit 6
 fi
 run_stage validate-legal-mined-data \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/validate_embedding_jsonl.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/validate_embedding_jsonl.py" \
   "$CURRICULUM" "$VAL_FILE" || exit 6
 
 train_legal() {
@@ -220,7 +222,7 @@ if ! find "$ROOT/outputs/$RUN_NAME" -maxdepth 3 -type d -name "checkpoint-$MAX_S
 fi
 checkpoint=""
 if (( primary_status == 0 )); then
-  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
 fi
 if [[ -z "$checkpoint" ]]; then
   fallback="${RUN_NAME}-b4"
@@ -228,11 +230,11 @@ if [[ -z "$checkpoint" ]]; then
   RUN_NAME="$fallback"
   MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
   MODEL_DIR="$ROOT/$MODEL_REL"
-  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 6
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 6
 fi
 
 retry_stage upload-derived-legal-replay 3 \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --manifest "$CURRICULUM_MANIFEST" \
   --mining-manifest "$MINING_MANIFEST" --mining-audit "$AUDIT" \
@@ -247,12 +249,12 @@ DATA_UPLOAD_PID=$!
 echo "[$(timestamp)] derived legal dataset upload started pid=$DATA_UPLOAD_PID"
 
 run_stage verify-legal-adapter \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
   --adapter "$checkpoint" --data "$VAL_FILE" --model "$MINING_MODEL" \
   --output "$LOG_DIR/verification.json" || exit 7
 if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
   run_stage merge-legal-adapter \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" \
     --base-model "$MINING_MODEL" --base-revision "$MINING_REVISION" \
     --device cuda --dtype bfloat16 --local-files-only || exit 8
@@ -296,7 +298,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   [[ -s "$ROBUST_SUMMARY" ]] && \
     robustness_args+=(--robustness-summary "$ROBUST_SUMMARY")
   if retry_stage publish-legal-target-adapted 3 \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" --training-manifest "$CURRICULUM_MANIFEST" \
     "${clean_args[@]}" \

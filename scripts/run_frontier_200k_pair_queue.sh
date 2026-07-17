@@ -21,6 +21,10 @@ TRAIN_FILE="$ROOT/outputs/data/performance-v1/ablation-200k/train.homogeneous-b1
 TRAIN_MANIFEST="$ROOT/outputs/data/performance-v1/ablation-200k/homogeneous-b16.manifest.json"
 VAL_FILE="$ROOT/data/processed/ko_triplet_pilot_10k/validation.hn-qwen3-r095-n4.jsonl"
 QUEUE_LOG="$ROOT/outputs/frontier-200k-pair-queue.log"
+POST_EVAL_LOG="$ROOT/outputs/post-training-eval-20260717-frontier"
+POST_EVAL_SELECTION="$POST_EVAL_LOG/clean-first-selection.json"
+SCALE_LOG="$ROOT/outputs/scale-1m-20260717-frontier"
+LEGAL_LOG="$ROOT/outputs/legal-adaptation-20260717-frontier"
 
 mkdir -p "$COMSAT_RUN"
 exec > >(tee -a "$QUEUE_LOG") 2>&1
@@ -102,3 +106,36 @@ env EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
   "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 
 echo "[$(timestamp)] Comsat 200K production completed"
+
+# The watcher has finished its production responsibility.  Stop it explicitly
+# before moving into evaluation so the EXIT trap cannot linger for the rest of
+# the multi-day campaign.
+cleanup
+trap - EXIT INT TERM
+
+embedding_require_storage_headroom "$ROOT" 500 1000000
+embedding_require_storage_headroom /tmp 50 100000
+echo "[$(timestamp)] starting clean-first Qwen/Comsat comparison"
+env WAIT_PID= LOG_DIR="$POST_EVAL_LOG" \
+  CAMPAIGN_EVAL_BATCH_SIZES="192 128 64 32 16 8 4 2" \
+  bash "$ROOT/scripts/run_post_training_eval_queue.sh"
+if [[ ! -s "$POST_EVAL_SELECTION" ]]; then
+  echo "[$(timestamp)] clean-first selection was not produced" >&2
+  exit 20
+fi
+
+embedding_require_storage_headroom "$ROOT" 500 1000000
+embedding_require_storage_headroom /tmp 50 100000
+echo "[$(timestamp)] starting 1M scale from the clean-selected lineage"
+env WAIT_PID= LOG_DIR="$SCALE_LOG" \
+  POSTTRAIN_SELECTION="$POST_EVAL_SELECTION" \
+  bash "$ROOT/scripts/run_scale_1m_queue.sh"
+
+embedding_require_storage_headroom "$ROOT" 500 1000000
+embedding_require_storage_headroom /tmp 50 100000
+echo "[$(timestamp)] starting legal replay and combined target adaptation"
+env WAIT_PID= LOG_DIR="$LEGAL_LOG" \
+  ENABLE_SIONIC_COMBINED_ADAPTATION=1 \
+  bash "$ROOT/scripts/run_legal_adaptation_queue.sh"
+
+echo "[$(timestamp)] frontier campaign queue completed"

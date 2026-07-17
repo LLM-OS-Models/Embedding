@@ -8,6 +8,8 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+embedding_resolve_train_runtime
+UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/post-training-eval-20260711}"
@@ -25,6 +27,8 @@ RUNS=(
   qwen3-embedding-8b-ko-performance50k-lora-r64-b8
   qwen3-embedding-8b-ko-performance200k-lora-r64
   qwen3-embedding-8b-ko-performance200k-lora-r64-b8
+  comsat-embed-ko-8b-performance200k-lora-r64
+  comsat-embed-ko-8b-performance200k-lora-r64-b8
   qwen3-embedding-8b-ko-hn10k-f2dual-lora-r64
   qwen3-embedding-8b-ko-hn10k-f2dual-t002-lora-r64
   qwen3-embedding-8b-ko-hn10k-f2dual-mrl-lora-r64
@@ -40,7 +44,7 @@ exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
 unset HF_TOKEN HUGGINGFACE_HUB_TOKEN
 PUBLISH_HF_TOKEN_FILE="$ROOT/.env"
-read -r -a EVAL_BATCHES <<< "${CAMPAIGN_EVAL_BATCH_SIZES:-8 4 2}"
+read -r -a EVAL_BATCHES <<< "${CAMPAIGN_EVAL_BATCH_SIZES:-192 128 64 32 16 8 4 2}"
 for batch in "${EVAL_BATCHES[@]}"; do
   [[ "$batch" =~ ^[1-9][0-9]*$ ]] || {
     echo "Invalid evaluation batch size: $batch" >&2
@@ -186,7 +190,7 @@ for run_name in "${RUNS[@]}"; do
     echo "[$(timestamp)] skip disqualified candidate: $run_name"
     continue
   fi
-  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$run_dir" --print-path 2>/dev/null)" || continue
   [[ -n "$checkpoint" ]] || continue
   merged_rel="artifacts/models/${run_name}-best-merged"
@@ -194,7 +198,7 @@ for run_name in "${RUNS[@]}"; do
   if [[ ! -s "$merged/merge_report.json" ]]; then
     run_stage "merge-$run_name" \
       "${OFFLINE_ENV[@]}" \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
       --adapter "$checkpoint" --output-dir "$merged" \
       --device cuda --dtype bfloat16 --local-files-only || continue
   fi
@@ -213,7 +217,7 @@ for run_name in "${FULL_RUNS[@]}"; do
     echo "[$(timestamp)] skip disqualified candidate: $run_name"
     continue
   fi
-  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$run_dir" --checkpoint-kind full --print-path 2>/dev/null)" || continue
   [[ -n "$checkpoint" ]] || continue
   packaged_rel="artifacts/models/${run_name}-best-full"
@@ -300,7 +304,7 @@ if [[ -s "$SELECTION" ]]; then
     if [[ ! -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
       echo "[$(timestamp)] no Hugging Face token file available; skip private publication"
     elif retry_stage "publish-best-private-candidate" 3 \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
       --model-dir "$best_abs" \
       --sionic-summary "$sionic_summary" \
       --official-summary "$official_summary" \

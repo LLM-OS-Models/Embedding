@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
+embedding_resolve_train_runtime
 cd "$ROOT"
 if [[ -f .env ]]; then
   set -a
@@ -10,7 +12,7 @@ if [[ -f .env ]]; then
 fi
 [[ -n "${GITHUB:-}" ]] || { echo "GITHUB token is unavailable" >&2; exit 2; }
 
-"$ROOT/.venv-train/bin/python" "$ROOT/scripts/summarize_legal_holdout_results.py" \
+"$EMBEDDING_TRAIN_PYTHON" "$ROOT/scripts/summarize_legal_holdout_results.py" \
   "$ROOT/outputs/evaluation/legal-source-heldout" \
   --output "$ROOT/reports/legal-source-heldout-results.json" \
   --robustness-root "$ROOT/outputs/evaluation/conversational-noise-robustness" \

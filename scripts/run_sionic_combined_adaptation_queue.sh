@@ -4,6 +4,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 source "$ROOT/scripts/backend_admission.sh"
+embedding_resolve_train_runtime
+UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/sionic-combined-adaptation-20260712}"
 OUT_DIR="$ROOT/outputs/data/sionic-combined-target-v1"
@@ -127,7 +129,7 @@ if [[ ! -s "$MANIFEST" ]]; then
   component_args=()
   for value in "${components[@]}"; do component_args+=(--component "$value"); done
   run_stage build-sionic-combined-curriculum \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_multidomain_curriculum.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/build_multidomain_curriculum.py" \
     "${component_args[@]}" --output "$CURRICULUM" \
     --provenance-output "$PROVENANCE" --manifest-output "$MANIFEST" \
     --batch-size 16 --seed 42 \
@@ -138,7 +140,7 @@ run_stage audit-sionic-combined-quality \
   --train "$CURRICULUM" --provenance "$PROVENANCE" --output "$QUALITY" \
   --expected-batch-size 16 || exit 3
 run_stage audit-sionic-combined-overlap \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
   --train "$CURRICULUM" --provenance "$PROVENANCE" \
   --blocklist-root "$ROOT/outputs/decontamination/benchmark_blocklist" \
   --output "$OVERLAP" --fail-on-critical || exit 3
@@ -172,11 +174,11 @@ train_combined() {
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }
 
-checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoint.py" \
+checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
   "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
 if [[ -z "$checkpoint" ]]; then
   train_combined "$RUN_NAME" 8 8 || true
-  checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
 fi
 if [[ -z "$checkpoint" ]]; then
@@ -185,12 +187,12 @@ if [[ -z "$checkpoint" ]]; then
   RUN_NAME="$fallback"
   MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
   MODEL_DIR="$ROOT/$MODEL_REL"
-  checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 5
 fi
 
 retry_stage upload-combined-curriculum 3 \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
   --train "$CURRICULUM" --provenance "$PROVENANCE" --manifest "$MANIFEST" \
   --quality-audit "$QUALITY" --benchmark-overlap-audit "$OVERLAP" \
   --repo-id LLM-OS-Models2/korean-embedding-sionic-combined-replay-v1 \
@@ -205,12 +207,12 @@ retry_stage upload-combined-curriculum 3 \
 DATA_UPLOAD_PID=$!
 
 run_stage verify-combined-adapter \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
   --adapter "$checkpoint" --data "$VAL_FILE" --model "$BASE_MODEL" \
   --output "$LOG_DIR/verification.json" || exit 6
 if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
   run_stage merge-combined-adapter \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" --base-model "$BASE_MODEL" \
     --base-revision "" --device cuda --dtype bfloat16 --local-files-only || exit 7
 fi
@@ -238,7 +240,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
   [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
   if retry_stage publish-combined-model 3 \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
     --training-manifest "$MANIFEST" \

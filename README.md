@@ -11,7 +11,7 @@ Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 
 ## 한 줄 결론
 
 - 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
-- 현재 valid performance candidate는 **0개**다. 재시작으로 소실된 공개 data/model cache를 exact revision으로 복원했고, 2026-07-17 11:46 KST부터 Qwen clean-lineage 200K를 처음부터 다시 학습 중이다.
+- 현재 valid performance candidate는 **0개**다. 재시작으로 소실된 공개 data/model cache를 exact revision으로 복원했고, 2026-07-17 11:46 KST부터 Qwen clean-lineage 200K를 처음부터 다시 학습 중이다. 성공 종료 뒤 Comsat 200K → clean-first 비교 → 1M → 타깃/법률 통합 적응까지 단일 직렬 queue가 이어받는다.
 - 본선은 `Qwen clean lineage`와 `Comsat Korean warm-start lineage`를 같은 200K 조건으로 비교한 뒤, 1M general → current-student hybrid mining → Qwen reranker score-quantile KD → 400K target → last-5 checkpoint merge 순으로 진행한다.
 - checkpoint는 public score가 아니라 Grade-I clean retrieval에서 먼저 고르며 NDCG@10 차이 `0.002` 이하는 near-tie로 처리합니다. Sionic 9와 공식 Korean 6은 local winner에 final-once로 실행합니다.
 - Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
@@ -103,7 +103,7 @@ row는 101개였다.
 | Hugging Face 새 publish namespace | `LLM-OS-Models2` private model repo 생성+README write 실검증 완료; 기존 `LLM-OS-Models`는 source read-only | [`embedding-upload-permission-test-20260717`](https://huggingface.co/LLM-OS-Models2/embedding-upload-permission-test-20260717) |
 | Qwen3-Embedding 공식 저장소 | pinned submodule 복원 완료 (`44548aa5`) | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
 | 공식 후속학습 프레임워크 `ms-swift` | pinned submodule `3d61b931`, NFS `.venv-train-fa2`, CUDA 12.6/PyTorch 2.5 import+8B backward 통과 | [`third_party/ms-swift/`](third_party/ms-swift/) |
-| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 147/147 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
+| MTEB/FAISS 평가 환경 | NFS `.venv-mteb` 복원; MTEB 2.18.0, FAISS 1.14.3, NumPy 1.26.4, Transformers 5.12.1 import gate·전체 test 150/150 통과 | [`bootstrap_mteb_env.sh`](scripts/bootstrap_mteb_env.sh) |
 | 상위 비교 모델 local cache | F2 8B, PwC, Harrier 27B, KaLM 12B, Nemotron 8B revision은 고정; 재시작 후 local cache 복원 대기 | [상위 모델 평가 매트릭스](docs/20_TOP_MODEL_LOCAL_EVAL_MATRIX.md) |
 | Sionic 벤치마크 감사 | 1차 완료 | [docs/02_COMSAT_AUDIT.md](docs/02_COMSAT_AUDIT.md) |
 | 2026-07 라이브 MTEB 및 상위 모델 감사 | 완료, 새 결과는 날짜 고정 갱신 | [docs/03_SOTA_MODELS_2026-07.md](docs/03_SOTA_MODELS_2026-07.md) |
@@ -124,7 +124,7 @@ row는 101개였다.
 | Clean 법률 retrieval 10K | training document overlap 0, benchmark exact overlap 0, 독립 verifier pass | [`LLM-OS-Models/korean-legal-source-heldout-retrieval-v1`](https://huggingface.co/datasets/LLM-OS-Models/korean-legal-source-heldout-retrieval-v1/tree/ee1300f04ea03d66bb51e23bbbda34376fece3f0) |
 | 대화형 noise robustness | prompt on/off × noise 0/1/5%, exact rank·cache·모델 카드 자동화; baseline 실행 대기 | [종합 평가 설계](docs/10_COMPREHENSIVE_SUITE.md) |
 | 200K 학습 backend | 2026-07-17 exact homogeneous-order 5+5-step: SDPA 11.96, FA2 11.53 s/step(1.0373x); FA2 탈락, exact 검증된 `.venv-train-fa2 + SDPA` 선택 | [진행 현황](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
-| 200K LoRA r64 production | 2026-07-17 11:46 KST Qwen 시작; 199,904행·3,123-step, 양쪽 shuffle off, offline/token-free. 성공 종료 뒤 Comsat exact probe+동일 200K를 자동 시작하는 직렬 queue active | [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
+| 200K LoRA r64 production | 2026-07-17 11:46 KST Qwen 시작; 199,904행·3,123-step, 양쪽 shuffle off, offline/token-free. 성공 종료 뒤 Comsat exact probe+동일 200K, clean-first 비교, 1M, retrieval/SQuAD/health/AutoRAG, 법률 replay, combined 400K를 자동 실행하는 단일 직렬 queue active | [2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
 | private checkpoint watcher | active; step-250부터 finite/same-step eval gate를 통과한 allowlist 3파일만 `LLM-OS-Models2` private 복구 artifact로 업로드 | [private watcher](docs/31_PRIVATE_CHECKPOINT_WATCHER.md) |
 | clean-first model selection | valid performance candidate 0; Grade-I-not-Z 법률 10K 우선, clean/robustness epsilon `0.002`, public Sionic/official score는 selector 입력에서 제외 | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |
 | text-only comprehensive diagnostic | 7 tasks·414 selected subsets; K-HATERS는 unsupported registered task, visual-document 5 assets는 modality 불일치로 명시 제외; public medium/high contamination diagnostic | [종합 선택 계약](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md) |

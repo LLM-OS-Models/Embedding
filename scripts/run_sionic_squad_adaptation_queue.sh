@@ -8,6 +8,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 source "$ROOT/scripts/backend_admission.sh"
+embedding_resolve_train_runtime
+UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 TARGET_KIND="${TARGET_KIND:-squad}"
@@ -116,7 +118,7 @@ fi
 if [[ ! -s "$BOOTSTRAP" || ! -s "$PROVENANCE" ]]; then
   if [[ "$TARGET_KIND" == retrieval_family ]]; then
     run_stage "build-sionic-${TARGET_KIND}-data" \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/extract_training_source_subset.py" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/extract_training_source_subset.py" \
       --train "$GENERAL_DIR/train.jsonl" \
       --provenance "$GENERAL_DIR/provenance.jsonl" \
       --output-dir "$DATA_DIR" \
@@ -125,7 +127,7 @@ if [[ ! -s "$BOOTSTRAP" || ! -s "$PROVENANCE" ]]; then
       --expected-rows 4146 || exit 2
   else
     run_stage "build-sionic-${TARGET_KIND}-data" \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_performance_mix.py" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/build_performance_mix.py" \
       --phase "$TARGET_PHASE" --output-dir "$DATA_DIR" || exit 2
   fi
 fi
@@ -175,14 +177,14 @@ fi
 
 if [[ ! -s "$MINED_PROVENANCE" ]]; then
   run_stage "project-sionic-${TARGET_KIND}-mined-provenance" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/project_mined_provenance.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/project_mined_provenance.py" \
     --input-provenance "$PROVENANCE" --mining-audit "$MINING_AUDIT" \
     --output "$MINED_PROVENANCE" \
     --manifest-output "$DATA_DIR/provenance.faiss-current-r095-n7.manifest.json" || exit 4
 fi
 if [[ ! -s "$ORDERED_MANIFEST" ]]; then
   run_stage "order-sionic-${TARGET_KIND}-homogeneous" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/build_homogeneous_batches.py" \
     --train "$MINED" --provenance "$MINED_PROVENANCE" \
     --output "$ORDERED" --provenance-output "$ORDERED_PROVENANCE" \
     --manifest-output "$ORDERED_MANIFEST" --batch-size 16 --seed 42 \
@@ -193,7 +195,7 @@ PRIMARY_ROWS="$(jq -r '.output_rows' "$ORDERED_MANIFEST")"
 PRIMARY_ROWS="$((PRIMARY_ROWS / 16 * 16))"
 if [[ ! -s "$CURRICULUM_MANIFEST" ]]; then
   run_stage "build-${TARGET_KIND}50-general50-curriculum" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_replay_curriculum.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/build_replay_curriculum.py" \
     --primary-train "$ORDERED" --primary-provenance "$ORDERED_PROVENANCE" \
     --primary-rows "$PRIMARY_ROWS" --replay-train "$GENERAL_TRAIN" \
     --replay-provenance "$GENERAL_PROVENANCE" --replay-rows "$PRIMARY_ROWS" \
@@ -206,7 +208,7 @@ run_stage "audit-${TARGET_KIND}50-general50-curriculum" \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --output "$CURRICULUM_QUALITY" --expected-batch-size 16 || exit 6
 run_stage "audit-${TARGET_KIND}50-general50-benchmark-overlap" \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/audit_training_benchmark_overlap.py" \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --blocklist-root "$ROOT/outputs/decontamination/benchmark_blocklist" \
   --output "$CURRICULUM_OVERLAP" --fail-on-critical || exit 6
@@ -239,13 +241,13 @@ train_target() {
     "$ROOT/experiments/020_hard_negative/train_pilot_lora_r64.sh"
 }
 
-checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoint.py" \
+checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
   "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
 status=0
 if [[ -z "$checkpoint" ]]; then
   train_target "$RUN_NAME" "$TARGET_TRAIN_BATCH_SIZE" "$TARGET_GRAD_ACCUM_STEPS" || status=$?
   if (( status == 0 )); then
-    checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoint.py" \
+    checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
       "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
   fi
 else
@@ -258,12 +260,12 @@ if [[ -z "$checkpoint" ]]; then
   RUN_NAME="$fallback"
   MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
   MODEL_DIR="$ROOT/$MODEL_REL"
-  checkpoint="$("$ROOT/.venv-train/bin/python" "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 7
 fi
 
 retry_stage "upload-derived-${TARGET_KIND}-replay" 3 \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
   --train "$CURRICULUM" --provenance "$CURRICULUM_PROVENANCE" \
   --manifest "$CURRICULUM_MANIFEST" --mining-manifest "$MINING_MANIFEST" \
   --mining-audit "$MINING_AUDIT" --quality-audit "$CURRICULUM_QUALITY" \
@@ -275,12 +277,12 @@ retry_stage "upload-derived-${TARGET_KIND}-replay" 3 \
 DATA_UPLOAD_PID=$!
 
 run_stage "verify-${TARGET_KIND}-target-adapter" \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
   --adapter "$checkpoint" --data "$VAL_FILE" --model "$MINING_MODEL" \
   --output "$LOG_DIR/verification.json" || exit 8
 if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
   run_stage "merge-${TARGET_KIND}-target-adapter" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" --base-model "$MINING_MODEL" \
     --base-revision "$MINING_REVISION" --device cuda --dtype bfloat16 \
     --local-files-only || exit 9
@@ -311,7 +313,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   clean_args=()
   [[ -s "$CLEAN_SUMMARY" ]] && clean_args+=(--clean-summary "$CLEAN_SUMMARY")
   if retry_stage "publish-${TARGET_KIND}-target-model" 3 \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" "${clean_args[@]}" \
     --training-manifest "$CURRICULUM_MANIFEST" \

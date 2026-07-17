@@ -82,6 +82,32 @@ embedding_require_storage_headroom() {
   fi
 }
 
+embedding_resolve_train_runtime() {
+  local requested="${TRAIN_ENV:-}" candidate
+  EMBEDDING_TRAIN_ENV=
+  if [[ -n "$requested" && -x "$requested/bin/python" ]]; then
+    EMBEDDING_TRAIN_ENV="$requested"
+  else
+    for candidate in \
+      "$EMBEDDING_RUNTIME_ROOT/.venv-train" \
+      "$EMBEDDING_RUNTIME_ROOT/.venv-train-fa2"; do
+      if [[ -x "$candidate/bin/python" ]]; then
+        EMBEDDING_TRAIN_ENV="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$EMBEDDING_TRAIN_ENV" ]]; then
+    echo "no repository-local training Python environment is available" >&2
+    return 4
+  fi
+  if [[ "$EMBEDDING_TRAIN_ENV" == "$EMBEDDING_RUNTIME_ROOT/.venv-train-fa2" ]]; then
+    embedding_enable_torch25_swift_compat
+  fi
+  EMBEDDING_TRAIN_PYTHON="$EMBEDDING_TRAIN_ENV/bin/python"
+  export EMBEDDING_TRAIN_ENV EMBEDDING_TRAIN_PYTHON
+}
+
 embedding_enable_torch25_swift_compat() {
   local compat="$EMBEDDING_RUNTIME_ROOT/compat/torch25"
   case ":${PYTHONPATH:-}:" in

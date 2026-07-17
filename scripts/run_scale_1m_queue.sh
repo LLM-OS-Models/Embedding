@@ -4,6 +4,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
 source "$ROOT/scripts/backend_admission.sh"
+embedding_resolve_train_runtime
+UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/scale-1m-20260711}"
@@ -31,7 +33,7 @@ MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
 MODEL_DIR="$ROOT/$MODEL_REL"
 SIONIC_OUT="$ROOT/outputs/evaluation/sionic9-scale1m"
 OFFICIAL_OUT="$ROOT/outputs/evaluation/mteb-korean-v1-scale1m"
-POSTTRAIN_SELECTION="$ROOT/outputs/post-training-eval-20260711/sionic9-selection.json"
+POSTTRAIN_SELECTION="${POSTTRAIN_SELECTION:-$ROOT/outputs/post-training-eval-20260717-frontier/clean-first-selection.json}"
 mkdir -p "$LOG_DIR" "$SIONIC_OUT" "$OFFICIAL_OUT"
 exec > >(tee -a "$LOG_DIR/queue.log") 2>&1
 
@@ -101,7 +103,7 @@ fi
 
 if [[ ! -s "$DATA_MANIFEST" || "$(jq -r '.phase + ":" + (.built_rows|tostring)' "$DATA_MANIFEST" 2>/dev/null)" != "performance_1m:1000000" ]]; then
   run_stage "build-performance-1m" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_performance_mix.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/build_performance_mix.py" \
     --phase performance_1m --output-dir "$DATA_DIR" \
     --critical-blocklist-root "$BLOCKLIST_ROOT" || exit 2
 fi
@@ -130,7 +132,7 @@ TRAINING_MANIFEST="$DATA_MANIFEST"
 if [[ ! -s "$HOMOGENEOUS_MANIFEST" \
     || "$(jq -r '.length_bucketed // false' "$HOMOGENEOUS_MANIFEST")" != true ]]; then
   run_stage "build-homogeneous-1m-batches" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/build_homogeneous_batches.py" \
     --train "$TRAIN_FILE" --provenance "$DATA_DIR/provenance.jsonl" \
     --output "$HOMOGENEOUS_TRAIN" \
     --provenance-output "$HOMOGENEOUS_PROVENANCE" \
@@ -177,7 +179,7 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
   fi
   if [[ -s "$MINING_MANIFEST" && ! -s "$MINED_PROVENANCE" ]]; then
     run_stage "project-performance-1m-mined-provenance" \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/project_mined_provenance.py" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/project_mined_provenance.py" \
       --input-provenance "$DATA_DIR/provenance.jsonl" \
       --mining-audit "$MINING_AUDIT" --output "$MINED_PROVENANCE" \
       --manifest-output "$DATA_DIR/provenance.faiss-current-r095-n7.manifest.json" || true
@@ -185,7 +187,7 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
   if [[ -s "$MINED_TRAIN" && -s "$MINED_PROVENANCE" \
       && ! -s "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
     run_stage "order-performance-1m-mined-batches" \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/build_homogeneous_batches.py" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/build_homogeneous_batches.py" \
       --train "$MINED_TRAIN" --provenance "$MINED_PROVENANCE" \
       --output "$MINED_HOMOGENEOUS_TRAIN" \
       --provenance-output "$MINED_HOMOGENEOUS_PROVENANCE" \
@@ -250,7 +252,7 @@ if ! find "$ROOT/outputs/$RUN_NAME" -maxdepth 3 -type d -name "checkpoint-$MAX_S
 fi
 checkpoint=""
 if (( primary_status == 0 )); then
-  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$ROOT/outputs/$RUN_NAME" --print-path 2>/dev/null)" || checkpoint=""
 fi
 if [[ -z "$checkpoint" ]]; then
@@ -259,14 +261,14 @@ if [[ -z "$checkpoint" ]]; then
   RUN_NAME="$fallback"
   MODEL_REL="artifacts/models/${RUN_NAME}-best-merged"
   MODEL_DIR="$ROOT/$MODEL_REL"
-  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 3
 fi
 
 DATA_UPLOAD_PID=""
 if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
   retry_stage "upload-derived-performance-1m" 3 \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_derived_training_dataset.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/publish_derived_training_dataset.py" \
     --train "$MINED_HOMOGENEOUS_TRAIN" \
     --provenance "$MINED_HOMOGENEOUS_PROVENANCE" \
     --manifest "$MINED_HOMOGENEOUS_MANIFEST" \
@@ -282,13 +284,13 @@ if [[ "$TRAINING_MANIFEST" == "$MINED_HOMOGENEOUS_MANIFEST" ]]; then
 fi
 
 run_stage "verify-$RUN_NAME" \
-  "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+  "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
   --adapter "$checkpoint" --data "$VAL_FILE" --model "$CONTINUAL_BASE" \
   --output "$LOG_DIR/adapter-verification.json" || exit 4
 
 if [[ ! -s "$MODEL_DIR/merge_report.json" ]]; then
   run_stage "merge-$RUN_NAME" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
     --adapter "$checkpoint" --output-dir "$MODEL_DIR" \
     --base-model "$CONTINUAL_BASE" --base-revision "$CONTINUAL_REVISION" \
     --device cuda --dtype bfloat16 --local-files-only || exit 5
@@ -332,7 +334,7 @@ if [[ -s "$SIONIC_SUMMARY" && -s "$OFFICIAL_SUMMARY" ]]; then
   [[ -s "$ROBUST_SUMMARY" ]] && \
     robustness_args+=(--robustness-summary "$ROBUST_SUMMARY")
   if retry_stage "publish-$RUN_NAME" 3 \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/publish_best_embedding_model.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/publish_best_embedding_model.py" \
     --model-dir "$MODEL_DIR" \
     --sionic-summary "$SIONIC_SUMMARY" \
     --official-summary "$OFFICIAL_SUMMARY" \

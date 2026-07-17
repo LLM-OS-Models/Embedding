@@ -2,9 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
+embedding_resolve_train_runtime
 cd "$ROOT"
 OUT="${OUT:-$ROOT/outputs/data/legal-performance-v1}"
-PYTHON="${PYTHON:-$ROOT/.venv-train/bin/python}"
+PYTHON="${PYTHON:-$EMBEDDING_TRAIN_PYTHON}"
 mkdir -p "$OUT/candidates"
 
 extract() {

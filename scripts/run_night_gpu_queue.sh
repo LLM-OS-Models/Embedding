@@ -7,6 +7,8 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common_runtime.sh"
+embedding_resolve_train_runtime
+UTILITY_PYTHON="$EMBEDDING_TRAIN_PYTHON"
 cd "$ROOT"
 WAIT_PID="${WAIT_PID:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/outputs/night-queue-20260711}"
@@ -59,18 +61,18 @@ screen_lora_run() {
     return 0
   fi
   local checkpoint
-  checkpoint="$($ROOT/.venv-train/bin/python "$ROOT/scripts/select_best_checkpoint.py" \
+  checkpoint="$("$UTILITY_PYTHON" "$ROOT/scripts/select_best_checkpoint.py" \
     "$run_dir" --print-path 2>/dev/null)" || return 0
   [[ -n "$checkpoint" && -s "$checkpoint/adapter_model.safetensors" ]] || return 0
   run_stage "$run_name-verify-best" \
-    "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+    "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
     --adapter "$checkpoint" --data "$PILOT_VAL" \
     --output "$run_dir/verification-best.json" || return 0
   local merged_rel="artifacts/models/${run_name}-best-merged"
   local merged="$ROOT/$merged_rel"
   if [[ ! -s "$merged/merge_report.json" ]]; then
     run_stage "$run_name-merge-best" \
-      "$ROOT/.venv-train/bin/python" "$ROOT/scripts/merge_embedding_adapter.py" \
+      "$UTILITY_PYTHON" "$ROOT/scripts/merge_embedding_adapter.py" \
       --adapter "$checkpoint" --output-dir "$merged" \
       --device cuda --dtype bfloat16 --local-files-only || return 0
   fi
@@ -93,7 +95,7 @@ fi
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 export PYTHONPATH="$ROOT/third_party/mteb${PYTHONPATH:+:$PYTHONPATH}"
-if "$ROOT/.venv-train/bin/python" -c 'import flash_attn' >/dev/null 2>&1; then
+if "$UTILITY_PYTHON" -c 'import flash_attn' >/dev/null 2>&1; then
   DEFAULT_TRAIN_ATTN=flash_attention_2
 else
   DEFAULT_TRAIN_ATTN=sdpa
@@ -191,7 +193,7 @@ run_lora_training() {
       echo "[$(timestamp)] preserve diagnostic checkpoint without candidate verification: $run_name"
     else
       run_stage "$run_name-verify" \
-        "$ROOT/.venv-train/bin/python" "$ROOT/scripts/verify_adapter.py" \
+        "$UTILITY_PYTHON" "$ROOT/scripts/verify_adapter.py" \
         --adapter "$latest" --data "$PILOT_VAL" \
         --output "$ROOT/outputs/$run_name/verification.json"
       screen_lora_run "$run_name"

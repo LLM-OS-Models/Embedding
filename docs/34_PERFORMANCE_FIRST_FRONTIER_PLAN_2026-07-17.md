@@ -39,11 +39,11 @@ data/model과 법률 원문, 학습·평가 환경은 NFS에 다시 복원됐다
 
 | 항목 | 현재 실제 상태 |
 |---|---|
-| Git | 복구/방법론/queue/environment local commit 완료; 재시작 환경에 GitHub credential이 없어 `origin/main` push 대기 |
+| Git | 복구/방법론/queue/environment/storage guard 4개 commit을 `origin/main@eade122`까지 push 완료; credential은 one-shot helper에서만 사용 |
 | submodule | 4개 모두 pinned commit으로 복원 완료 |
 | 로컬 data/cache/output | 이전 checkpoint는 없음. 13개 pinned dataset, core/teacher 8B 4개, 법률 312,581문서를 exact 복원·검증 |
-| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 147/147 통과 |
-| valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K 직렬 queue 대기 |
+| Python 환경 | NFS `.venv-hf-tools`, `.venv-train-fa2`, `.venv-mteb` 복원; 8B backward와 전체 test 150/150 통과 |
+| valid model | 0개; 새 Qwen 200K active, 성공 종료 후 Comsat 200K와 나머지 frontier campaign 직렬 queue 대기 |
 | GPU | H100 80GB 1장, Qwen production 100% utilization |
 | NFS | `/home/ubuntu/data`, 49TB 중 48TB 가용, 사용률 3%, inode 1% |
 | system disk | `/`, 2.0TB 중 1.6TB 가용, 사용률 22% |
@@ -318,6 +318,15 @@ legacy warm-start` 순으로 한 요소씩 비교한다.
 정상 3,123-step 종료를 검증한 뒤 Comsat 전용 5+5-step backend report, 별도 private
 watcher, 동일 3,123-step run을 직렬로 시작하도록 대기 중이다. 두 8B job은 겹치지 않는다.
 
+Comsat이 정상 종료되면 같은 queue가 watcher를 명시적으로 정리한 뒤
+`post-training-eval-20260717-frontier/clean-first-selection.json`을 반드시 생성한다. Qwen과
+Comsat 후보는 Grade-I legal holdout과 noise robustness에서 먼저 비교하며, selection 파일이
+없으면 1M으로 넘어가지 않는다. selection gate를 통과하면 선택된 lineage에서 1M general,
+retrieval/SQuAD/health/AutoRAG, 법률 25% + general replay 75%, combined 400K를 차례대로
+실행한다. 각 큰 경계에서 workspace 500GiB/100만 inode와 `/tmp` 50GiB/10만 inode를 다시
+검사한다. 존재하지 않는 `.venv-train` 하드코딩은 없애고, 명시적 `TRAIN_ENV` →
+`.venv-train` → 복원된 `.venv-train-fa2` 순서로 runtime을 결정한다.
+
 이 stage가 끝나기 전에는 과거 중단 run의 loss나 문서상 결과를 새 checkpoint 결과로
 간주하지 않는다.
 
@@ -416,13 +425,13 @@ credential이 없다. `.env`는 ignored 상태로 존재하지만 public restore
 
 ## 10. 즉시 해야 할 일
 
-1. 이 문서와 README의 재시작 상태를 commit/push한다.
+1. 이 문서와 README의 재시작 상태를 commit/push한다. — **완료; `origin/main@eade122`**
 2. `scripts/restore_hf_assets.py`를 public unauthenticated download가 기본이 되도록 수정하고
    test한다. — **완료, 전용 test 3개 통과**
 3. submodule, pinned dataset, Qwen/Comsat/reranker core model을 NFS에 복원한다. — **완료**
 4. 법률 Git 4개를 정확한 commit으로 복원하고 312,581 Markdown inventory를 재검증한다. — **완료**
 5. Qwen 200K exact 5+5-step backend probe와 schema/SHA preflight를 통과한다. — **완료; SDPA 선택**
-6. 200K Qwen과 Comsat 두 run을 처음부터 시작한다. — **Qwen active, Comsat 직렬 queue armed**
+6. 200K Qwen과 Comsat 두 run을 처음부터 시작한다. — **Qwen active, Comsat 및 post-eval→1M→target/legal 직렬 queue armed**
 7. winner에 1M, current-student hybrid mining, reranker stratified KD를 순서대로 적용한다.
 
 이 순서는 저장공간을 먼저 보호하면서도, 이전 결과를 복구했다는 착각 없이 가장 빠르게

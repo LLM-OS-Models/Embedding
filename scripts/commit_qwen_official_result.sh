@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/common_runtime.sh"
+embedding_resolve_train_runtime
 cd "$ROOT"
 if [[ -f .env ]]; then
   set -a
@@ -13,7 +15,7 @@ fi
 REVISION=4e423935c619ae4df87b646a3ce949610c66241c
 SUMMARY="$ROOT/outputs/evaluation/mteb-korean-v1-qwen-base/Qwen__Qwen3-Embedding-8B/$REVISION/summary.json"
 COMPARISON="$ROOT/outputs/evaluation/mteb-korean-v1-qwen-base/qwen-live-comparison.json"
-"$ROOT/.venv-train/bin/python" "$ROOT/scripts/update_qwen_official_readme.py" \
+"$EMBEDDING_TRAIN_PYTHON" "$ROOT/scripts/update_qwen_official_readme.py" \
   --summary "$SUMMARY" --comparison "$COMPARISON" --readme "$ROOT/README.md" \
   --output "$ROOT/reports/qwen-mteb-korean-v1-local.json"
 git add README.md reports/qwen-mteb-korean-v1-local.json
