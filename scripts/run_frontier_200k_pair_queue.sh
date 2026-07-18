@@ -163,7 +163,12 @@ env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
   "$ROOT/experiments/070_tuning_strategy/admit_fa2_lora_backend.sh" || true
 
 COMSAT_ADMISSION="$ROOT/outputs/backend-probes/$COMSAT_ADMISSION_KEY/admission.json"
+# The probe records CUDA_VISIBLE_DEVICES/PYTORCH_CUDA_ALLOC_CONF in the
+# runtime fingerprint; the verifying check must run under the same values or
+# it fails with a fingerprint mismatch.
 if ! ROOT="$ROOT" FA2_ENV="$ROOT/.venv-train-fa2" \
+    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
+    PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}" \
     bash -c 'source "$ROOT/scripts/common_runtime.sh"; source "$ROOT/scripts/backend_admission.sh"; embedding_check_matched_sdpa "$1" "$2" 16 4 512 64 128 bfloat16 "$3" "$4" 4 0.05' \
     bash "$COMSAT_ADMISSION" "$TRAIN_FILE" "$COMSAT_MODEL" "$COMSAT_REVISION"; then
   echo "[$(timestamp)] Comsat matched-SDPA contract was not admitted" >&2
