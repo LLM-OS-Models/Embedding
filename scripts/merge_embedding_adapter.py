@@ -688,7 +688,12 @@ def merge_adapter(args: argparse.Namespace, staging_dir: Path) -> dict[str, Any]
         base = AutoModelForCausalLM.from_pretrained(
             args.base_model, **_load_kwargs(args, load_dtype)
         )
-        if base.config.architectures != ["Qwen3ForCausalLM"]:
+        # Comsat ships the same Qwen3 backbone as an encoder-only
+        # ["Qwen3Model"] artifact. Training wrapped it in the CausalLM class
+        # (adapter keys carry the model.model prefix for both lineages), so a
+        # CausalLM load matches the trained module paths; the randomly
+        # initialized head is dropped before saving either way.
+        if base.config.architectures not in (["Qwen3ForCausalLM"], ["Qwen3Model"]):
             raise RuntimeError(
                 f"Unexpected base architecture: {base.config.architectures!r}"
             )
