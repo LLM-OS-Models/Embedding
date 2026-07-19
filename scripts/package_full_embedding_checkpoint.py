@@ -274,7 +274,12 @@ def verify(output: Path, args: argparse.Namespace) -> dict:
         raise RuntimeError(f"Invalid packaged embedding shape/value: {vectors.shape}")
     max_norm_error = float(np.max(np.abs(norms - 1.0)))
     positive_margin = float(vectors[0] @ vectors[1] - vectors[0] @ vectors[2])
-    if max_norm_error > 1e-4 or positive_margin <= 0:
+    # SentenceTransformers normalizes in the model dtype; bf16 rounding leaves
+    # |norm - 1| up to ~4e-3, so the fp32-grade tolerance only applies there.
+    # The Normalize-module contract itself is enforced by
+    # validate_sentence_transformers_contract above.
+    norm_tolerance = 1e-4 if args.dtype == "float32" else 1e-2
+    if max_norm_error > norm_tolerance or positive_margin <= 0:
         raise RuntimeError(
             f"Packaged model probe failed: norm_error={max_norm_error}, margin={positive_margin}"
         )
