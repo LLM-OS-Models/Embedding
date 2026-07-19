@@ -28,6 +28,7 @@ try:
         sha256,
     )
     from scripts.select_best_clean_model import (
+        MULTIDOMAIN_POLICY_ID,
         POLICY_ID,
         load_clean_candidate,
         load_robustness,
@@ -41,6 +42,7 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         sha256,
     )
     from select_best_clean_model import (
+        MULTIDOMAIN_POLICY_ID,
         POLICY_ID,
         load_clean_candidate,
         load_robustness,
@@ -334,7 +336,10 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
             "private-noncommercial-performance-track",
         }:
             raise ValueError("Private training data lineage cannot be published publicly")
-    if selection.get("schema_version") != 1 or selection.get("policy_id") != POLICY_ID:
+    if selection.get("schema_version") != 1 or selection.get("policy_id") not in {
+        POLICY_ID,
+        MULTIDOMAIN_POLICY_ID,
+    }:
         raise ValueError("Unexpected clean-selection policy")
     if selection.get("public_benchmark_used_for_selection") is not False:
         raise ValueError("Public benchmark was used for intermediate selection")
@@ -405,6 +410,7 @@ def validate_candidate(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "model_dir": model_dir,
         "model_rel": model_rel,
+        "selection_policy_id": selection["policy_id"],
         "selection_path": selection_path,
         "training_manifest_path": training_manifest_path,
         "clean_path": clean_path,
@@ -451,7 +457,7 @@ license: other
 {visibility_ko} 연구용 중간 후보입니다. public leaderboard 점수로 선택하지 않았고, Grade-I
 source-document-held-out retrieval과 대화형 noise robustness만으로 선택했습니다.
 
-- selection policy: `{POLICY_ID}`
+- selection policy: `{validated['selection_policy_id']}`
 - immutable revision: `{validated['revision']}`
 - model weights SHA-256: `{validated['weights_sha256']}`
 - clean NDCG@10: `{clean['clean_ndcg_at_10']:.8f}`
@@ -530,7 +536,7 @@ def prepare_publication(
             "shards": model_shards,
         },
         "selection": {
-            "policy_id": POLICY_ID,
+            "policy_id": validated["selection_policy_id"],
             "public_benchmark_used": False,
             "sha256": sha256(evidence_dir / "selection.json"),
         },
