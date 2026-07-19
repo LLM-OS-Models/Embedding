@@ -531,6 +531,17 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
       echo "[$(timestamp)] Hugging Face token file unavailable for required public backup" >&2
       exit 21
     fi
+    # The publisher's rights gate refuses --public unless the training
+    # manifest is release-eligible.  Rights-unclear tracks (the 200K/1M
+    # performance mixes) preserve the intermediate winner privately instead;
+    # public release stays with the rights-safe track and final publication
+    # gates.
+    selection_visibility_args=()
+    expected_selection_visibility=private
+    if [[ "$(jq -r '.release_eligible // false' "$training_manifest" 2>/dev/null)" == true ]]; then
+      selection_visibility_args=(--public)
+      expected_selection_visibility=public
+    fi
     retry_stage "publish-selection-only-clean-winner" 3 \
       env -u HF_TOKEN -u HUGGINGFACE_HUB_TOKEN \
       "$UTILITY_PYTHON" "$ROOT/scripts/publish_private_clean_candidate.py" \
@@ -538,10 +549,11 @@ if [[ "$SELECTION_ONLY" == 1 ]]; then
       --training-manifest "$training_manifest" \
       --repo-id "$SELECTION_PUBLIC_REPO_ID" \
       --hf-token-file "$PUBLISH_HF_TOKEN_FILE" \
-      --report-output "$SELECTION_UPLOAD_REPORT" --upload --public || exit 21
+      --report-output "$SELECTION_UPLOAD_REPORT" --upload \
+      "${selection_visibility_args[@]}" || exit 21
     if [[ "$(jq -r '.visibility + ":" + (.remote_manifest_exact|tostring) + ":" + (.remote_file_set_exact|tostring)' \
-        "$SELECTION_UPLOAD_REPORT" 2>/dev/null)" != "public:true:true" ]]; then
-      echo "[$(timestamp)] public clean-winner upload report failed verification" >&2
+        "$SELECTION_UPLOAD_REPORT" 2>/dev/null)" != "$expected_selection_visibility:true:true" ]]; then
+      echo "[$(timestamp)] clean-winner upload report failed $expected_selection_visibility verification" >&2
       exit 21
     fi
     best_weights_sha="$(jq -r '.best.weights_sha256 // empty' "$SELECTION")"
