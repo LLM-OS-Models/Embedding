@@ -234,7 +234,7 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
   watcher_base_revision="$BASE_REVISION"
   if [[ "$BASE_MODEL" == /* ]]; then
     if [[ ! -s "$CHECKPOINT_BASE_UPLOAD_REPORT" ]]; then
-      echo "local continual base requires a verified public upload report" >&2
+      echo "local continual base requires a verified remote upload report" >&2
       exit 2
     fi
     report_contract="$(jq -r \
@@ -260,8 +260,14 @@ if [[ "$ENABLE_PRIVATE_CHECKPOINT_WATCHER" == 1 ]]; then
       exit 2
     fi
     expected_base_sha="$(jq -r '.model.weights_sha256 // empty' "$base_evidence" 2>/dev/null)"
+    # The gate exists so a local continual base is provably backed up remotely
+    # with exact weight/file binding.  A private backup satisfies that; the
+    # rights-unclear performance track cannot be published publicly at all
+    # (see the training-manifest rights gate), so requiring public visibility
+    # here would block its own continual runs.
     if [[ "$report_contract" != public:true:true \
-        || "$watcher_base_model" != LLM-OS-Models2/* \
+        && "$report_contract" != private:true:true ]] \
+        || [[ "$watcher_base_model" != LLM-OS-Models2/* \
         || ! "$watcher_base_revision" =~ ^[0-9a-f]{40}$ \
         || ! "$report_weights_sha" =~ ^[0-9a-f]{64}$ \
         || "$report_weights_sha" != "$expected_base_sha" \
