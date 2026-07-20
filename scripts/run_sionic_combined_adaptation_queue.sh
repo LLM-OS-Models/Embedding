@@ -155,7 +155,11 @@ run_stage audit-sionic-combined-overlap \
 embedding_resolve_general_base || exit 4
 BASE_MODEL="$EMBEDDING_GENERAL_BASE"
 [[ -s "$BASE_MODEL/merge_report.json" && -s "$VAL_FILE" ]] || exit 4
-MAX_STEPS="$(jq -r '.output_rows / 64 | floor' "$MANIFEST")"
+# A full epoch over 400K is 6,249 steps at ~33 s/step (about 58 h).  The
+# curriculum is interleaved, so any prefix carries the same component mix
+# within 0.2 pp; a caller may anneal over fewer steps instead.  The cosine
+# schedule then completes properly rather than stopping mid-decay.
+MAX_STEPS="${MAX_STEPS:-$(jq -r '.output_rows / 64 | floor' "$MANIFEST")}"
 
 train_combined() {
   local name="$1" batch="$2" accum="$3"
