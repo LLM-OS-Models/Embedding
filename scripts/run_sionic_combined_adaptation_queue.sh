@@ -168,9 +168,17 @@ train_combined() {
   fi
   admission_report="$BACKEND_ADMISSION_REPORT"
   echo "[$(timestamp)] combined training backend=$train_attn env=$train_env admission=$admission_report"
+  # The checkpoint watcher refuses --public unless the training manifest is
+  # release-eligible.  This curriculum mixes the rights-unclear performance
+  # track, so publish candidates privately; public release stays with the
+  # rights-safe track and the final publication gates.
+  local checkpoint_public=0
+  if [[ "$(jq -r '.release_eligible // false' "$MANIFEST" 2>/dev/null)" == true ]]; then
+    checkpoint_public=1
+  fi
   run_stage "train-$name" env \
     EMBEDDING_OFFLINE=1 ENABLE_VALIDATED_CONTINUAL_BASE=0 \
-    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 CHECKPOINT_REPO_PUBLIC=1 \
+    ENABLE_PRIVATE_CHECKPOINT_WATCHER=1 CHECKPOINT_REPO_PUBLIC="$checkpoint_public" \
     CHECKPOINT_TRAINING_MANIFEST="$MANIFEST" \
     CHECKPOINT_BASE_UPLOAD_REPORT="$GENERAL_BASE_UPLOAD_REPORT" \
     PRIVATE_CHECKPOINT_REPO_ID="LLM-OS-Models2/${name}-candidates" \
