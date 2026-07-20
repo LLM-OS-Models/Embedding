@@ -224,7 +224,8 @@ if [[ "${ENABLE_SCALE_HARD_NEGATIVE_MINING:-1}" == 1 ]]; then
     run_stage "project-performance-1m-mined-provenance" \
       "$UTILITY_PYTHON" "$ROOT/scripts/project_mined_provenance.py" \
       --input-provenance "$DATA_DIR/provenance.jsonl" \
-      --mining-audit "$MINING_AUDIT" --output "$MINED_PROVENANCE" \
+      --mining-audit "$MINING_AUDIT" --mined-train "$MINED_TRAIN" \
+      --output "$MINED_PROVENANCE" \
       --manifest-output "$DATA_DIR/provenance.faiss-current-r095-n7.manifest.json" || true
   fi
   if [[ -s "$MINED_TRAIN" && -s "$MINED_PROVENANCE" \

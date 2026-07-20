@@ -16,6 +16,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-provenance", type=Path, required=True)
     parser.add_argument("--mining-audit", type=Path, required=True)
+    parser.add_argument(
+        "--mined-train",
+        type=Path,
+        required=True,
+        help=(
+            "Mined training JSONL. Mining rewrites negatives, so the input "
+            "provenance row_sha256 no longer identifies the row it travels "
+            "with; it is recomputed against this file and the pre-mining value "
+            "is preserved as source_row_sha256."
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--manifest-output", type=Path, required=True)
     return parser.parse_args()
@@ -41,6 +52,7 @@ def main() -> None:
         os.fdopen(fd, "w", encoding="utf-8") as output_handle,
         args.mining_audit.open(encoding="utf-8") as audit_handle,
         args.input_provenance.open(encoding="utf-8") as provenance_handle,
+        args.mined_train.open(encoding="utf-8") as mined_train_handle,
     ):
         while True:
             line = audit_handle.readline()
@@ -64,7 +76,23 @@ def main() -> None:
                 raise ValueError(
                     f"Non-contiguous output index: expected {output_rows}, got {output_index}"
                 )
+            mined_line = mined_train_handle.readline()
+            if not mined_line:
+                raise ValueError(
+                    f"Mined training file ended before output row {output_rows}"
+                )
+            mined_row = json.loads(mined_line)
+            mined_compact = json.dumps(
+                mined_row, ensure_ascii=False, separators=(",", ":")
+            )
             row = dict(json.loads(provenance_line))
+            source_row_hash = row.get("row_sha256")
+            if source_row_hash is not None:
+                row["source_row_sha256"] = source_row_hash
+            row["row_sha256"] = hashlib.sha256(
+                mined_compact.encode("utf-8")
+            ).hexdigest()
+            row["row_index"] = output_index
             row["mining_projection"] = {
                 "input_row_index": input_index,
                 "output_row_index": output_index,
@@ -78,6 +106,8 @@ def main() -> None:
                 json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
             )
             output_rows += 1
+        if mined_train_handle.readline():
+            raise ValueError("Mined training file has more rows than the audit")
         output_handle.flush()
         os.fsync(output_handle.fileno())
     os.replace(temporary, args.output)
@@ -90,6 +120,10 @@ def main() -> None:
             "provenance": {
                 "path": str(args.input_provenance.resolve()),
                 "sha256": sha256(args.input_provenance),
+            },
+            "mined_train": {
+                "path": str(args.mined_train.resolve()),
+                "sha256": sha256(args.mined_train),
             },
             "mining_audit": {
                 "path": str(args.mining_audit.resolve()),
