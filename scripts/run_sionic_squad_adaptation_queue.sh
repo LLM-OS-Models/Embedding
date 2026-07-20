@@ -181,7 +181,7 @@ if [[ ! -s "$MINED_PROVENANCE" ]]; then
   run_stage "project-sionic-${TARGET_KIND}-mined-provenance" \
     "$UTILITY_PYTHON" "$ROOT/scripts/project_mined_provenance.py" \
     --input-provenance "$PROVENANCE" --mining-audit "$MINING_AUDIT" \
-    --output "$MINED_PROVENANCE" \
+    --mined-train "$MINED" --output "$MINED_PROVENANCE" \
     --manifest-output "$DATA_DIR/provenance.faiss-current-r095-n7.manifest.json" || exit 4
 fi
 if [[ ! -s "$ORDERED_MANIFEST" ]]; then

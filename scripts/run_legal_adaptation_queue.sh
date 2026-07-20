@@ -148,7 +148,7 @@ if [[ ! -s "$MINED_PROVENANCE" ]]; then
   run_stage project-legal-provenance \
     "$UTILITY_PYTHON" "$ROOT/scripts/project_mined_provenance.py" \
     --input-provenance "$DATA_DIR/provenance.jsonl" --mining-audit "$AUDIT" \
-    --output "$MINED_PROVENANCE" \
+    --mined-train "$MINED" --output "$MINED_PROVENANCE" \
     --manifest-output "$DATA_DIR/provenance.faiss-r095-n7.manifest.json" || exit 4
 fi
 

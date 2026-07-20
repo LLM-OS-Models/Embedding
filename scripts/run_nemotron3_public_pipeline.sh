@@ -90,6 +90,7 @@ if [[ ! -s "$PROJECTION_MANIFEST" ]]; then
   run_stage project-public-mined-provenance \
     "$ROOT/.venv-mteb/bin/python" "$ROOT/scripts/project_mined_provenance.py" \
     --input-provenance "$SOURCE_PROVENANCE" --mining-audit "$MINING_AUDIT" \
+    --mined-train "$MINED" \
     --output "$MINED_PROVENANCE" --manifest-output "$PROJECTION_MANIFEST"
 fi
 
