@@ -117,6 +117,33 @@ Nemotron은 legal에서 Qwen 대비 +0.0036 정도 우세했지만, finance/know
 아직 완료된 clean 법률 baseline이 없습니다.
 <!-- CLEAN_LEGAL_RESULTS_END -->
 
+### 200K 승자 Sionic 9 실측 (2026-07-20)
+
+우리 200K clean 승자(`Comsat LoRA checkpoint-1500` merged, `model-d549ad7573a0`)의
+고정 protocol Sionic 9 전체 실측이다. macro NDCG@10은 **`0.788718`**로 Comsat 카드
+`0.7930` 대비 **`-0.004282`**다. 아직 목표를 넘지 못했다.
+
+| Task | 우리 200K 승자 | Comsat 카드 | Delta |
+|---|---:|---:|---:|
+| MIRACL | .67247 | .6964 | **-.0239** |
+| MrTidy | .61558 | .6253 | -.0097 |
+| MLDR | .49869 | .5183 | **-.0196** |
+| AutoRAG | .84070 | .8518 | -.0111 |
+| Ko-StrategyQA | .83756 | .8394 | -.0018 |
+| PublicHealthQA | .90381 | .8871 | **+.0167** |
+| Belebele | .98179 | .9853 | -.0035 |
+| SQuADKorV1 | .91351 | .9168 | -.0033 |
+| LawIRKo | .83435 | .8164 | **+.0180** |
+| **Macro** | **.788718** | **.7930** | **-.004282** |
+
+해석: 200K curriculum이 법률·한국어 도메인에 치우쳐 LawIRKo와 PublicHealthQA는
+Comsat을 넘었지만, 다국어·장문 retrieval(MIRACL/MLDR/MrTidy)에서 함께 떨어졌다.
+전체 손실의 대부분이 이 세 task이며 전형적인 target-domain 편향/망각 패턴이다.
+따라서 다음 단계는 일반 1M 재학습이 아니라 **general replay를 포함한 Sionic combined
+400K target adaptation**(docs/28)이 최단 경로다. 이 실측값은 checkpoint 선택에
+사용하지 않으며 진단·전략 판단 근거로만 쓴다. Comsat 비교값은 카드 표라 동일 protocol
+재현치가 아니므로, 최종 주장 전에는 같은 evaluator로 Comsat 9종을 직접 재현해 확정한다.
+
 ### 자동 캠페인 실측 결과
 
 아래 block은 최종 local winner가 Sionic 9와 공식 Korean 6을 final-once로 끝낸 뒤
