@@ -168,6 +168,13 @@ ordering 이전 단계에서 해당 행만 제거해(전량 negative 필드, `nl
 `pass_with_retrieval_corpus_exposure`**로 통과했다. corpus-only 노출은 선언된 train
 split의 정상 조건이므로 유지하고 모델을 `target-adapted-sionic-combined-v1`로 표기한다.
 
+학습은 2026-07-21 01:11 KST에 시작했다. clean 승자에서 이어지는 LoRA r64,
+batch 8 × accum 8(effective 64), HN7, max length 512, LR `5e-6`, 6,249 step이며
+250 step마다 checkpoint를 남긴다. FA2 probe subset은 다중 component curriculum의
+배치 인덱스 계약을 처리하지 못해 실패하지만 비치명적이며 학습은 검증된
+`.venv-train-fa2 + SDPA`로 진행한다. 권리 불명확 track이므로 checkpoint 후보 repo는
+private이고, 공개는 rights-safe track과 최종 publication gate가 담당한다.
+
 ### 자동 캠페인 실측 결과
 
 아래 block은 최종 local winner가 Sionic 9와 공식 Korean 6을 final-once로 끝낸 뒤
