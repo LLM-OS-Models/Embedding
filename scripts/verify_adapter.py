@@ -27,6 +27,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adapter", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--model", default="Qwen/Qwen3-Embedding-8B")
+    # Qwen3ForCausalLM maps to several ms-swift model types, so automatic
+    # matching fails on our merged embedding checkpoints. Training already
+    # pins qwen3_emb; verification must use the same contract.
+    parser.add_argument("--model-type", default="qwen3_emb")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--allow-disqualified-diagnostic", action="store_true")
     return parser.parse_args()
@@ -71,6 +75,7 @@ def main() -> None:
     requests = [InferRequest(messages=messages) for messages in groups]
     engine = TransformersEngine(
         args.model,
+        model_type=args.model_type,
         task_type="embedding",
         torch_dtype=torch.bfloat16,
         attn_impl="sdpa",
