@@ -214,6 +214,14 @@ if [[ -z "$checkpoint" ]]; then
     "$ROOT/outputs/$RUN_NAME" --print-path)" || exit 5
 fi
 
+# The derived-dataset publisher refuses --public unless the manifest is
+# release-eligible.  This curriculum embeds the rights-unclear performance
+# track, so it uploads privately; the rights-safe track carries the public
+# training data.
+curriculum_visibility_args=()
+if [[ "$(jq -r '.release_eligible // false' "$MANIFEST" 2>/dev/null)" == true ]]; then
+  curriculum_visibility_args=(--public)
+fi
 DATA_UPLOAD_PID=""
 if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
   (
@@ -230,7 +238,7 @@ if [[ -f "$PUBLISH_HF_TOKEN_FILE" ]]; then
       --source-dataset LLM-OS-Models2/korean-embedding-sionic-retrieval-family-quantile-hn7-replay-v1 \
       --source-dataset LLM-OS-Models2/korean-legal-quantile-hn7-replay-v1 \
       --source-dataset LLM-OS-Models/korean-embedding-performance-v1-performance-1m \
-      --upload --public
+      --upload "${curriculum_visibility_args[@]}"
   ) >"$LOG_DIR/dataset-upload.log" 2>&1 &
   DATA_UPLOAD_PID=$!
 else
