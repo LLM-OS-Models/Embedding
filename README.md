@@ -1,47 +1,66 @@
 # Korean Embedding Lab
 
-한국어 검색 임베딩 모델을 연구하되 `sionic-ai/comsat-embed-ko-8b-preview`나 Sionic 한
-보드를 넘는 데서 멈추지 않고, **비상업 연구 자산까지 허용한 성능 최우선 모델**과 그
-방법을 재현 가능한 clean-release 모델로 다시 만드는 두 track의 작업 공간입니다.
-Korean retrieval·broad text·다국어·긴 문맥/context·noise 강건성을 함께 보며, 실질적으로
-미미한 차이는 near-tie로 취급하고 실패 축과 오염을 숨기지 않습니다.
+**한 문장 목표:** 한국어 검색에서 현재 최고 수준인 Sionic의 `comsat-embed-ko-8b`를 이기는,
+세계 최고 성능의 한국어 임베딩 모델을 만든다.
 
-기준일: **2026-07-18 (Asia/Seoul)**
+이 저장소는 그 목표를 향한 학습·평가·데이터 작업 공간입니다. 임베딩 모델은 문장을 숫자
+벡터로 바꿔 "의미가 가까운 문서"를 찾게 해 주는 검색의 핵심 부품입니다. 우리는 이미
+공개된 강력한 한국어 모델(Comsat)을 출발점으로 삼아, 한국어 검색 데이터로 추가 학습해
+더 나은 모델을 만듭니다.
 
-## 한 줄 결론
+기준일: **2026-07-23 (Asia/Seoul)** · 상세 실행 로그는 [docs/](docs/)에, 이 문서는 큰 그림만.
 
-- 최우선 목표는 **비상업 연구 자산까지 사용한 한국어 embedding 최고 성능**이다. 같은 방법을 권리가 확인된 데이터로 재학습하는 clean-release track은 그 다음이다.
-- **2026-07-20 01:01 KST에 last4 partial-full capacity challenger 판정까지 끝났다.** challenger(771.790M trainable, 3,123 step 완주)는 clean `0.981255`/multidomain `0.790264`로 전체 10위(최하위)에 그쳐 **LoRA r64 계보가 확정 승자**다(docs/34 R2). 최종 200K 승자는 여전히 Comsat LoRA `checkpoint-1500`이며, 자동 chain은 이 계보의 1M scale 단계로 진입했다. bf16 packaging norm 허용치와 capacity 후보 누락 선택 재실행은 2871eef에서 수정했다.
-- **2026-07-19 13:21 KST에 200K 계보 clean 비교가 완료됐다. 승자는 Comsat warm-start lineage의 `checkpoint-1500`이다**(Grade-I legal 10K NDCG@10 `0.981811`, 고정 multidomain macro `0.793252`; raw Comsat `0.981363`/`0.791890`, raw Qwen `0.978809`/`0.784709` 대비 모두 우위, 공개 benchmark 점수 미사용). merged winner는 exact SHA와 함께 [`LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lineage-clean-winner-v1`](https://huggingface.co/LLM-OS-Models2/qwen3-embedding-8b-ko-performance200k-lineage-clean-winner-v1)에 private 보존했다(권리 불명확 200K track이므로 공개는 rights-safe track·최종 gate 담당). 자동 chain은 Comsat 계보 raw base의 last4 partial-full capacity challenger로 진행 중이다.
-- **2026-07-19 01:38 KST에 Comsat warm-start 200K도 `3123/3123`으로 완주해 양 계보 학습이 끝났다.** 양쪽 모두 step 250~3123 13개 adapter checkpoint가 후보 repo에 검증 업로드됐고, frontier queue는 26개 checkpoint 전체를 legal 10K·고정 multidomain 1.9K로 재선택하는 clean-only 계보 비교로 자동 전환했다(공개 benchmark 점수 미사용).
-- **2026-07-18 13:00 KST에 Qwen 200K가 `3123/3123`으로 완주했다.** 2026-07-17 19:06 KST의 `1875/3123` 외부 종료를 `checkpoint-1750` exact resume(resume validation pass, matched_sdpa 재선택)로 복구한 결과다. step 250~3123 전체 13개 adapter checkpoint가 `LLM-OS-Models2/…-candidates-v2`에 검증 업로드됐고, eval loss는 전 구간 finite였다(선택 신호로는 미사용). frontier queue는 같은 시각 Comsat warm-start 200K exact probe로 자동 전환했다. 복구 세부와 당일 문헌 점검은 [docs/37](docs/37_RESUME_RECOVERY_AND_LITERATURE_2026-07-18.md)에 있다. 2026-07-18 00:26 KST에 `Nemotron-3-Embed-8B-BF16@2b29550c`의 고정 Sionic 9 전체 평가를 완료했으며 macro NDCG@10은 **`0.732212`**로 Comsat `0.7930`보다 `-0.060788`이다. 원본 그대로의 교체는 탈락이다. 태스크별 값은 MIRACL `.64994`, Mr.TyDi `.49324`, MLDR `.33463`, AutoRAG `.88550`, Ko-StrategyQA `.79387`, PublicHealthQA `.82497`, Belebele `.95209`, SQuADKorV1 `.92018`, LawIRKo `.73549`다. MLDR nominal batch/cache key 64는 유지하면서 OOM 1회 뒤 실제 encoder microbatch 32로 완료했다.
-- 현재 valid performance candidate는 **0개**다. 자동 chain은 Nemotron/Qwen/Comsat의 독립 legal 10K·finance/knowledge 1.9K 비교를 진행 중이다. raw deficit이 `.020`을 초과하고 multidomain가 guard에서 탈락해 Nemotron은 성능상 채택 조건을 충족하지 못했다. `outputs/evaluation/nemotron3-base-decision.json`의 `decision`는 `resume_qwen_checkpoint_1750_and_reselect`로 고정되어 있어, 현재 베이스 재개는 Qwen `checkpoint-1750`이 기준이다. clean 비교 결과는 Nemotron을 teacher/miner로 쓸지 판단하는 근거로 보존한다.
-- 공개 학습용 첫 권리안전 artifact는 [`LLM-OS-Models2/ko-legal-embedding-training-v1`](https://huggingface.co/datasets/LLM-OS-Models2/ko-legal-embedding-training-v1)이다. 한국 법령·행정규칙·판례·자치법규 source-native pair 250,000행이며 모든 행의 source/revision/license/redistribution 권리를 검증했고, 고정 benchmark blocklist exact overlap은 query/evaluation/corpus 모두 0이다. public immutable commit은 `faf431f53a9d8e8bbfa4d57903012a5d786f8716`이다.
-- Nemotron-3 공개 적응은 decision gate가 허용할 때만 `scripts/train_nemotron3_public_lora.py`가 실행한다. base architecture/mean-pooling/public manifest SHA를 검증하고 PEFT LoRA·cached all-negative loss·optimizer checkpoint를 재개한다. source JSONL에 저장된 기존 `Instruct/Query`를 한 번 제거한 뒤 학습 query에만 Sionic 고정 비교와 동일한 Qwen 검색 지시문을 붙이고 positive/negative는 무접두 source-native text로 유지해 이중 prompt 없이 train/eval 입력 계약을 맞춘다. contract-only와 단위 검증은 통과했다.
-- 현재 자동 chain은 `run_nemotron3_base_decision.sh` → `run_nemotron3_post_decision_probe.sh` → `run_nemotron3_public_pipeline.sh` → `run_nemotron3_post_training_release.sh` 순서로 대기한다. Nemotron gate를 통과하면 저장된 기존 query instruction을 제거하고 학습·평가와 같은 query-only 고정 prompt로 public HN을 mining해 dataset 배포, 300-step LoRA, public checkpoint watcher, winner 병합·전체 final gate·public 최종 모델 검증까지 이어진다. gate가 Qwen을 선택하면 Nemotron mutation/release를 건너뛰고 Qwen exact-resume 대상으로 남긴다.
-- 위 chain은 아직 **검증된 public adapter checkpoint에 도달하지 않았다**. decision이 Nemotron 적응을 허용하는 경우에만 same-step heldout loss로 checkpoint를 고르고, masked-mean/normalize/prompt 계약을 보존해 병합한 뒤 legal·multidomain guard → Sionic 9 `>0.7930` → 공식 Korean 6을 통과한 단일 모델을 public Hub repo에 visibility/file-set/LFS SHA까지 재검증한다.
-- `scripts/select_nemotron3_public_checkpoint.py`는 예정된 step 50/100/150/200/250/300 모두의 adapter/config/trainer/optimizer/scheduler 완결성과 base·public training-manifest SHA를 확인하고, public benchmark가 아닌 같은 step의 독립 512 heldout `eval_loss` 최솟값만 선택한다. 하나라도 없거나 non-finite면 병합으로 진행하지 않는다.
-- `scripts/merge_nemotron3_adapter.py`는 selector가 고른 exact adapter SHA만 pinned Nemotron base에 PEFT safe-merge한다. Qwen용 last-token 병합기를 재사용하지 않고 bidirectional `Ministral3Model`·4,096차원 masked mean·L2 normalize·query-only 고정 prompt를 검증하며, adapter 적용 전후와 병합 후 row cosine/pairwise-score parity가 통과한 경우에만 sibling staging을 최종 디렉터리로 원자 rename한다.
-- `scripts/gate_nemotron3_final_candidate.py`는 merged weight SHA로 legal·multidomain·Sionic summary의 model/revision을 다시 묶고, Qwen/Comsat 최고 clean reference 대비 legal/multidomain macro `-0.010`, finance/knowledge 각각 `-0.015` guard와 Sionic macro strict `>0.7930`을 모두 통과시킨다. public score는 checkpoint 선택에 쓰지 않았음을 report에 고정한다.
-- 최종 `publish_best_embedding_model.py`는 pinned upstream 계보가 Nemotron이면 `masked_mean+Ministral3Model`, Qwen이면 `last_token`을 각각 fail-closed로 검증하고 모델 카드에도 실제 pooling 계약을 기록한다. 따라서 Nemotron winner를 Qwen 계약으로 잘못 포장하거나 반대 경우를 허용하지 않는다.
-- `scripts/approve_nemotron3_public_release.py`는 사용자의 2026-07-17 “모델도 public” 지시를 authorization basis로 남기되, exact merged weight SHA·rights-safe manifest SHA·final gate·Sionic/공식6/comprehensive/clean/robustness summary SHA가 모두 맞을 때만 특정 public repo용 approval을 원자적으로 만든다.
-- Hugging Face 산출물은 **학습/파생 데이터, 중간 adapter checkpoint, 병합 모델, 최종 모델 모두 public이 기본**이다. 공개 repo에는 source revision·license·변환·dedup·benchmark overlap·모델 계보를 카드와 manifest로 함께 싣고 업로드 전후 visibility/file-set/SHA를 재검증한다. 권리 불명확·재배포 금지 source가 섞인 기존 performance track은 공개하지 않고 rights-safe 데이터로 다시 만든다. 점수 선택 오염을 막기 위한 고정 소규모 holdout만 비공개 예외다.
-- 최종 mined manifest는 `training_track=rights-safe-release`, `use_policy=public-redistributable-training`을 명시한다. 이 필드와 row별 권리·visibility·release blocker·SHA가 모두 맞아야 public checkpoint와 최종 model publisher가 받는다.
-- 최종 모델 카드는 이 manifest의 `artifact_id`를 우선 사용해 실제 학습 artifact인 `LLM-OS-Models2/ko-legal-embedding-training-nemotron3-hn-v1`만 연결한다. 과거 Qwen target-adapted 데이터 repo를 문자열 추정으로 잘못 계승하지 않는다.
-- 법률 공개 source 적응 표기는 canonical `target-adapted-legal-public-source`로 고정해 모델 카드가 LawIRKo/AutoRAG 관련 점수를 clean zero-shot으로 오인하지 않도록 경고한다.
-- 본선은 `Qwen clean lineage`와 `Comsat Korean warm-start lineage`를 같은 200K 조건으로 비교하고, 승자 계보의 원본 base에서 동일 200K/token budget인 last4 partial-full challenger를 거친 뒤, 1M general → current-student wide ANN pool → Qwen reranker score-quantile KD/queue A/B → 400K target → 모든 stage의 single-best 대 동일-trajectory last-available-5 FP32 평균을 최종 legal/multidomain/robustness gate로 재선택하는 순서다.
-- checkpoint는 public score가 아니라 Grade-I legal 10K guard와 고정 비공개 finance/knowledge 1.9K에서 먼저 고릅니다. 기존 512 validation의 200K 전량 중복을 발견해 Qwen/Comsat 200K는 양쪽 모두 보존된 모든 checkpoint를 동일한 legal·multidomain·noise 조건으로 다시 고릅니다. 이후 1M/KD/전문가 run은 source-document-held-out 512 내부 신호와 last-available-5 FP32 평균을 같은 최종 gate에서 비교합니다. Sionic 9와 공식 Korean 6은 local winner에 final-once로 실행합니다.
-- Comsat의 `1M+`는 문서나 토큰이 아니라 출처와 형식이 공개되지 않은 **Korean training examples**입니다.
-- Comsat의 `0.7930`은 일반 MTEB SOTA가 아니라, 자체 선택한 한국어 retrieval 9종의 macro `NDCG@10`입니다. Qwen3-Embedding-8B 대비 차이는 `+0.0105`입니다.
-- 가장 직접적인 학습법은 raw-text LM CPT가 아니라 `query / positive / hard negatives`를 이용한 **continued contrastive fine-tuning(InfoNCE)** 입니다.
-- 현재 첫 실험은 `Qwen/Qwen3-Embedding-8B + BF16 LoRA + InfoNCE`로 시작합니다. 공개 평가 9종은 학습·negative mining·checkpoint selection에서 차단합니다.
+---
 
-새 성능 우선 판단과 재복구 순서는
-[2026-07-17 frontier plan](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md), 기존
-전체 배경은 [요약 문서](docs/00_EXECUTIVE_SUMMARY.md)부터 읽으면 됩니다.
-새 Nemotron-3 비교와 중단 재개 명령은
-[Nemotron-3 한국어 base 결정](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)에
-고정합니다.
+## 지금 어디까지 왔나 (핵심 요약)
+
+목표 지표는 **Sionic 9종 한국어 검색 벤치마크의 평균 점수(NDCG@10)**이고, 넘어야 할 벽은
+Comsat의 **0.7930**입니다.
+
+| 단계 | 우리 모델 | Sionic 9 평균 | 목표(0.7930) 대비 | 상태 |
+|---|---|---:|---:|---|
+| 1. 200K 학습 승자 | Comsat + LoRA (200K 데이터) | **0.7887** | −0.0043 | ✅ 측정 완료 |
+| 2. 400K 타깃 보강 | 위 모델 + 약점 보강(400K) | 측정 중 | — | ⏳ 진행 중 |
+
+**핵심 스토리:**
+1. **출발점 선택** — Comsat(한국어 특화)과 Qwen3(다국어 범용)을 같은 조건으로 학습해 비교했더니,
+   Comsat을 이어 학습한 쪽이 이겼습니다. → 우리 베이스는 **Comsat + LoRA**.
+2. **LoRA vs 풀 파인튜닝** — 같은 예산으로 둘을 붙여 봤더니 **LoRA가 이겼습니다**(풀 파인튜닝은 오히려 하락).
+3. **1차 성적표** — 이 모델의 Sionic 9 평균은 **0.7887**, 목표에 **0.0043 부족**. 법률·의료는 이미
+   Comsat을 넘었지만, **다국어·장문 검색(MIRACL·MLDR·MrTidy)에서 밀려서** 생긴 격차였습니다.
+4. **약점 정조준** — 그 약한 검색 과제들을 직접 보강하는 **400K 데이터로 추가 학습**을 마쳤습니다.
+   자체 법률 지표는 0.98181 → **0.98767**로 올랐고, 첫 재측정 결과 MIRACL은 0.672 → **0.708**로
+   **Comsat(0.696)을 앞질렀습니다.** 나머지 8개 과제를 지금 측정 중입니다.
+
+> **아직 "이겼다"고 말하지 않는 이유:** 9개 과제 중 1개(MIRACL)만 재측정이 끝났습니다.
+> 최종 평균이 나와야 목표 돌파 여부를 확정할 수 있습니다.
+
+**왜 이 방법인가 (짧은 근거):**
+- 밑바닥부터 학습하지 않고 **이미 잘하는 모델에 대조학습(InfoNCE)만 추가**하는 게 1× H100에서
+  가장 빠르고 확실한 길입니다. Comsat/Qwen3도 같은 계열의 방법으로 만들어졌습니다.
+- 점수를 부풀리지 않기 위해, **공개 벤치마크 점수는 학습·모델 선택 과정에서 절대 보지 않습니다.**
+  중간 선택은 전부 비공개 자체 데이터로 하고, Sionic 9는 최종 후보에 딱 한 번만 실행합니다.
+
+자세한 방법론·근거 논문은 [docs/37 (2026-07-18 방법론 정리)](docs/37_RESUME_RECOVERY_AND_LITERATURE_2026-07-18.md)와
+[docs/34 (frontier plan)](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md)에 정리돼 있습니다.
+
+---
+
+## 벤치마크 3종 (숫자를 헷갈리지 않기 위해)
+
+**세 표는 재는 대상과 계산법이 달라서 서로 평균 내면 안 됩니다.** `—`는 0점이 아니라 아직 안 잰 것.
+
+- **① Sionic 9 검색** — 우리의 **주 목표**. 한국어 검색 9개 과제의 NDCG@10 평균. Comsat이 0.7930으로 1위.
+- **② 공식 MTEB Korean v1** — 한국어 전반(검색·분류·유사도 등) 6개 과제의 공식 리더보드.
+- **③ 자체 종합 보드** — 오염을 차단한 비공개 데이터로, 실제로 어떤 모델을 고를지 결정하는 내부 보드.
+
+---
+
+## 참고: 이전 후보(Nemotron-3)는 탈락
+
+`nvidia/Nemotron-3-Embed-8B`를 베이스 후보로 검토했으나 Sionic 9 평균이 **0.7322**로 목표에
+크게 못 미쳐(−0.0608) 탈락했습니다. 관련 결정 근거는
+[docs/36](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)에 보존돼 있습니다.
 
 ## 성능 보드 3종
 
@@ -168,12 +187,22 @@ ordering 이전 단계에서 해당 행만 제거해(전량 negative 필드, `nl
 `pass_with_retrieval_corpus_exposure`**로 통과했다. corpus-only 노출은 선언된 train
 split의 정상 조건이므로 유지하고 모델을 `target-adapted-sionic-combined-v1`로 표기한다.
 
-학습은 2026-07-21 01:11 KST에 시작했다. clean 승자에서 이어지는 LoRA r64,
-batch 8 × accum 8(effective 64), HN7, max length 512, LR `5e-6`, 6,249 step이며
-250 step마다 checkpoint를 남긴다. FA2 probe subset은 다중 component curriculum의
-배치 인덱스 계약을 처리하지 못해 실패하지만 비치명적이며 학습은 검증된
-`.venv-train-fa2 + SDPA`로 진행한다. 권리 불명확 track이므로 checkpoint 후보 repo는
-private이고, 공개는 rights-safe track과 최종 publication gate가 담당한다.
+학습은 2026-07-21 01:11 KST에 시작해 **2026-07-22 06:23 KST에 3,000 step으로 완주**했다
+(clean 승자에서 이어지는 LoRA r64, effective batch 64, HN7, max length 512, LR `5e-6`,
+250 step마다 checkpoint). 전체 400K 1-epoch은 6,249 step(약 58시간)이지만, 커리큘럼이
+component 간 교차 배열되어 어느 prefix든 소스 구성이 0.2pp 이내로 동일하므로 3,000 step
+(약 28시간)에서 cosine 스케줄을 완주시켰다. 최종 loss 0.047, eval loss 전 구간 finite.
+FA2 probe subset은 다중 component 배치 인덱스 계약을 처리하지 못해 실패하지만 비치명적이며
+학습은 검증된 `.venv-train-fa2 + SDPA`로 진행했다. 권리 불명확 track이므로 checkpoint
+후보 repo는 private이고, 공개는 rights-safe track과 최종 publication gate가 담당한다.
+
+**학습 후 실측 (2026-07-22~):**
+- **자체 Grade-I 법률 10K NDCG@10: `0.98181` → `0.98767`** (200K 승자 대비 +0.0059,
+  raw Comsat 0.98136 대비 +0.0063). 약점 보강이 법률 성능을 떨어뜨리지 않고 오히려 올렸다.
+- **Sionic 9 재측정 진행 중.** 첫 완료 과제 MIRACL은 `0.70794`로 200K 승자 `0.67247`,
+  Comsat `0.6964`를 모두 앞질렀다(가장 약했던 축을 정조준한 결과). 나머지 8개 과제 측정 중이며,
+  장문 코퍼스의 OOM을 피하려 batch 16으로 재실행했다(배치 크기는 임베딩·점수에 영향 없음).
+  완료 후 macro 평균으로 목표 `0.7930` 돌파 여부를 확정한다.
 
 ### 자동 캠페인 실측 결과
 
