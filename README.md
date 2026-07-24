@@ -54,25 +54,79 @@ Comsat의 **0.7930**입니다.
 
 ---
 
-## 벤치마크 3종 (숫자를 헷갈리지 않기 위해)
+## 이 문서 사용법 (목차)
 
-**세 표는 재는 대상과 계산법이 달라서 서로 평균 내면 안 됩니다.** `—`는 0점이 아니라 아직 안 잰 것.
+처음이면 위 "지금 어디까지 왔나"까지만 읽어도 큰 그림이 잡힙니다. 더 깊이 보려면 아래로.
 
-- **① Sionic 9 검색** — 우리의 **주 목표**. 한국어 검색 9개 과제의 NDCG@10 평균. Comsat이 0.7930으로 1위.
-- **② 공식 MTEB Korean v1** — 한국어 전반(검색·분류·유사도 등) 6개 과제의 공식 리더보드.
-- **③ 자체 종합 보드** — 오염을 차단한 비공개 데이터로, 실제로 어떤 모델을 고를지 결정하는 내부 보드.
+- [✅ 지금까지 한 것 (완료)](#-지금까지-한-것-완료)
+- [⏭️ 바로 다음에 할 것](#️-바로-다음에-할-것)
+- [🔮 그다음 로드맵](#-그다음-로드맵)
+- [🐛 겪은 문제와 해결](#-겪은-문제와-해결)
+- [🎯 무엇이 통했나 (핵심 교훈)](#-무엇이-통했나-핵심-교훈)
+- [📊 성능 보드 상세 (3종)](#성능-보드-3종) · [📁 산출물·데이터 위치](#산출물데이터-위치) · [🗺️ 문서 지도](#문서-지도) · [🧪 실험 지도](#실험-지도) · [📏 원칙](#원칙) · [🖥️ 환경](#환경)
+
+가장 최신 스냅샷 한 장이 필요하면 → **[docs/38 진행 상황 정리](docs/38_STATUS_2026-07-24.md)**.
 
 ---
 
-## 참고: 이전 후보(Nemotron-3)는 탈락
+## ✅ 지금까지 한 것 (완료)
 
-`nvidia/Nemotron-3-Embed-8B`를 베이스 후보로 검토했으나 Sionic 9 평균이 **0.7322**로 목표에
-크게 못 미쳐(−0.0608) 탈락했습니다. 관련 결정 근거는
-[docs/36](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)에 보존돼 있습니다.
+| 무엇을 | 결과 | 근거 |
+|---|---|---|
+| 환경·자산 전면 복구 | H100 학습/평가 환경, 비교 모델 5종, 데이터 15종 NFS 복원 | [docs/14](docs/14_PROGRESS_AND_BOTTLENECKS.md) |
+| 오염 차단 blocklist | Sionic 9 + 공식 Korean 6 원문 없는 SHA-256 blocklist 공개 | [blocklist](https://huggingface.co/datasets/LLM-OS-Models/korean-embedding-benchmark-blocklist-v1) |
+| **베이스 결정** | Comsat vs Qwen3 동일 200K 비교 → **Comsat 이어학습 계보 승** | [docs/34](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md) |
+| **LoRA vs 풀 파인튜닝** | partial-full(771.79M)이 최하위 → **LoRA r64 승** | [docs/38](docs/38_STATUS_2026-07-24.md) |
+| 후보 Nemotron-3 검증 | Sionic 9 `0.7322`로 목표에 크게 미달 → **탈락** | [docs/36](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md) |
+| **1차 모델(200K) 최종 측정** | Sionic 9 평균 **0.7887** (목표 −0.0043, 패배) | [아래 표](#200k-승자-sionic-9-실측-2026-07-20) |
+| **2차 모델(400K 약점보강) 학습·병합** | 3,000 step 완주, 병합 검증 통과 (SHA `fd0a6ef2b9a3`) | [아래](#combined-400k-target-adaptation-2026-07-21-진행) |
+| 2차 모델 부분 측정 | 자체 법률 `0.98767`(Comsat↑), Sionic MIRACL `0.708`(Comsat↑) | [docs/38](docs/38_STATUS_2026-07-24.md) |
+
+## ⏭️ 바로 다음에 할 것
+
+지금 GPU는 정지 상태. 재개하면 **학습은 다시 안 하고 측정만** 이어서 하면 됩니다.
+
+1. **2차 모델 Sionic 9 나머지 8개 과제 측정** (batch 16, ~1일). → 9개 평균으로 **목표 0.7930 돌파 여부 확정**.
+2. **공식 MTEB Korean v1 6개 측정** (Sionic 다음 순서).
+3. 위 두 결과를 이 README의 [성능 보드](#성능-보드-3종)와 [docs/38](docs/38_STATUS_2026-07-24.md)에 기록·push.
+
+> 정확한 재개 명령과 대상 모델 경로는 [docs/38 "다시 시작하려면"](docs/38_STATUS_2026-07-24.md#다시-시작하려면-재개-방법)에.
+
+## 🔮 그다음 로드맵
+
+목표(0.7930 돌파)를 확정한 뒤의 계획. 전체 설계는 [docs/34](docs/34_PERFORMANCE_FIRST_FRONTIER_PLAN_2026-07-17.md).
+
+- **성능 더 끌어올리기** — reranker(Qwen3-Reranker-8B) 지식증류(KD), last-5 checkpoint FP32 평균, 도메인 전문가 모델 soup을 자체 clean 보드에서 비교. ([teacher](experiments/030_teacher_distillation/) · [merge](experiments/050_model_merge/))
+- **최종 게이트 & 공개** — 단일 winner에 Sionic 9 + 공식 6 + 종합 진단을 final-once 실행하고, 검증 통과 시 모델·데이터를 Hugging Face에 공개. ([docs/33](docs/33_COMPREHENSIVE_SELECTION_AND_EVALUATION.md))
+- **권리안전 재현판(clean-release)** — 성능 track과 별개로, 재배포 권리가 확인된 데이터만으로 같은 방법을 재학습해 상업적 사용까지 가능한 공개판을 만든다. ([docs/13](docs/13_RIGHTS_SAFE_DATA_FACTORY.md))
+
+## 🐛 겪은 문제와 해결
+
+이번 사이클에 실제로 막혔다가 고친 것들(전부 GitHub push 완료). 파이프라인이 견고해진 흔적입니다.
+
+| 문제 | 원인 | 해결 |
+|---|---|---|
+| 200K 학습 재개 불가 | 레거시 validation 게이트·torch.load CVE 가드·`rg` 미설치 | 재개 예외 게이트, env 한정 패치, ripgrep 설치 |
+| Comsat 병합 전부 실패 | 병합기가 encoder-only `Qwen3Model` 아키텍처 미허용 | 두 아키텍처 모두 허용 |
+| 학습·업로드 3곳에서 중단 | 권리 불명확 track에 public 공개를 강제 | 매니페스트 권리에 따라 public/private 자동 선택 |
+| 400K 학습이 벤치마크 오염 | 재채굴이 코퍼스 문서를 negative로 끌어옴(26,400행) | 오염 게이트가 차단 → 해당 행만 필터·정화 후 재학습 |
+| Sionic 측정 30시간 지연 | batch 64가 장문 코퍼스에서 메모리 초과 반복(99회) | batch 16으로 안정화(초과 0회), 점수 동일 |
+
+세부 내역은 각 커밋 메시지와 [docs/38](docs/38_STATUS_2026-07-24.md)에 있습니다.
+
+## 🎯 무엇이 통했나 (핵심 교훈)
+
+- **약점 정조준이 통한다.** 1차 모델의 최대 약점(MIRACL)을 겨냥해 관련 데이터를 보강하니 그 과제가
+  Comsat을 앞질렀다(0.672 → 0.708). 무작정 데이터를 늘리는 것보다 진단→보강이 빠르다.
+- **이미 강한 모델 + LoRA 대조학습**이 밑바닥 학습·풀 파인튜닝보다 이 예산(1× H100)에서 유리하다.
+- **오염 차단을 타협하지 않는다.** 점수를 부풀릴 negative를 게이트가 잡아냈고, 이를 무시했다면
+  결과 자체가 무의미했을 것이다. 공개 벤치마크 점수는 학습·선택에 절대 넣지 않는다.
+
+---
 
 ## 성능 보드 3종
 
-세 표는 평가 대상과 집계법이 달라서 **서로 평균내지 않습니다**. 공식 Korean 보드는 한국어 전반의 6-task Borda/평균, Sionic 보드는 검색 9종 NDCG@10, 종합 보드는 오염을 차단한 자체 holdout과 효율을 봅니다. `—`는 0점이 아니라 미제출·미측정입니다.
+세 표는 평가 대상과 집계법이 달라서 **서로 평균내지 않습니다.** ① Sionic 검색 9종 NDCG@10(**주 목표**, Comsat 0.7930), ② 공식 MTEB Korean 6-task, ③ 오염을 차단한 자체 종합 보드. `—`는 0점이 아니라 미제출·미측정입니다.
 
 ### 1. 공식 MTEB Korean v1
 
@@ -221,16 +275,11 @@ FA2 probe subset은 다중 component 배치 인덱스 계약을 처리하지 못
 아직 완료된 성능 후보가 없습니다.
 <!-- CAMPAIGN_RESULTS_END -->
 
-## 현재 상태
+## 산출물·데이터 위치
 
-> **재시작 정정(2026-07-17):** 아래 dataset/card와 과거 run 기록은 원격 공개 artifact와
-> 역사적 실측을 뜻한다. 재시작 직후에는 `data/`, `outputs/`, 기존 `.venv-*`, model cache가
-> 없었으나, 현재 submodule 5개, 학습/검증 dataset 15개, comprehensive text용 dataset
-> 13개, core/teacher 4개와 외부 비교 모델 5개 cache, H100 학습 환경을 NFS에 exact 복원했다.
-> valid candidate는 아직 0이다. Qwen 200K는 step 1875에서 중단됐다. Nemotron-3
-> full Sionic9은 `0.732212`로 완료됐고 legal·multidomain base decision이 active다.
-> 정확한 재개 지점과 명령은 docs/36에 있다.
-> cache/env/data/checkpoint는 모두 `/home/ubuntu/data/Embedding`의 NFS 아래에 둔다.
+아래 표는 이 프로젝트가 만든/복원한 자산(데이터셋, 환경, 모델 아티팩트)과 그 위치·상태의
+색인입니다. **HF 링크는 그대로 눌러 들어갈 수 있습니다.** (이 표는 참조용 색인이라 길며,
+"지금 뭐가 됐나"만 궁금하면 위 [완료](#-지금까지-한-것-완료) 섹션으로 충분합니다.)
 
 | 항목 | 상태 | 위치 |
 |---|---|---|
@@ -322,6 +371,7 @@ FA2 probe subset은 다중 component 배치 인덱스 계약을 처리하지 못
 36. [고정 비공개 finance/knowledge 다영역 모델 선택 보드](docs/35_FIXED_MULTIDOMAIN_SELECTION_HOLDOUT.md)
 37. [Nemotron-3 한국어 base 결정·중단 재개](docs/36_NEMOTRON3_KOREAN_BASE_DECISION_2026-07-17.md)
 38. [2026-07-18 중단 복구와 방법론 문헌 점검](docs/37_RESUME_RECOVERY_AND_LITERATURE_2026-07-18.md)
+39. [2026-07-24 진행 상황 정리 (최신 스냅샷·재개 방법)](docs/38_STATUS_2026-07-24.md)
 
 ## 실험 지도
 
